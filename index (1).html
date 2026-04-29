@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>StockPro — Gestion Inventaire Alu</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#f5f4f0;--surface:#ffffff;--border:#e2e0d8;--border2:#c8c5bc;
+  --text:#1a1917;--text2:#6b6860;--text3:#9b9890;
+  --green:#1a8c66;--green-bg:#e6f5ef;--green-dark:#0f5c44;
+  --amber:#b87010;--amber-bg:#fef3e2;
+  --red:#c0392b;--red-bg:#fdecea;
+  --blue:#1a5fa8;--blue-bg:#e8f0fb;
+  --purple:#7c3aed;--purple-bg:#f3eeff;
+  --radius:10px;--radius-sm:7px;
+  --shadow:0 1px 3px rgba(0,0,0,0.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;min-height:100vh;}
+#app{display:flex;height:100vh;overflow:hidden;}
+#sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+#topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+#topbar-title{font-size:16px;font-weight:600;flex:1;}
+#content{flex:1;overflow-y:auto;padding:16px;}
+.sb-logo{padding:16px;border-bottom:1px solid var(--border);}
+.sb-logo-name{font-size:17px;font-weight:700;color:var(--green);}
+.sb-logo-sub{font-size:11px;color:var(--text3);}
+/* Indicateur connexion */
+#conn-indicator{display:flex;align-items:center;gap:5px;font-size:11px;padding:4px 10px;border-radius:20px;background:var(--green-bg);color:var(--green-dark);}
+#conn-indicator.offline{background:var(--red-bg);color:var(--red);}
+#conn-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;}
+#conn-indicator.offline #conn-dot{background:var(--red);}
+.sb-section{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:14px 16px 4px;}
+.nav-btn{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:13px;color:var(--text2);cursor:pointer;border:none;background:none;width:100%;text-align:left;border-left:3px solid transparent;transition:all .15s;}
+.nav-btn:hover{background:#f5f4f0;color:var(--text);}
+.nav-btn.active{background:#e6f5ef;color:var(--green-dark);font-weight:600;border-left-color:var(--green);}
+.nav-icon{font-size:16px;width:20px;text-align:center;}
+.badge-sb{margin-left:auto;background:var(--amber-bg);color:var(--amber);font-size:10px;font-weight:600;padding:2px 6px;border-radius:20px;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;font-weight:500;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border2);background:var(--surface);color:var(--text);transition:all .15s;}
+.btn:hover{background:var(--bg);}
+.btn:active{transform:scale(.97);}
+.btn-primary{background:var(--green);color:#fff;border-color:var(--green);}
+.btn-primary:hover{background:var(--green-dark);}
+.btn-danger{background:var(--red);color:#fff;border-color:var(--red);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-xs{padding:3px 8px;font-size:11px;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+.kpi-label{font-size:11px;color:var(--text3);margin-bottom:3px;}
+.kpi-value{font-size:24px;font-weight:700;line-height:1.1;}
+.kpi-sub{font-size:11px;margin-top:3px;}
+.kpi-sub.ok{color:var(--green);}
+.kpi-sub.warn{color:var(--amber);}
+.kpi-sub.danger{color:var(--red);}
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;}
+.table-wrap table{width:100%;border-collapse:collapse;font-size:13px;}
+.table-wrap th{font-size:11px;font-weight:600;color:var(--text3);text-align:left;padding:8px 12px;background:#fafaf8;border-bottom:1px solid var(--border);}
+.table-wrap td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
+.table-wrap tr:last-child td{border-bottom:none;}
+.table-wrap tr:hover td{background:#fafaf8;}
+.table-wrap th:last-child,.table-wrap td:last-child{text-align:right;}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;}
+.badge-ok{background:var(--green-bg);color:var(--green-dark);}
+.badge-warn{background:var(--amber-bg);color:var(--amber);}
+.badge-danger{background:var(--red-bg);color:var(--red);}
+.badge-blue{background:var(--blue-bg);color:var(--blue);}
+.badge-gray{background:#f0ede8;color:var(--text2);}
+.badge-purple{background:var(--purple-bg);color:var(--purple);}
+.form-row{margin-bottom:12px;}
+.form-label{font-size:12px;color:var(--text2);margin-bottom:4px;display:block;font-weight:500;}
+input,select,textarea{width:100%;padding:9px 11px;font-size:14px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:inherit;outline:none;transition:border .15s;}
+input:focus,select:focus,textarea:focus{border-color:var(--green);}
+textarea{resize:vertical;min-height:60px;}
+.form-grid{display:grid;gap:10px;}
+.form-grid.col2{grid-template-columns:1fr 1fr;}
+.form-grid.col3{grid-template-columns:1fr 1fr 1fr;}
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.modal-backdrop.open{display:flex;}
+.modal{background:var(--surface);border-radius:var(--radius);max-width:520px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18);}
+.modal-lg{max-width:680px;}
+.modal-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:16px;font-weight:700;}
+.modal-body{padding:20px;}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+.alert-card{background:var(--amber-bg);border-left:4px solid var(--amber);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.alert-card.danger{background:var(--red-bg);border-color:var(--red);}
+.alert-text{font-size:13px;color:var(--amber);flex:1;}
+.alert-card.danger .alert-text{color:var(--red);}
+.alert-link{font-size:12px;color:var(--blue);cursor:pointer;font-weight:500;white-space:nowrap;}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.section-title{font-size:13px;font-weight:600;color:var(--text2);}
+.prog-bar{height:5px;background:#ebe9e4;border-radius:4px;overflow:hidden;margin-top:4px;}
+.prog-fill{height:100%;border-radius:4px;transition:width .3s;}
+.search-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.search-bar input{flex:1;min-width:160px;}
+.search-bar select{flex-shrink:0;}
+.info-box{background:#f0f7ff;border:1px solid #c5daf7;border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:#1a5fa8;margin-bottom:12px;}
+.warn-box{background:var(--amber-bg);border:1px solid #f0c070;border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:12px;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.stock-ok{color:var(--green);font-weight:600;}
+.stock-warn{color:var(--amber);font-weight:600;}
+.stock-danger{color:var(--red);font-weight:600;}
+code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);background:#f0ede8;padding:2px 5px;border-radius:4px;}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text3);font-size:14px;}
+.pareto-bar{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.pareto-label{font-size:12px;color:var(--text2);width:100px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pareto-track{flex:1;height:16px;background:#ebe9e4;border-radius:4px;overflow:hidden;}
+.pareto-fill{height:100%;border-radius:4px;transition:width .4s;}
+.pareto-val{font-size:11px;color:var(--text3);width:45px;text-align:right;flex-shrink:0;}
+.p-vital{background:var(--green);}
+.p-other{background:#c8c5bc;}
+.cmd-item{display:flex;gap:8px;align-items:center;padding:8px;background:var(--bg);border-radius:var(--radius-sm);margin-bottom:6px;}
+.cmd-item-info{flex:1;font-size:13px;}
+.cmd-item-info small{font-size:11px;color:var(--text3);}
+.cmd-item-qty{width:70px;flex-shrink:0;}
+.cmd-item-del{background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;}
+.cat-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.cat-pill{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--surface);color:var(--text2);transition:all .15s;}
+.cat-pill.active{background:var(--green);color:#fff;border-color:var(--green);}
+#qr-reader-zone{width:100%;max-width:300px;margin:0 auto;}
+#qr-reader-zone video{border-radius:var(--radius-sm);}
+.tab-switch{display:flex;gap:0;background:var(--bg);border-radius:var(--radius-sm);padding:3px;margin-bottom:14px;}
+.tab-sw-btn{flex:1;padding:6px 10px;font-size:12px;font-weight:500;border:none;background:none;border-radius:6px;cursor:pointer;color:var(--text2);transition:all .15s;}
+.tab-sw-btn.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow);}
+.qr-view-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 0;}
+#qr-display{border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;background:#fff;}
+.cat-list-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);}
+.cat-list-item:last-child{border-bottom:none;}
+.cat-list-name{flex:1;font-size:14px;}
+/* Loading overlay */
+#loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;}
+#loading-overlay.hidden{display:none;}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+/* Toast */
+#toast{position:fixed;bottom:24px;right:24px;background:#1a1917;color:#fff;padding:10px 18px;border-radius:var(--radius-sm);font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;}
+#toast.show{opacity:1;}
+#mobile-nav{display:none;background:var(--surface);border-top:1px solid var(--border);padding:6px 0 env(safe-area-inset-bottom);flex-shrink:0;}
+#mobile-nav-inner{display:flex;justify-content:space-around;}
+.mob-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border:none;background:none;color:var(--text3);font-size:10px;cursor:pointer;}
+.mob-btn.active{color:var(--green);}
+.mob-btn-icon{font-size:20px;}
+.page{display:none;}
+.page.active{display:block;}
+@media(max-width:700px){
+  #sidebar{display:none;}
+  #mobile-nav{display:block;}
+  #app{flex-direction:column;}
+  #main{height:calc(100vh - 56px);}
+  #topbar{padding:10px 12px;}
+  #content{padding:10px;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .two-col,.form-grid.col2,.form-grid.col3{grid-template-columns:1fr;}
+  .table-wrap{overflow-x:auto;}
+  .table-wrap table{min-width:500px;}
+  .modal{max-width:100%;border-radius:var(--radius) var(--radius) 0 0;margin-top:auto;}
+  .modal-backdrop{align-items:flex-end;padding:0;}
+}
+@media(min-width:701px){#mobile-nav{display:none!important;}}
+@media print{#sidebar,#topbar,#mobile-nav,.btn{display:none!important;}body{background:#fff;}.page{display:block!important;}}
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div style="font-size:14px;color:var(--text2);">Connexion à la base de données…</div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<div id="app">
+<div id="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-name">StockPro</div>
+    <div class="sb-logo-sub">Gestion inventaire Alu</div>
+    <div id="conn-indicator" style="margin-top:8px;"><div id="conn-dot"></div><span id="conn-label">Connecté</span></div>
+  </div>
+  <div class="sb-section">Principal</div>
+  <button class="nav-btn active" onclick="showPage('dashboard',this)" data-page="dashboard"><span class="nav-icon">📊</span>Tableau de bord</button>
+  <button class="nav-btn" onclick="showPage('stock',this)" data-page="stock"><span class="nav-icon">📦</span>Articles & Stock</button>
+  <button class="nav-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="nav-icon">📈</span>Analyse Pareto</button>
+  <button class="nav-btn" onclick="showPage('scan',this)" data-page="scan"><span class="nav-icon">📷</span>Scanner QR</button>
+  <div class="sb-section">Gestion</div>
+  <button class="nav-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="nav-icon">📋</span>Commandes <span class="badge-sb" id="sb-cmd-count" style="display:none">0</span></button>
+  <div class="sb-section">Admin</div>
+  <button class="nav-btn" onclick="showPage('alertes',this)" data-page="alertes"><span class="nav-icon">🔔</span>Alertes <span class="badge-sb" id="sb-alert-count" style="display:none">0</span></button>
+  <button class="nav-btn" onclick="showPage('historique',this)" data-page="historique"><span class="nav-icon">📜</span>Historique</button>
+  <button class="nav-btn" onclick="showPage('categories',this)" data-page="categories"><span class="nav-icon">🏷</span>Catégories</button>
+  <button class="nav-btn" onclick="showPage('parametres',this)" data-page="parametres"><span class="nav-icon">⚙️</span>Paramètres</button>
+  <button class="nav-btn" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);"><span class="nav-icon">📥</span>Exporter Excel</button>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <div id="topbar-title">Tableau de bord</div>
+    <button class="btn btn-primary btn-sm" id="topbar-action" style="display:none" onclick="">+ Article</button>
+  </div>
+  <div id="content">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="kpi-grid" id="kpi-grid"></div>
+      <div class="two-col">
+        <div>
+          <div class="section-header"><div class="section-title">⚠ Alertes stock bas / rupture</div></div>
+          <div id="dashboard-alerts"></div>
+        </div>
+        <div>
+          <div class="section-header"><div class="section-title">📋 Dernières commandes</div></div>
+          <div class="table-wrap">
+            <table><thead><tr><th>Chantier</th><th>Articles</th><th>Statut</th></tr></thead>
+            <tbody id="dash-commandes"></tbody></table>
+          </div>
+        </div>
+      </div>
+      <div class="section-header"><div class="section-title">Aperçu stock par catégorie</div></div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Catégorie</th><th>Articles</th><th>Valeur</th><th>Critiques</th><th>État</th></tr></thead>
+        <tbody id="dash-categories"></tbody></table>
+      </div>
+    </div>
+
+    <!-- STOCK -->
+    <div class="page" id="page-stock">
+      <div class="search-bar">
+        <input type="search" id="search-input" placeholder="Rechercher référence, diamètre…" oninput="renderStock()">
+        <select id="filter-cat" onchange="renderStock()"><option value="">Toutes catégories</option></select>
+        <select id="filter-status" onchange="renderStock()">
+          <option value="">Tous statuts</option>
+          <option value="ok">OK</option><option value="warn">Bas</option><option value="danger">Critique</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="openNewArticle()">+ Nouvel article</button>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th><th>Prix unit.</th><th>Valeur</th><th>Statut</th><th></th></tr></thead>
+        <tbody id="stock-table"></tbody></table>
+      </div>
+      <div id="stock-empty" class="empty-state" style="display:none;">Aucun article trouvé.</div>
+    </div>
+
+    <!-- PARETO -->
+    <div class="page" id="page-pareto">
+      <div class="info-box">📈 <strong>Loi de Pareto (80/20)</strong> — Les articles "vitaux" représentent 80% de la valeur d'inventaire.</div>
+      <div class="two-col" style="margin-bottom:14px;">
+        <div class="kpi" id="pareto-kpi-vital"></div>
+        <div class="kpi" id="pareto-kpi-other"></div>
+      </div>
+      <div class="section-header"><div class="section-title">🟢 Articles vitaux — 80% de la valeur</div></div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Rang</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Stock</th><th>Prix unit.</th><th>Valeur</th><th>% cumulé</th><th>Statut</th></tr></thead>
+        <tbody id="pareto-vital"></tbody></table>
+      </div>
+      <div class="section-header" style="margin-top:8px;"><div class="section-title">⚪ Articles secondaires — 20% restants</div></div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Rang</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Stock</th><th>Prix unit.</th><th>Valeur</th><th>% cumulé</th></tr></thead>
+        <tbody id="pareto-other"></tbody></table>
+      </div>
+      <div class="section-header" style="margin-top:8px;"><div class="section-title">Valeur par catégorie</div></div>
+      <div id="pareto-cat-bars"></div>
+    </div>
+
+    <!-- SCAN -->
+    <div class="page" id="page-scan">
+      <div class="tab-switch">
+        <button class="tab-sw-btn active" onclick="switchScanTab('camera',this)">📷 Caméra</button>
+        <button class="tab-sw-btn" onclick="switchScanTab('manual',this)">⌨️ Saisie manuelle</button>
+      </div>
+      <div id="scan-tab-camera">
+        <div class="info-box">Pointez la caméra vers le QR code de l'article.</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+          <select id="scan-type-cam" style="flex:1;"><option value="out">Sortie de stock</option><option value="in">Entrée de stock</option></select>
+          <input type="number" id="scan-qty-cam" value="1" min="1" style="width:80px;">
+          <input type="text" id="scan-equipe-cam" placeholder="Utilisateur" style="flex:1;">
+        </div>
+        <div id="qr-reader-zone"></div>
+        <div id="scan-cam-btn" style="text-align:center;margin:12px 0;">
+          <button class="btn btn-primary" onclick="startQRScan()" id="btn-start-scan">▶ Démarrer la caméra</button>
+          <button class="btn" onclick="stopQRScan()" id="btn-stop-scan" style="display:none;">⏹ Arrêter</button>
+        </div>
+      </div>
+      <div id="scan-tab-manual" style="display:none;">
+        <div class="form-row"><label class="form-label">Référence article</label><input type="text" id="manual-ref" placeholder="ex: GAI 450, C90 315…" oninput="lookupArticle(this.value)"></div>
+        <div id="lookup-result" style="font-size:12px;min-height:18px;margin-bottom:10px;"></div>
+        <div class="form-grid col2">
+          <div class="form-row"><label class="form-label">Type</label><select id="scan-type"><option value="out">Sortie de stock</option><option value="in">Entrée de stock</option></select></div>
+          <div class="form-row"><label class="form-label">Quantité</label><input type="number" id="scan-qty" value="1" min="1"></div>
+        </div>
+        <div class="form-row"><label class="form-label">Chantier / Utilisateur</label><input type="text" id="scan-equipe" placeholder="Qui effectue ce mouvement ?"></div>
+        <button class="btn btn-primary" style="width:100%;" onclick="processScan()">Valider le mouvement</button>
+      </div>
+      <div id="scan-result" style="display:none;margin-top:14px;padding:16px;border-radius:var(--radius);text-align:center;">
+        <div style="font-size:32px;" id="sr-icon"></div>
+        <div style="font-size:16px;font-weight:700;margin-top:6px;" id="sr-title"></div>
+        <div style="font-size:13px;color:var(--text2);margin-top:4px;" id="sr-detail"></div>
+        <div style="font-size:28px;font-weight:700;margin-top:8px;" id="sr-qty"></div>
+        <div style="font-size:12px;color:var(--text2);" id="sr-qlabel"></div>
+      </div>
+    </div>
+
+    <!-- COMMANDES -->
+    <div class="page" id="page-commandes">
+      <div class="section-header">
+        <div class="section-title">Demandes de matériel par chantier</div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-commande')">+ Nouvelle demande</button>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>N°</th><th>Date</th><th>Chantier</th><th>Articles</th><th>Urgence</th><th>Statut</th><th></th></tr></thead>
+        <tbody id="commandes-table"></tbody></table>
+      </div>
+      <div id="cmd-empty" class="empty-state" style="display:none;">Aucune commande pour l'instant.</div>
+    </div>
+
+    <!-- ALERTES -->
+    <div class="page" id="page-alertes">
+      <div class="info-box">Les alertes se déclenchent automatiquement quand le stock passe sous le seuil minimum.</div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Stock actuel</th><th>Seuil min.</th><th>Statut</th><th></th></tr></thead>
+        <tbody id="alertes-table"></tbody></table>
+      </div>
+      <div id="alertes-empty" class="empty-state" style="display:none;">✅ Aucune alerte — tous les stocks sont au-dessus du seuil minimum.</div>
+    </div>
+
+    <!-- HISTORIQUE -->
+    <div class="page" id="page-historique">
+      <div class="search-bar">
+        <input type="search" id="hist-search" placeholder="Rechercher…" oninput="renderHistorique()">
+        <select id="hist-filter" onchange="renderHistorique()">
+          <option value="">Tous types</option><option value="in">Entrées</option>
+          <option value="out">Sorties</option><option value="cmd">Commandes</option>
+        </select>
+        <button class="btn btn-sm" onclick="exportExcel()">📥 Exporter Excel</button>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Date / Heure</th><th>Type</th><th>Article</th><th>Qté</th><th>Chantier</th><th>Nouveau stock</th></tr></thead>
+        <tbody id="hist-table"></tbody></table>
+      </div>
+      <div id="hist-empty" class="empty-state" style="display:none;">Aucun mouvement enregistré.</div>
+    </div>
+
+    <!-- CATEGORIES -->
+    <div class="page" id="page-categories">
+      <div class="section-header">
+        <div class="section-title">Gestion des catégories</div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-newcat')">+ Nouvelle catégorie</button>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Nom de la catégorie</th><th>Articles</th><th></th></tr></thead>
+        <tbody id="cat-table"></tbody></table>
+      </div>
+      <div class="info-box" style="margin-top:8px;">⚠ La suppression d'une catégorie n'est possible que si elle ne contient aucun article.</div>
+    </div>
+
+    <!-- PARAMETRES -->
+    <div class="page" id="page-parametres">
+      <div class="section-title" style="margin-bottom:12px;">⚙️ Paramètres</div>
+      <div class="table-wrap">
+        <div style="padding:18px 20px;">
+          <div class="form-row">
+            <label class="form-label">📧 Adresse e-mail pour les alertes commandes</label>
+            <input type="email" id="param-email" placeholder="votre@email.com">
+          </div>
+          <div class="form-row">
+            <label class="form-label">Nom de l'entreprise / site</label>
+            <input type="text" id="param-company" placeholder="Mon Entreprise">
+          </div>
+          <div style="margin-top:4px;padding:10px 14px;background:var(--green-bg);border-radius:var(--radius-sm);font-size:12px;color:var(--green-dark);">
+            ☁️ Les données sont synchronisées en temps réel via Supabase. Tous les utilisateurs voient le même stock.
+          </div>
+          <div style="margin-top:14px;"></div>
+          <button class="btn btn-primary" onclick="saveParams()">💾 Enregistrer</button>
+        </div>
+      </div>
+      <div class="section-title" style="margin:14px 0 8px;">🔄 Données</div>
+      <div class="table-wrap">
+        <div style="padding:18px 20px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn" onclick="exportExcel()">📥 Exporter Excel (stock + historique)</button>
+          <button class="btn btn-danger btn-sm" onclick="resetData()">⚠ Réinitialiser toutes les données</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MOBILE NAV -->
+<div id="mobile-nav">
+  <div id="mobile-nav-inner">
+    <button class="mob-btn active" onclick="showPage('dashboard',this)" data-page="dashboard"><span class="mob-btn-icon">📊</span>Bord</button>
+    <button class="mob-btn" onclick="showPage('stock',this)" data-page="stock"><span class="mob-btn-icon">📦</span>Stock</button>
+    <button class="mob-btn" onclick="showPage('scan',this)" data-page="scan"><span class="mob-btn-icon">📷</span>Scanner</button>
+    <button class="mob-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="mob-btn-icon">📋</span>Commandes</button>
+    <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
+  </div>
+</div>
+</div>
+
+<!-- ===== MODALS ===== -->
+
+<!-- Modal: Nouvel article -->
+<div class="modal-backdrop" id="modal-article">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="art-modal-title">Ajouter un article</div></div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Référence (ex: GAI 355)</label><input type="text" id="art-id" placeholder="CATEGORIE DIAMETRE"></div>
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Catégorie</label><select id="art-cat"></select></div>
+        <div class="form-row"><label class="form-label">Diamètre</label><input type="text" id="art-diam" placeholder="ex: 315"></div>
+      </div>
+      <div class="form-grid col3">
+        <div class="form-row"><label class="form-label">Stock actuel</label><input type="number" id="art-stock" value="0" min="0"></div>
+        <div class="form-row"><label class="form-label">Stock minimum</label><input type="number" id="art-min" value="5" min="0"></div>
+        <div class="form-row"><label class="form-label">Prix unit. (€)</label><input type="number" id="art-prix" value="0" step="0.01" min="0"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-article')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveArticle()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nouvelle commande -->
+<div class="modal-backdrop" id="modal-commande">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">Nouvelle demande de matériel</div>
+      <button class="btn btn-xs" onclick="closeModal('modal-commande')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Chantier / Service</label>
+          <input type="text" id="cmd-chantier" placeholder="Nom du chantier ou service">
+        </div>
+        <div class="form-row"><label class="form-label">Urgence</label>
+          <select id="cmd-urgence"><option value="normale">Normale</option><option value="urgent">Urgent</option><option value="critique">Critique</option></select>
+        </div>
+      </div>
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Demandeur</label><input type="text" id="cmd-nom" placeholder="Votre nom"></div>
+        <div class="form-row"><label class="form-label">Notes / Motif</label><input type="text" id="cmd-notes" placeholder="Raison, précisions…"></div>
+      </div>
+      <div class="section-header" style="margin-top:6px;">
+        <div class="section-title">Articles à commander</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-xs btn-primary" onclick="switchAddMode('search')">🔍 Recherche</button>
+          <button class="btn btn-xs" onclick="switchAddMode('cat')">📂 Par catégorie</button>
+          <button class="btn btn-xs" onclick="switchAddMode('qr')">📷 Scanner QR</button>
+        </div>
+      </div>
+      <div id="add-mode-search">
+        <div style="position:relative;">
+          <input type="text" id="cmd-art-search" placeholder="Taper référence ou diamètre…" oninput="filterCmdSearch(this.value)" autocomplete="off">
+          <div id="cmd-search-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);max-height:180px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+        </div>
+      </div>
+      <div id="add-mode-cat" style="display:none;">
+        <div class="cat-pills" id="cmd-cat-pills"></div>
+        <div id="cmd-cat-items" style="max-height:180px;overflow-y:auto;"></div>
+      </div>
+      <div id="add-mode-qr" style="display:none;">
+        <div id="cmd-qr-zone"></div>
+        <div style="text-align:center;margin-top:8px;">
+          <button class="btn btn-primary btn-sm" onclick="startCmdQR()" id="btn-cmd-qr-start">▶ Démarrer caméra</button>
+          <button class="btn btn-sm" onclick="stopCmdQR()" id="btn-cmd-qr-stop" style="display:none;">⏹ Arrêter</button>
+        </div>
+      </div>
+      <div id="cmd-items-list" style="margin-top:12px;min-height:40px;"></div>
+      <div id="cmd-items-empty" style="font-size:12px;color:var(--text3);text-align:center;padding:10px;">Aucun article ajouté.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-commande')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveCommande()">Soumettre la demande</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: QR Code -->
+<div class="modal-backdrop" id="modal-qr">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="qr-title">QR Code</div></div>
+    <div class="modal-body">
+      <div class="qr-view-wrap">
+        <div id="qr-display"></div>
+        <div style="text-align:center;margin-top:8px;">
+          <strong id="qr-art-name"></strong><br>
+          <span style="font-size:12px;color:var(--text3);" id="qr-art-detail"></span><br>
+          <span style="font-size:11px;color:var(--text3);margin-top:4px;display:block;">Imprimez et collez sur l'emplacement de stockage.</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-qr')">Fermer</button>
+      <button class="btn btn-primary" onclick="printQR()">🖨 Imprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Mouvement stock -->
+<div class="modal-backdrop" id="modal-mouvement">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="mv-title">Mouvement de stock</div></div>
+    <div class="modal-body">
+      <div id="mv-info" style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:14px;font-size:13px;"></div>
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Type</label><select id="mv-type"><option value="out">Sortie</option><option value="in">Entrée</option></select></div>
+        <div class="form-row"><label class="form-label">Quantité</label><input type="number" id="mv-qty" value="1" min="1"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Chantier / Utilisateur</label><input type="text" id="mv-equipe" placeholder="Qui effectue ce mouvement ?"></div>
+      <div class="form-row"><label class="form-label">Note (optionnel)</label><input type="text" id="mv-note" placeholder="Chantier, raison…"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-mouvement')">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmMouvement()">Valider</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Détail commande -->
+<div class="modal-backdrop" id="modal-cmd-detail">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title" id="cmd-detail-title">Détail commande</div>
+      <button class="btn btn-xs" onclick="closeModal('modal-cmd-detail')">✕</button>
+    </div>
+    <div class="modal-body" id="cmd-detail-body"></div>
+    <div class="modal-footer" id="cmd-detail-footer"></div>
+  </div>
+</div>
+
+<!-- Modal: Nouvelle catégorie -->
+<div class="modal-backdrop" id="modal-newcat">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="cat-modal-title">Nouvelle catégorie</div></div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Nom de la catégorie</label><input type="text" id="newcat-name" placeholder="ex: Manchons, Joints…"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-newcat')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveCat()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== SUPABASE ====================
+const SUPABASE_URL = 'https://cjvlqicfjjhxjhtawbnq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ZpoTqdKtXqejsyP0ME2QhQ_swOJ8jq7';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ==================== DONNEES PAR DEFAUT ====================
+const DEFAULT_CATEGORIES = ["Gaines","Coudes 90°","Coudes 45°","RM","Piquage droit","Raccord sur plat","Réduction","Bouchons","Té souche","Té égal","Sifflet","Colliers"];
+
+const INVENTORY_DATA = [
+  {id:"GAI 500",categorie:"Gaines",diametre:"500",stock:4,prix_unitaire:0,stock_min:5},
+  {id:"GAI 450",categorie:"Gaines",diametre:"450",stock:19,prix_unitaire:31.78,stock_min:10},
+  {id:"GAI 400",categorie:"Gaines",diametre:"400",stock:21,prix_unitaire:28.61,stock_min:10},
+  {id:"GAI 355",categorie:"Gaines",diametre:"355",stock:25,prix_unitaire:24.99,stock_min:10},
+  {id:"GAI 315",categorie:"Gaines",diametre:"315",stock:32,prix_unitaire:20.33,stock_min:10},
+  {id:"GAI 250",categorie:"Gaines",diametre:"250",stock:34,prix_unitaire:15.84,stock_min:10},
+  {id:"GAI 200",categorie:"Gaines",diametre:"200",stock:45,prix_unitaire:12.43,stock_min:10},
+  {id:"GAI 160",categorie:"Gaines",diametre:"160",stock:27,prix_unitaire:10.02,stock_min:10},
+  {id:"GAI 125",categorie:"Gaines",diametre:"125",stock:81,prix_unitaire:7.90,stock_min:15},
+  {id:"C90 500",categorie:"Coudes 90°",diametre:"500",stock:7,prix_unitaire:0,stock_min:5},
+  {id:"C90 450",categorie:"Coudes 90°",diametre:"450",stock:7,prix_unitaire:28.39,stock_min:5},
+  {id:"C90 400",categorie:"Coudes 90°",diametre:"400",stock:5,prix_unitaire:23.56,stock_min:5},
+  {id:"C90 355",categorie:"Coudes 90°",diametre:"355",stock:9,prix_unitaire:18.46,stock_min:5},
+  {id:"C90 315",categorie:"Coudes 90°",diametre:"315",stock:13,prix_unitaire:13.33,stock_min:5},
+  {id:"C90 250",categorie:"Coudes 90°",diametre:"250",stock:47,prix_unitaire:10.51,stock_min:10},
+  {id:"C90 200",categorie:"Coudes 90°",diametre:"200",stock:43,prix_unitaire:7.71,stock_min:10},
+  {id:"C90 160",categorie:"Coudes 90°",diametre:"160",stock:43,prix_unitaire:5.52,stock_min:10},
+  {id:"C90 125",categorie:"Coudes 90°",diametre:"125",stock:61,prix_unitaire:3.52,stock_min:10},
+  {id:"C90 100",categorie:"Coudes 90°",diametre:"100",stock:42,prix_unitaire:0,stock_min:10},
+  {id:"C45 630",categorie:"Coudes 45°",diametre:"630",stock:1,prix_unitaire:0,stock_min:2},
+  {id:"C45 500",categorie:"Coudes 45°",diametre:"500",stock:0,prix_unitaire:0,stock_min:2},
+  {id:"C45 450",categorie:"Coudes 45°",diametre:"450",stock:6,prix_unitaire:18.91,stock_min:3},
+  {id:"C45 400",categorie:"Coudes 45°",diametre:"400",stock:9,prix_unitaire:14.63,stock_min:3},
+  {id:"C45 355",categorie:"Coudes 45°",diametre:"355",stock:0,prix_unitaire:11.34,stock_min:3},
+  {id:"C45 315",categorie:"Coudes 45°",diametre:"315",stock:13,prix_unitaire:9.87,stock_min:5},
+  {id:"C45 250",categorie:"Coudes 45°",diametre:"250",stock:46,prix_unitaire:7.67,stock_min:10},
+  {id:"C45 200",categorie:"Coudes 45°",diametre:"200",stock:48,prix_unitaire:4.96,stock_min:10},
+  {id:"C45 160",categorie:"Coudes 45°",diametre:"160",stock:42,prix_unitaire:2.61,stock_min:10},
+  {id:"C45 125",categorie:"Coudes 45°",diametre:"125",stock:36,prix_unitaire:2.33,stock_min:10},
+  {id:"C45 100",categorie:"Coudes 45°",diametre:"100",stock:7,prix_unitaire:0,stock_min:5},
+  {id:"RM 630",categorie:"RM",diametre:"630",stock:0,prix_unitaire:9.86,stock_min:2},
+  {id:"RM 450J",categorie:"RM",diametre:"450 J",stock:1,prix_unitaire:0,stock_min:2},
+  {id:"RM 450",categorie:"RM",diametre:"450",stock:24,prix_unitaire:4.42,stock_min:10},
+  {id:"RM 400",categorie:"RM",diametre:"400",stock:28,prix_unitaire:0,stock_min:10},
+  {id:"RM 355",categorie:"RM",diametre:"355",stock:21,prix_unitaire:2.87,stock_min:10},
+  {id:"RM 315",categorie:"RM",diametre:"315",stock:16,prix_unitaire:2.09,stock_min:10},
+  {id:"RM 250J",categorie:"RM",diametre:"250 J",stock:12,prix_unitaire:0,stock_min:5},
+  {id:"RM 250",categorie:"RM",diametre:"250",stock:90,prix_unitaire:1.45,stock_min:20},
+  {id:"RM 200",categorie:"RM",diametre:"200",stock:145,prix_unitaire:1.04,stock_min:20},
+  {id:"RM 160",categorie:"RM",diametre:"160",stock:162,prix_unitaire:0.96,stock_min:20},
+  {id:"RM 125",categorie:"RM",diametre:"125",stock:193,prix_unitaire:0.84,stock_min:30},
+  {id:"PD 630 125",categorie:"Piquage droit",diametre:"630/125",stock:5,prix_unitaire:0,stock_min:2},
+  {id:"PD 400 315",categorie:"Piquage droit",diametre:"400/315",stock:27,prix_unitaire:7.87,stock_min:5},
+  {id:"PD 355 125",categorie:"Piquage droit",diametre:"355/125",stock:64,prix_unitaire:0,stock_min:10},
+  {id:"PD 315 250",categorie:"Piquage droit",diametre:"315/250",stock:41,prix_unitaire:5.05,stock_min:10},
+  {id:"PD 315 160",categorie:"Piquage droit",diametre:"315/160",stock:27,prix_unitaire:2.45,stock_min:5},
+  {id:"PD 250 160",categorie:"Piquage droit",diametre:"250/160",stock:36,prix_unitaire:2.45,stock_min:5},
+  {id:"PD 250 125",categorie:"Piquage droit",diametre:"250/125",stock:47,prix_unitaire:1.80,stock_min:10},
+  {id:"PD 200 125",categorie:"Piquage droit",diametre:"200/125",stock:74,prix_unitaire:1.80,stock_min:10},
+  {id:"PD 160 125",categorie:"Piquage droit",diametre:"160/125",stock:91,prix_unitaire:1.73,stock_min:10},
+  {id:"RSP 315",categorie:"Raccord sur plat",diametre:"315",stock:38,prix_unitaire:2.99,stock_min:10},
+  {id:"RSP 250",categorie:"Raccord sur plat",diametre:"250",stock:39,prix_unitaire:2.31,stock_min:10},
+  {id:"RSP 200",categorie:"Raccord sur plat",diametre:"200",stock:31,prix_unitaire:1.65,stock_min:10},
+  {id:"RSP 160",categorie:"Raccord sur plat",diametre:"160",stock:21,prix_unitaire:1.55,stock_min:5},
+  {id:"RSP 125",categorie:"Raccord sur plat",diametre:"125",stock:12,prix_unitaire:1.28,stock_min:5},
+  {id:"RED 400 315",categorie:"Réduction",diametre:"400/315",stock:9,prix_unitaire:12.92,stock_min:2},
+  {id:"RED 160 125",categorie:"Réduction",diametre:"160/125",stock:6,prix_unitaire:2.36,stock_min:2},
+  {id:"BOU 250",categorie:"Bouchons",diametre:"250",stock:2,prix_unitaire:3.78,stock_min:2},
+  {id:"BOU 200",categorie:"Bouchons",diametre:"200",stock:11,prix_unitaire:2.48,stock_min:3},
+  {id:"BOU 160",categorie:"Bouchons",diametre:"160",stock:14,prix_unitaire:1.89,stock_min:3},
+  {id:"BOU 125",categorie:"Bouchons",diametre:"125",stock:31,prix_unitaire:1.54,stock_min:5},
+  {id:"TS 630",categorie:"Té souche",diametre:"630",stock:0,prix_unitaire:155.17,stock_min:1},
+  {id:"TS 450",categorie:"Té souche",diametre:"450",stock:3,prix_unitaire:79.69,stock_min:2},
+  {id:"TS 400",categorie:"Té souche",diametre:"400",stock:1,prix_unitaire:67.70,stock_min:2},
+  {id:"TS 315",categorie:"Té souche",diametre:"315",stock:1,prix_unitaire:36.21,stock_min:1},
+  {id:"TE 315",categorie:"Té égal",diametre:"315",stock:6,prix_unitaire:23.07,stock_min:2},
+  {id:"TE 250",categorie:"Té égal",diametre:"250",stock:20,prix_unitaire:15.33,stock_min:5},
+  {id:"TE 160",categorie:"Té égal",diametre:"160",stock:6,prix_unitaire:6.24,stock_min:2},
+  {id:"TE 125",categorie:"Té égal",diametre:"125",stock:43,prix_unitaire:4.29,stock_min:5},
+  {id:"SIF 400",categorie:"Sifflet",diametre:"400",stock:5,prix_unitaire:3.44,stock_min:2},
+  {id:"SIF 315",categorie:"Sifflet",diametre:"315",stock:6,prix_unitaire:20.68,stock_min:2},
+];
+
+// ==================== STATE ====================
+let stock = [];
+let commandes = [];
+let historique = [];
+let categories = [...DEFAULT_CATEGORIES];
+let cmdCounter = 1;
+let params = {email:'',company:''};
+let currentMvArticle = null;
+let currentQRArticle = null;
+let cmdItems = [];
+let html5QrCode = null;
+let cmdHtml5QrCode = null;
+let editingCat = null;
+
+// Adapte les colonnes Supabase → format interne JS
+function adaptArticle(row) {
+  return {
+    id: row.id,
+    categorie: row.categorie,
+    diametre: row.diametre,
+    stock: row.stock,
+    prixUnitaire: row.prix_unitaire,
+    stockMin: row.stock_min,
+  };
+}
+
+// ==================== INIT SUPABASE ====================
+async function initApp() {
+  try {
+    // Vérifier si la table stock existe, sinon la créer et la peupler
+    const { data: existingStock, error: stockErr } = await db.from('stock').select('id').limit(1);
+
+    if (stockErr && stockErr.code === '42P01') {
+      // Table n'existe pas — on ne peut pas la créer depuis le client, on informe
+      showToast('⚠ Table "stock" manquante dans Supabase. Voir instructions.');
+      document.getElementById('loading-overlay').classList.add('hidden');
+      return;
+    }
+
+    if (!existingStock || existingStock.length === 0) {
+      // Table vide : on insère les données par défaut
+      const { error: insertErr } = await db.from('stock').insert(INVENTORY_DATA);
+      if (insertErr) throw insertErr;
+    }
+
+    // Charger toutes les données
+    await loadAllData();
+
+    // Abonner aux changements temps réel
+    subscribeRealtime();
+
+    document.getElementById('loading-overlay').classList.add('hidden');
+    setConnected(true);
+    renderDashboard();
+    updateBadges();
+
+  } catch (err) {
+    console.error('Erreur init:', err);
+    document.getElementById('loading-overlay').classList.add('hidden');
+    setConnected(false);
+    showToast('❌ Erreur de connexion : ' + (err.message || err));
+  }
+}
+
+async function loadAllData() {
+  const [stockRes, cmdRes, histRes, configRes] = await Promise.all([
+    db.from('stock').select('*').order('categorie').order('id'),
+    db.from('commandes').select('*').order('created_at', {ascending:false}),
+    db.from('historique').select('*').order('created_at', {ascending:false}).limit(500),
+    db.from('config').select('*'),
+  ]);
+
+  if (stockRes.error) throw stockRes.error;
+  if (cmdRes.error) throw cmdRes.error;
+  if (histRes.error) throw histRes.error;
+
+  stock = (stockRes.data || []).map(adaptArticle);
+  commandes = (cmdRes.data || []);
+  historique = (histRes.data || []).map(h => ({
+    ts: new Date(h.created_at).getTime(),
+    type: h.type,
+    id: h.article_id,
+    categorie: h.categorie,
+    diametre: h.diametre,
+    qty: h.qty,
+    equipe: h.equipe,
+    note: h.note,
+    newStock: h.new_stock,
+  }));
+
+  // Config
+  if (configRes.data) {
+    configRes.data.forEach(row => {
+      if (row.key === 'categories') categories = row.value;
+      if (row.key === 'cmd_counter') cmdCounter = row.value;
+      if (row.key === 'email') params.email = row.value;
+      if (row.key === 'company') params.company = row.value;
+    });
+  }
+}
+
+function subscribeRealtime() {
+  db.channel('stockpro-realtime')
+    .on('postgres_changes', {event:'*', schema:'public', table:'stock'}, async () => {
+      const {data} = await db.from('stock').select('*').order('categorie').order('id');
+      stock = (data||[]).map(adaptArticle);
+      renderStock(); renderDashboard(); updateBadges();
+      showToast('🔄 Stock mis à jour en temps réel');
+    })
+    .on('postgres_changes', {event:'*', schema:'public', table:'commandes'}, async () => {
+      const {data} = await db.from('commandes').select('*').order('created_at',{ascending:false});
+      commandes = data||[];
+      renderCommandes(); updateBadges();
+    })
+    .on('postgres_changes', {event:'*', schema:'public', table:'historique'}, async () => {
+      const {data} = await db.from('historique').select('*').order('created_at',{ascending:false}).limit(500);
+      historique = (data||[]).map(h => ({
+        ts: new Date(h.created_at).getTime(),
+        type: h.type, id: h.article_id, categorie: h.categorie,
+        diametre: h.diametre, qty: h.qty, equipe: h.equipe,
+        note: h.note, newStock: h.new_stock,
+      }));
+      renderHistorique();
+    })
+    .on('postgres_changes', {event:'*', schema:'public', table:'config'}, async () => {
+      const {data} = await db.from('config').select('*');
+      if (data) data.forEach(row => {
+        if (row.key === 'categories') { categories = row.value; renderCategories(); }
+        if (row.key === 'cmd_counter') cmdCounter = row.value;
+      });
+    })
+    .subscribe((status) => {
+      setConnected(status === 'SUBSCRIBED');
+    });
+}
+
+function setConnected(ok) {
+  const el = document.getElementById('conn-indicator');
+  const lbl = document.getElementById('conn-label');
+  if (ok) { el.classList.remove('offline'); lbl.textContent = 'Connecté'; }
+  else { el.classList.add('offline'); lbl.textContent = 'Hors ligne'; }
+}
+
+// ==================== HELPERS ====================
+function getStatus(a){
+  if(a.stock===0)return'danger';
+  if(a.stock<a.stockMin)return(a.stock<=a.stockMin*0.3)?'danger':'warn';
+  return'ok';
+}
+function statusLabel(s){
+  if(s==='ok')return'<span class="badge badge-ok">OK</span>';
+  if(s==='warn')return'<span class="badge badge-warn">Stock bas</span>';
+  return'<span class="badge badge-danger">Critique</span>';
+}
+function fmtDate(ts){
+  const d=new Date(ts);
+  return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+function getAlerts(){return stock.filter(a=>getStatus(a)!=='ok');}
+function getCmdPending(){return commandes.filter(c=>c.statut==='en_attente');}
+function updateBadges(){
+  const a=getAlerts().length,p=getCmdPending().length;
+  const sa=document.getElementById('sb-alert-count'),sc=document.getElementById('sb-cmd-count');
+  if(sa){sa.textContent=a;sa.style.display=a>0?'':'none';}
+  if(sc){sc.textContent=p;sc.style.display=p>0?'':'none';}
+}
+function cmdBadge(s){
+  return{en_attente:'<span class="badge badge-blue">En attente</span>',approuvee:'<span class="badge badge-ok">Approuvée</span>',refusee:'<span class="badge badge-danger">Refusée</span>'}[s]||s;
+}
+function showToast(msg, duration=3500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+// ==================== NAVIGATION ====================
+function showPage(page,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-btn,.mob-btn').forEach(b=>b.classList.remove('active'));
+  if(el)el.classList.add('active');
+  document.querySelectorAll('[data-page="'+page+'"]').forEach(b=>b.classList.add('active'));
+  const titles={dashboard:'Tableau de bord',stock:'Articles & Stock',pareto:'Analyse Pareto (80/20)',
+    scan:'Scanner QR',commandes:'Commandes chantiers',alertes:'Alertes de stock',
+    historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres'};
+  document.getElementById('topbar-title').textContent=titles[page]||page;
+  const ab=document.getElementById('topbar-action');
+  if(page==='stock'){ab.style.display='';ab.textContent='+ Article';ab.onclick=()=>openNewArticle();}
+  else if(page==='commandes'){ab.style.display='';ab.textContent='+ Demande';ab.onclick=()=>openCmdModal();}
+  else if(page==='categories'){ab.style.display='';ab.textContent='+ Catégorie';ab.onclick=()=>openModal('modal-newcat');}
+  else ab.style.display='none';
+  const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
+    commandes:renderCommandes,alertes:renderAlertes,historique:renderHistorique,
+    categories:renderCategories,parametres:renderParams};
+  if(renders[page])renders[page]();
+  if(page!=='scan'){stopQRScan();stopCmdQR();}
+}
+
+// ==================== DASHBOARD ====================
+function renderDashboard(){
+  const alerts=getAlerts(),pending=getCmdPending();
+  const totalVal=stock.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
+  document.getElementById('kpi-grid').innerHTML=`
+    <div class="kpi"><div class="kpi-label">Articles référencés</div><div class="kpi-value">${stock.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Valeur inventaire</div><div class="kpi-value" style="font-size:18px;">${totalVal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')} €</div></div>
+    <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div></div>
+    <div class="kpi"><div class="kpi-label">Commandes en attente</div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
+  const alertDiv=document.getElementById('dashboard-alerts');
+  const top5=alerts.slice(0,5);
+  alertDiv.innerHTML=top5.length===0?'<div style="font-size:13px;color:var(--green);padding:10px 0;">✅ Tous les stocks sont OK</div>'
+    :top5.map(a=>{const s=getStatus(a);return`<div class="alert-card ${s==='danger'?'danger':''}">
+      <span class="alert-text">${s==='danger'?'🔴':'🟡'} ${a.categorie} Ø${a.diametre} — ${a.stock} en stock (min. ${a.stockMin})</span>
+      <span class="alert-link" onclick="openMouvement('${a.id}')">Mouvement →</span></div>`;}).join('');
+  const recent=[...commandes].slice(0,5);
+  document.getElementById('dash-commandes').innerHTML=recent.length===0
+    ?'<tr><td colspan="3" style="text-align:center;color:var(--text3);font-size:12px;">Aucune commande</td></tr>'
+    :recent.map(c=>`<tr><td>${c.chantier}</td><td style="font-size:11px;">${c.items?c.items.length+' article(s)':'—'}</td><td>${cmdBadge(c.statut)}</td></tr>`).join('');
+  const cats=[...new Set(stock.map(a=>a.categorie))];
+  document.getElementById('dash-categories').innerHTML=cats.map(cat=>{
+    const items=stock.filter(a=>a.categorie===cat);
+    const val=items.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
+    const critiques=items.filter(a=>getStatus(a)!=='ok').length;
+    return`<tr><td><strong>${cat}</strong></td><td>${items.length}</td>
+      <td>${val>0?val.toFixed(2).replace('.',',')+' €':'—'}</td>
+      <td class="${critiques>0?'stock-danger':''}">${critiques>0?critiques+' article(s)':'—'}</td>
+      <td>${critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>'}</td></tr>`;
+  }).join('');
+  updateBadges();
+}
+
+// ==================== STOCK ====================
+function populateCatFilter(){
+  const sel=document.getElementById('filter-cat');
+  if(sel&&sel.options.length<=1){
+    categories.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
+  }
+}
+function renderStock(){
+  populateCatFilter();
+  const q=(document.getElementById('search-input')?.value||'').toLowerCase();
+  const cat=document.getElementById('filter-cat')?.value||'';
+  const status=document.getElementById('filter-status')?.value||'';
+  const filtered=stock.filter(a=>{
+    const mq=!q||a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).toLowerCase().includes(q);
+    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
+  });
+  document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
+  document.getElementById('stock-table').innerHTML=filtered.map(a=>{
+    const s=getStatus(a),val=a.stock*a.prixUnitaire;
+    const pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
+    const color=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
+    const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
+    return`<tr>
+      <td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
+      <td><span class="${sc}">${a.stock}</span><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${color};"></div></div></td>
+      <td>${a.stockMin}</td>
+      <td>${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</td>
+      <td>${val>0?val.toFixed(2).replace('.',',')+' €':'—'}</td>
+      <td>${statusLabel(s)}</td>
+      <td><button class="btn btn-xs" onclick="openMouvement('${a.id}')">±</button>
+          <button class="btn btn-xs" style="margin-left:3px;" onclick="showQR('${a.id}')">QR</button>
+          <button class="btn btn-xs" style="margin-left:3px;" onclick="editArticle('${a.id}')">✏</button></td></tr>`;
+  }).join('');
+}
+
+// ==================== PARETO ====================
+function renderPareto(){
+  const withVal=stock.filter(a=>a.prixUnitaire>0&&a.stock>0).map(a=>({...a,valeur:a.stock*a.prixUnitaire}));
+  withVal.sort((a,b)=>b.valeur-a.valeur);
+  const totalVal=withVal.reduce((s,a)=>s+a.valeur,0);
+  if(totalVal===0){document.getElementById('pareto-vital').innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);">Aucune donnée de valeur disponible.</td></tr>';return;}
+  let cumul=0;const vital=[],other=[];
+  withVal.forEach((a,i)=>{
+    cumul+=a.valeur;const pct=(cumul/totalVal*100);const obj={...a,rang:i+1,pctCumul:pct};
+    if(pct<=82||vital.length<Math.ceil(withVal.length*0.22))vital.push(obj);else other.push(obj);
+  });
+  const vv=vital.reduce((s,a)=>s+a.valeur,0);const ov=other.reduce((s,a)=>s+a.valeur,0);
+  document.getElementById('pareto-kpi-vital').innerHTML=`<div class="kpi-label">🟢 Articles vitaux (20%)</div><div class="kpi-value">${vital.length} <span style="font-size:14px;font-weight:400;">articles</span></div><div class="kpi-sub ok">${(vv/totalVal*100).toFixed(0)}% de la valeur — ${vv.toFixed(2).replace('.',',')} €</div>`;
+  document.getElementById('pareto-kpi-other').innerHTML=`<div class="kpi-label">⚪ Articles secondaires (80%)</div><div class="kpi-value">${other.length} <span style="font-size:14px;font-weight:400;">articles</span></div><div class="kpi-sub">${(ov/totalVal*100).toFixed(0)}% de la valeur — ${ov.toFixed(2).replace('.',',')} €</div>`;
+  document.getElementById('pareto-vital').innerHTML=vital.map((a,i)=>{const s=getStatus(a);return`<tr style="background:${i%2===0?'#f9fdf9':''};">
+    <td><span class="badge badge-purple">${a.rang}</span></td><td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
+    <td class="${s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger'}">${a.stock}</td>
+    <td>${a.prixUnitaire.toFixed(2).replace('.',',')} €</td><td><strong>${a.valeur.toFixed(2).replace('.',',')} €</strong></td>
+    <td><span style="font-weight:600;color:var(--green);">${a.pctCumul.toFixed(1)}%</span></td><td>${statusLabel(s)}</td></tr>`;}).join('');
+  document.getElementById('pareto-other').innerHTML=other.map(a=>`<tr>
+    <td>${a.rang}</td><td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
+    <td>${a.stock}</td><td>${a.prixUnitaire.toFixed(2).replace('.',',')} €</td><td>${a.valeur.toFixed(2).replace('.',',')} €</td>
+    <td>${a.pctCumul.toFixed(1)}%</td></tr>`).join('');
+  const cats=[...new Set(withVal.map(a=>a.categorie))];
+  const catVals=cats.map(c=>({cat:c,val:withVal.filter(a=>a.categorie===c).reduce((s,a)=>s+a.valeur,0)}));
+  catVals.sort((a,b)=>b.val-a.val);const maxV=catVals[0]?.val||1;
+  document.getElementById('pareto-cat-bars').innerHTML=catVals.map(c=>`
+    <div class="pareto-bar"><div class="pareto-label" title="${c.cat}">${c.cat}</div>
+    <div class="pareto-track"><div class="pareto-fill p-vital" style="width:${c.val/maxV*100}%;"></div></div>
+    <div class="pareto-val">${c.val.toFixed(0)} €</div></div>`).join('');
+}
+
+// ==================== MOUVEMENT ====================
+function openMouvement(id){
+  currentMvArticle=stock.find(a=>a.id===id);if(!currentMvArticle)return;
+  document.getElementById('mv-title').textContent='Mouvement — '+currentMvArticle.categorie+' Ø'+currentMvArticle.diametre;
+  document.getElementById('mv-info').innerHTML=`<strong>${currentMvArticle.id}</strong> · ${currentMvArticle.categorie} Ø${currentMvArticle.diametre}<br>Stock actuel : <strong>${currentMvArticle.stock}</strong> · Min. : ${currentMvArticle.stockMin}`;
+  document.getElementById('mv-qty').value=1;document.getElementById('mv-equipe').value='';document.getElementById('mv-note').value='';
+  openModal('modal-mouvement');
+}
+async function confirmMouvement(){
+  if(!currentMvArticle)return;
+  const type=document.getElementById('mv-type').value;
+  const qty=parseInt(document.getElementById('mv-qty').value)||1;
+  const equipe=document.getElementById('mv-equipe').value||'Inconnu';
+  const note=document.getElementById('mv-note').value;
+  const art=stock.find(a=>a.id===currentMvArticle.id);
+  if(type==='out'&&qty>art.stock){alert('Stock insuffisant ! Stock actuel : '+art.stock);return;}
+  const newStock=type==='out'?art.stock-qty:art.stock+qty;
+  // Mise à jour Supabase
+  const {error:e1} = await db.from('stock').update({stock:newStock}).eq('id',art.id);
+  if(e1){showToast('❌ Erreur mise à jour stock');return;}
+  const {error:e2} = await db.from('historique').insert({
+    type, article_id:art.id, categorie:art.categorie, diametre:art.diametre,
+    qty, equipe, note, new_stock:newStock
+  });
+  if(e2) console.error('Erreur historique:', e2);
+  closeModal('modal-mouvement');
+  showToast('✅ Mouvement enregistré');
+}
+
+// ==================== SCAN ====================
+let scanTabActive='camera';
+function switchScanTab(tab,btn){
+  scanTabActive=tab;
+  document.querySelectorAll('.tab-sw-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('scan-tab-camera').style.display=tab==='camera'?'':'none';
+  document.getElementById('scan-tab-manual').style.display=tab==='manual'?'':'none';
+  if(tab!=='camera')stopQRScan();
+}
+async function startQRScan(){
+  if(html5QrCode)return;
+  // S'assurer que le conteneur est visible et a des dimensions
+  const zone = document.getElementById('qr-reader-zone');
+  zone.style.minHeight = '250px';
+  zone.innerHTML = '';
+  // Vérifier que l'API caméra est disponible
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    alert('Votre navigateur ne supporte pas l\'accès à la caméra.\nUtilisez Chrome ou Safari sur HTTPS.');
+    return;
+  }
+  try {
+    // Demander la permission explicitement d'abord
+    await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+  } catch(permErr){
+    alert('Accès caméra refusé.\nAutorisez la caméra dans les paramètres de votre navigateur.');
+    return;
+  }
+  try {
+    html5QrCode = new Html5Qrcode('qr-reader-zone');
+    await html5QrCode.start(
+      {facingMode:'environment'},
+      {fps:10, qrbox:{width:220,height:220}, aspectRatio:1.0},
+      async (text)=>{
+        const art=stock.find(a=>a.id===text||a.id===text.trim());
+        if(art){
+          const type=document.getElementById('scan-type-cam').value;
+          const qty=parseInt(document.getElementById('scan-qty-cam').value)||1;
+          const equipe=document.getElementById('scan-equipe-cam').value||'Scan';
+          if(type==='out'&&qty>art.stock){showScanResult(false,'Stock insuffisant',art.categorie+' Ø'+art.diametre+' — '+art.stock+' disponibles','');return;}
+          const newStock=type==='out'?art.stock-qty:art.stock+qty;
+          await db.from('stock').update({stock:newStock}).eq('id',art.id);
+          await db.from('historique').insert({type,article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty,equipe,note:'Scan QR',new_stock:newStock});
+          showScanResult(true,(type==='out'?'📤 Sortie':'📥 Entrée')+' enregistrée !',art.categorie+' Ø'+art.diametre+' · '+qty+' u.',newStock);
+        } else {
+          showScanResult(false,'Article introuvable','QR : '+text,'');
+        }
+      },
+      ()=>{}
+    );
+    document.getElementById('btn-start-scan').style.display='none';
+    document.getElementById('btn-stop-scan').style.display='';
+  } catch(e){
+    html5QrCode=null;
+    alert('Impossible de démarrer la caméra :\n'+e);
+  }
+}
+function stopQRScan(){
+  if(html5QrCode){
+    try{html5QrCode.stop().then(()=>{html5QrCode.clear();document.getElementById('qr-reader-zone').innerHTML='';}).catch(()=>{});}catch(e){}
+    html5QrCode=null;
+  }
+  const b1=document.getElementById('btn-start-scan'),b2=document.getElementById('btn-stop-scan');
+  if(b1)b1.style.display='';if(b2)b2.style.display='none';
+}
+function showScanResult(ok,title,detail,qty){
+  const r=document.getElementById('scan-result');
+  r.style.display='';r.style.background=ok?'var(--green-bg)':'var(--red-bg)';r.style.border='1px solid '+(ok?'var(--green)':'var(--red)');
+  document.getElementById('sr-icon').textContent=ok?'✅':'❌';
+  document.getElementById('sr-title').textContent=title;document.getElementById('sr-title').style.color=ok?'var(--green-dark)':'var(--red)';
+  document.getElementById('sr-detail').textContent=detail;
+  document.getElementById('sr-qty').textContent=qty!==''?qty:'';
+  document.getElementById('sr-qlabel').textContent=qty!==''?'nouveau stock':'';
+  setTimeout(()=>{r.style.display='none';},5000);
+}
+function lookupArticle(val){
+  const art=stock.find(a=>a.id.toLowerCase()===val.toLowerCase().trim());
+  const el=document.getElementById('lookup-result');
+  if(art){el.innerHTML=`✅ <strong>${art.categorie}</strong> Ø${art.diametre} · Stock : <strong>${art.stock}</strong>`;el.style.color='var(--green-dark)';}
+  else if(val.length>2){el.textContent='Référence non trouvée';el.style.color='var(--red)';}
+  else el.textContent='';
+}
+async function processScan(){
+  const ref=document.getElementById('manual-ref').value.trim();
+  const type=document.getElementById('scan-type').value;
+  const qty=parseInt(document.getElementById('scan-qty').value)||1;
+  const equipe=document.getElementById('scan-equipe').value||'Scan';
+  const art=stock.find(a=>a.id.toLowerCase()===ref.toLowerCase());
+  if(!art){showScanResult(false,'Article introuvable','Référence "'+ref+'" inconnue.','');return;}
+  if(type==='out'&&qty>art.stock){showScanResult(false,'Stock insuffisant','Disponible : '+art.stock,'');return;}
+  const newStock=type==='out'?art.stock-qty:art.stock+qty;
+  await db.from('stock').update({stock:newStock}).eq('id',art.id);
+  await db.from('historique').insert({type,article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty,equipe,note:'Saisie manuelle',new_stock:newStock});
+  showScanResult(true,(type==='out'?'📤 Sortie':'📥 Entrée')+' enregistrée !',art.categorie+' Ø'+art.diametre+' · '+qty+' u.',newStock);
+  document.getElementById('manual-ref').value='';document.getElementById('scan-qty').value=1;document.getElementById('lookup-result').textContent='';
+}
+
+// ==================== QR CODE ====================
+function showQR(id){
+  const art=stock.find(a=>a.id===id);if(!art)return;
+  currentQRArticle=art;
+  document.getElementById('qr-title').textContent='QR Code — '+art.id;
+  document.getElementById('qr-art-name').textContent=art.categorie+' Ø'+art.diametre;
+  document.getElementById('qr-art-detail').textContent=art.id+' · Stock : '+art.stock;
+  const qrDiv=document.getElementById('qr-display');qrDiv.innerHTML='';
+  new QRCode(qrDiv,{text:art.id,width:180,height:180,colorDark:'#1a1917',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+  openModal('modal-qr');
+}
+function printQR(){
+  if(!currentQRArticle)return;const art=currentQRArticle;
+  const el=document.querySelector('#qr-display img')||document.querySelector('#qr-display canvas');
+  const src=el?(el.src||el.toDataURL()):'';
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>Étiquette ${art.id}</title>
+  <style>body{font-family:sans-serif;text-align:center;padding:20px;}.label{border:2px solid #333;border-radius:8px;padding:16px;display:inline-block;}h2{font-size:13px;margin:0 0 2px;}p{font-size:10px;color:#555;margin:2px 0;}img{width:150px;height:150px;}</style>
+  </head><body><div class="label"><h2>${art.categorie}</h2><p>Ø ${art.diametre}</p><p><strong>${art.id}</strong></p><img src="${src}"><p style="margin-top:6px;font-size:9px;">StockPro Alu · ${art.id}</p></div><script>window.print();<\/script></body></html>`);
+  w.document.close();
+}
+
+// ==================== COMMANDES ====================
+function openCmdModal(){
+  cmdItems=[];
+  ['cmd-chantier','cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('cmd-urgence').value='normale';
+  renderCmdItems();switchAddMode('search');buildCatPills();
+  openModal('modal-commande');
+}
+let addMode='search';
+function switchAddMode(mode){
+  addMode=mode;
+  document.getElementById('add-mode-search').style.display=mode==='search'?'':'none';
+  document.getElementById('add-mode-cat').style.display=mode==='cat'?'':'none';
+  document.getElementById('add-mode-qr').style.display=mode==='qr'?'':'none';
+  if(mode!=='qr')stopCmdQR();
+  if(mode==='cat')renderCatItems(categories[0]);
+}
+function filterCmdSearch(val){
+  const dd=document.getElementById('cmd-search-dropdown');
+  if(val.length<1){dd.style.display='none';return;}
+  const matches=stock.filter(a=>a.id.toLowerCase().includes(val.toLowerCase())||a.diametre.includes(val)||a.categorie.toLowerCase().includes(val.toLowerCase())).slice(0,10);
+  if(matches.length===0){dd.style.display='none';return;}
+  dd.style.display='';
+  dd.innerHTML=matches.map(a=>`<div onclick="addCmdItem('${a.id}')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;" onmouseover="this.style.background='#f5f4f0'" onmouseout="this.style.background=''">
+    <code>${a.id}</code> · ${a.categorie} Ø${a.diametre} <span style="color:${getStatus(a)==='ok'?'var(--green)':'var(--red)'};">${a.stock} en stock</span></div>`).join('');
+}
+function buildCatPills(){
+  const pills=document.getElementById('cmd-cat-pills');
+  pills.innerHTML=categories.map((c,i)=>`<div class="cat-pill ${i===0?'active':''}" onclick="selectCatPill(this,'${c}')">${c}</div>`).join('');
+}
+function selectCatPill(el,cat){
+  document.querySelectorAll('.cat-pill').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');renderCatItems(cat);
+}
+function renderCatItems(cat){
+  const items=stock.filter(a=>a.categorie===cat);
+  document.getElementById('cmd-cat-items').innerHTML=items.map(a=>{const s=getStatus(a);
+    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <span><code>${a.id}</code> Ø${a.diametre}</span>
+      <span style="color:${s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)'};">${a.stock} unités</span>
+      <button class="btn btn-xs btn-primary" onclick="addCmdItem('${a.id}')">+ Ajouter</button></div>`;}).join('');
+}
+function addCmdItem(id){
+  const existing=cmdItems.find(i=>i.id===id);
+  if(existing){existing.qty++;renderCmdItems();return;}
+  cmdItems.push({id,qty:1});renderCmdItems();
+  document.getElementById('cmd-search-dropdown').style.display='none';
+  document.getElementById('cmd-art-search').value='';
+}
+function removeCmdItem(id){cmdItems=cmdItems.filter(i=>i.id!==id);renderCmdItems();}
+function renderCmdItems(){
+  const list=document.getElementById('cmd-items-list');
+  const empty=document.getElementById('cmd-items-empty');
+  if(cmdItems.length===0){list.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+  list.innerHTML=cmdItems.map(item=>{
+    const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:0};
+    return`<div class="cmd-item">
+      <div class="cmd-item-info"><strong><code>${item.id}</code></strong><br><small>${art.categorie} Ø${art.diametre} · ${art.stock} en stock</small></div>
+      <input type="number" class="cmd-item-qty" value="${item.qty}" min="1" onchange="updateCmdQty('${item.id}',this.value)">
+      <button class="cmd-item-del" onclick="removeCmdItem('${item.id}')">🗑</button>
+    </div>`;}).join('');
+}
+function updateCmdQty(id,val){const item=cmdItems.find(i=>i.id===id);if(item)item.qty=parseInt(val)||1;}
+async function startCmdQR(){
+  if(cmdHtml5QrCode)return;
+  const zone=document.getElementById('cmd-qr-zone');
+  zone.style.minHeight='220px';
+  zone.innerHTML='';
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    alert('Votre navigateur ne supporte pas la caméra.\nUtilisez Chrome ou Safari sur HTTPS.');return;
+  }
+  try{await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});}
+  catch(e){alert('Accès caméra refusé.\nAutorisez la caméra dans les paramètres du navigateur.');return;}
+  try{
+    cmdHtml5QrCode=new Html5Qrcode('cmd-qr-zone');
+    await cmdHtml5QrCode.start(
+      {facingMode:'environment'},
+      {fps:10,qrbox:{width:200,height:200},aspectRatio:1.0},
+      (text)=>{const art=stock.find(a=>a.id===text||a.id===text.trim());if(art){addCmdItem(art.id);}else alert('Article "'+text+'" introuvable.');},
+      ()=>{}
+    );
+    document.getElementById('btn-cmd-qr-start').style.display='none';
+    document.getElementById('btn-cmd-qr-stop').style.display='';
+  }catch(e){cmdHtml5QrCode=null;alert('Impossible de démarrer la caméra :\n'+e);}
+}
+function stopCmdQR(){
+  if(cmdHtml5QrCode){
+    try{cmdHtml5QrCode.stop().then(()=>{cmdHtml5QrCode.clear();document.getElementById('cmd-qr-zone').innerHTML='';}).catch(()=>{});}catch(e){}
+    cmdHtml5QrCode=null;
+  }
+  const b1=document.getElementById('btn-cmd-qr-start'),b2=document.getElementById('btn-cmd-qr-stop');
+  if(b1)b1.style.display='';if(b2)b2.style.display='none';
+}
+async function saveCommande(){
+  if(!document.getElementById('cmd-chantier').value.trim()){alert('Veuillez indiquer le chantier.');return;}
+  if(cmdItems.length===0){alert('Ajoutez au moins un article.');return;}
+  document.querySelectorAll('.cmd-item-qty').forEach(inp=>{
+    const id=inp.closest('.cmd-item').querySelector('code').textContent;
+    const item=cmdItems.find(i=>i.id===id);if(item)item.qty=parseInt(inp.value)||1;
+  });
+  const num = cmdCounter;
+  const cmd = {
+    num,
+    chantier:document.getElementById('cmd-chantier').value.trim(),
+    nom:document.getElementById('cmd-nom').value,
+    urgence:document.getElementById('cmd-urgence').value,
+    notes:document.getElementById('cmd-notes').value,
+    items:cmdItems.map(i=>({...i})),
+    statut:'en_attente'
+  };
+  const {error} = await db.from('commandes').insert(cmd);
+  if(error){showToast('❌ Erreur création commande');return;}
+  // Incrémenter compteur
+  await db.from('config').upsert({key:'cmd_counter', value: num+1});
+  cmdCounter++;
+  await db.from('historique').insert({
+    type:'cmd', article_id:'#'+String(num).padStart(3,'0'),
+    categorie:cmd.chantier, diametre:'',
+    qty:cmd.items.reduce((s,i)=>s+i.qty,0),
+    equipe:cmd.nom||cmd.chantier, note:cmd.items.length+' article(s)', new_stock:null
+  });
+  closeModal('modal-commande');
+  showToast('✅ Commande soumise');
+}
+function renderCommandes(){
+  const tbody=document.getElementById('commandes-table');
+  document.getElementById('cmd-empty').style.display=commandes.length===0?'':'none';
+  tbody.innerHTML=commandes.map(c=>`<tr>
+    <td><code>#${String(c.num).padStart(3,'0')}</code></td>
+    <td style="font-size:11px;color:var(--text3);">${fmtDate(new Date(c.created_at).getTime())}</td>
+    <td>${c.chantier}</td>
+    <td>${c.items?c.items.length+' article(s) — '+c.items.map(i=>'<code>'+i.id+'</code> x'+i.qty).join(', '):'—'}</td>
+    <td><span class="badge ${c.urgence==='critique'?'badge-danger':c.urgence==='urgent'?'badge-warn':'badge-gray'}">${c.urgence}</span></td>
+    <td>${cmdBadge(c.statut)}</td>
+    <td style="text-align:right;">
+      <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
+      ${c.statut==='en_attente'?`<button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
+      <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✗</button>`:''}
+    </td></tr>`).join('');
+  updateBadges();
+}
+function viewCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  document.getElementById('cmd-detail-title').textContent='Commande #'+String(c.num).padStart(3,'0')+' — '+c.chantier;
+  document.getElementById('cmd-detail-body').innerHTML=`
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">
+      <strong>Date :</strong> ${fmtDate(new Date(c.created_at).getTime())} &nbsp;|&nbsp; <strong>Demandeur :</strong> ${c.nom||'—'} &nbsp;|&nbsp;
+      <strong>Urgence :</strong> <span class="badge ${c.urgence==='critique'?'badge-danger':c.urgence==='urgent'?'badge-warn':'badge-gray'}">${c.urgence}</span> &nbsp;|&nbsp; ${cmdBadge(c.statut)}</div>
+    ${c.notes?`<div style="font-size:13px;color:var(--text2);margin-bottom:12px;">Notes : ${c.notes}</div>`:''}
+    <div class="table-wrap"><table><thead><tr><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Qté commandée</th><th>Stock actuel</th></tr></thead>
+    <tbody>${(c.items||[]).map(item=>{const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:'?'};
+      return`<tr><td><code>${item.id}</code></td><td>${art.categorie}</td><td>${art.diametre}</td><td><strong>${item.qty}</strong></td><td class="${getStatus(art)!=='ok'?'stock-danger':''}">${art.stock}</td></tr>`;}).join('')}
+    </tbody></table></div>`;
+  document.getElementById('cmd-detail-footer').innerHTML=`
+    <button class="btn" onclick="closeModal('modal-cmd-detail')">Fermer</button>
+    ${c.statut==='en_attente'?`
+      <button class="btn btn-danger btn-sm" onclick="refuserCmd('${c.id}');closeModal('modal-cmd-detail');">✗ Refuser</button>
+      <button class="btn btn-primary btn-sm" onclick="approuverCmd('${c.id}');closeModal('modal-cmd-detail');">✓ Approuver et déduire du stock</button>`:''}`;
+  openModal('modal-cmd-detail');
+}
+async function approuverCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c||c.statut!=='en_attente')return;
+  const msgs=[];
+  for(const item of (c.items||[])){
+    const art=stock.find(a=>a.id===item.id);
+    if(!art){msgs.push('⚠ '+item.id+' introuvable.');continue;}
+    const dispo=Math.min(item.qty,art.stock);
+    const newStock=art.stock-dispo;
+    await db.from('stock').update({stock:newStock}).eq('id',art.id);
+    await db.from('historique').insert({type:'out',article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty:dispo,equipe:c.chantier,note:'Commande #'+String(c.num).padStart(3,'0'),new_stock:newStock});
+    if(dispo<item.qty)msgs.push('⚠ '+item.id+' : seulement '+dispo+'/'+item.qty+' unités déduites.');
+  }
+  await db.from('commandes').update({statut:'approuvee'}).eq('id',id);
+  showToast('✅ Commande approuvée');
+  if(msgs.length)setTimeout(()=>alert('Attention :\n'+msgs.join('\n')),500);
+}
+async function refuserCmd(id){
+  await db.from('commandes').update({statut:'refusee'}).eq('id',id);
+  showToast('Commande refusée');
+}
+
+// ==================== ALERTES ====================
+function renderAlertes(){
+  const alerts=getAlerts();
+  document.getElementById('alertes-empty').style.display=alerts.length===0?'':'none';
+  document.getElementById('alertes-table').innerHTML=alerts.map(a=>{const s=getStatus(a);
+    return`<tr><td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
+      <td class="${s==='danger'?'stock-danger':'stock-warn'}">${a.stock}</td><td>${a.stockMin}</td>
+      <td>${statusLabel(s)}</td><td><button class="btn btn-xs" onclick="openMouvement('${a.id}')">Mouvement</button></td></tr>`;}).join('');
+}
+
+// ==================== HISTORIQUE ====================
+function renderHistorique(){
+  const q=(document.getElementById('hist-search')?.value||'').toLowerCase();
+  const type=document.getElementById('hist-filter')?.value||'';
+  const filtered=historique.filter(h=>{
+    const mq=!q||h.id.toLowerCase().includes(q)||(h.categorie||'').toLowerCase().includes(q)||(h.equipe||'').toLowerCase().includes(q);
+    return mq&&(!type||h.type===type);
+  });
+  document.getElementById('hist-empty').style.display=filtered.length===0?'':'none';
+  const tlabel={in:'📥 Entrée',out:'📤 Sortie',cmd:'📋 Commande',alert:'📧 Email'};
+  const tbadge={in:'badge-ok',out:'badge-warn',cmd:'badge-blue',alert:'badge-purple'};
+  document.getElementById('hist-table').innerHTML=filtered.map(h=>`<tr>
+    <td style="font-size:11px;color:var(--text3);">${fmtDate(h.ts)}</td>
+    <td><span class="badge ${tbadge[h.type]||'badge-gray'}">${tlabel[h.type]||h.type}</span></td>
+    <td>${h.categorie||''}${h.diametre?' Ø'+h.diametre:''} ${h.id&&h.id!=='—'?'<code>'+h.id+'</code>':''}</td>
+    <td>${h.qty||'—'}</td><td>${h.equipe||'—'}</td>
+    <td>${h.newStock!=null?h.newStock:'—'}</td></tr>`).join('');
+}
+
+// ==================== ARTICLES CRUD ====================
+function openNewArticle(){
+  document.getElementById('art-modal-title').textContent='Ajouter un article';
+  document.getElementById('art-id').value='';document.getElementById('art-id').disabled=false;
+  document.getElementById('art-diam').value='';document.getElementById('art-stock').value=0;
+  document.getElementById('art-min').value=5;document.getElementById('art-prix').value=0;
+  populateArtCatSelect();openModal('modal-article');
+}
+function editArticle(id){
+  const art=stock.find(a=>a.id===id);if(!art)return;
+  document.getElementById('art-modal-title').textContent='Modifier '+art.id;
+  document.getElementById('art-id').value=art.id;document.getElementById('art-id').disabled=true;
+  document.getElementById('art-diam').value=art.diametre;document.getElementById('art-stock').value=art.stock;
+  document.getElementById('art-min').value=art.stockMin;document.getElementById('art-prix').value=art.prixUnitaire;
+  populateArtCatSelect(art.categorie);openModal('modal-article');
+}
+function populateArtCatSelect(selected){
+  const sel=document.getElementById('art-cat');sel.innerHTML='';
+  categories.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;if(c===selected)o.selected=true;sel.appendChild(o);});
+}
+async function saveArticle(){
+  const id=document.getElementById('art-id').value.trim().toUpperCase();
+  const cat=document.getElementById('art-cat').value;
+  const diam=document.getElementById('art-diam').value.trim();
+  const s=parseInt(document.getElementById('art-stock').value)||0;
+  const min=parseInt(document.getElementById('art-min').value)||0;
+  const prix=parseFloat(document.getElementById('art-prix').value)||0;
+  if(!id||!diam){alert('Référence et diamètre requis.');return;}
+  const existing=stock.find(a=>a.id===id);
+  let error;
+  if(existing){
+    ({error}=await db.from('stock').update({categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix}).eq('id',id));
+  } else {
+    ({error}=await db.from('stock').insert({id,categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix}));
+  }
+  if(error){showToast('❌ Erreur : '+error.message);return;}
+  document.getElementById('art-id').disabled=false;
+  closeModal('modal-article');
+  showToast('✅ Article enregistré');
+}
+
+// ==================== CATEGORIES ====================
+function renderCategories(){
+  document.getElementById('cat-table').innerHTML=categories.map(c=>{
+    const count=stock.filter(a=>a.categorie===c).length;
+    return`<tr><td class="cat-list-name">${c}</td><td>${count} article(s)</td>
+      <td style="text-align:right;">
+        <button class="btn btn-xs" onclick="editCat('${c}')">✏ Renommer</button>
+        ${count===0?`<button class="btn btn-xs btn-danger" style="margin-left:4px;" onclick="deleteCat('${c}')">🗑 Supprimer</button>`:''}
+      </td></tr>`;}).join('');
+}
+function editCat(name){
+  editingCat=name;
+  document.getElementById('cat-modal-title').textContent='Renommer : '+name;
+  document.getElementById('newcat-name').value=name;
+  openModal('modal-newcat');
+}
+async function saveCat(){
+  const name=document.getElementById('newcat-name').value.trim();
+  if(!name){alert('Nom requis.');return;}
+  let newCats=[...categories];
+  if(editingCat){
+    const idx=newCats.indexOf(editingCat);
+    if(idx!==-1){
+      newCats[idx]=name;
+      // Renommer dans le stock aussi
+      const arts=stock.filter(a=>a.categorie===editingCat);
+      for(const a of arts) await db.from('stock').update({categorie:name}).eq('id',a.id);
+    }
+    editingCat=null;
+  } else {
+    if(newCats.includes(name)){alert('Cette catégorie existe déjà.');return;}
+    newCats.push(name);
+  }
+  await db.from('config').upsert({key:'categories', value:newCats});
+  document.getElementById('cat-modal-title').textContent='Nouvelle catégorie';
+  closeModal('modal-newcat');
+  showToast('✅ Catégorie enregistrée');
+}
+async function deleteCat(name){
+  if(!confirm('Supprimer la catégorie "'+name+'" ?'))return;
+  const newCats=categories.filter(c=>c!==name);
+  await db.from('config').upsert({key:'categories', value:newCats});
+  showToast('Catégorie supprimée');
+}
+
+// ==================== PARAMETRES ====================
+function renderParams(){
+  document.getElementById('param-email').value=params.email||'';
+  document.getElementById('param-company').value=params.company||'';
+}
+async function saveParams(){
+  params.email=document.getElementById('param-email').value.trim();
+  params.company=document.getElementById('param-company').value.trim();
+  await db.from('config').upsert({key:'email',value:params.email});
+  await db.from('config').upsert({key:'company',value:params.company});
+  showToast('✅ Paramètres enregistrés');
+}
+async function resetData(){
+  if(!confirm('⚠ Réinitialiser TOUTES les données ? Cette action est irréversible.'))return;
+  if(!confirm('Confirmation finale : toutes les données seront effacées.'))return;
+  await db.from('historique').delete().neq('id','00000000-0000-0000-0000-000000000000');
+  await db.from('commandes').delete().neq('id','00000000-0000-0000-0000-000000000000');
+  await db.from('stock').delete().neq('id','placeholder');
+  await db.from('stock').insert(INVENTORY_DATA);
+  await db.from('config').upsert({key:'cmd_counter',value:1});
+  showToast('✅ Données réinitialisées');
+  await loadAllData();
+  renderDashboard(); updateBadges();
+}
+
+// ==================== EXPORT ====================
+function exportExcel(){
+  const ws1=XLSX.utils.aoa_to_sheet([
+    ['Référence','Catégorie','Diamètre','Stock','Stock min','Prix unit. (€)','Valeur (€)','Statut'],
+    ...stock.map(a=>[a.id,a.categorie,a.diametre,a.stock,a.stockMin,a.prixUnitaire||'',+(a.stock*a.prixUnitaire).toFixed(2),
+      getStatus(a)==='ok'?'OK':getStatus(a)==='warn'?'Stock bas':'Critique'])
+  ]);
+  const ws2=XLSX.utils.aoa_to_sheet([
+    ['Date','Type','Article','Qté','Chantier','Nouveau stock','Note'],
+    ...historique.map(h=>[new Date(h.ts).toLocaleString('fr-FR'),h.type,h.id,h.qty,h.equipe,h.newStock??'',h.note||''])
+  ]);
+  const ws3=XLSX.utils.aoa_to_sheet([
+    ['N°','Date','Chantier','Demandeur','Articles','Urgence','Statut'],
+    ...commandes.map(c=>['#'+String(c.num).padStart(3,'0'),new Date(c.created_at).toLocaleString('fr-FR'),
+      c.chantier,c.nom||'',(c.items||[]).map(i=>i.id+' x'+i.qty).join(', '),c.urgence,c.statut])
+  ]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws1,'Inventaire');
+  XLSX.utils.book_append_sheet(wb,ws2,'Historique');
+  XLSX.utils.book_append_sheet(wb,ws3,'Commandes');
+  XLSX.writeFile(wb,'StockPro_Alu_'+new Date().toLocaleDateString('fr-FR').replace(/\//g,'-')+'.xlsx');
+}
+
+// ==================== MODAL ====================
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  if(id==='modal-newcat')editingCat=null;
+  if(id==='modal-article')document.getElementById('art-id').disabled=false;
+}
+document.querySelectorAll('.modal-backdrop').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id);}));
+
+// ==================== DÉMARRAGE ====================
+initApp();
+</script>
+
+<!-- SQL À EXÉCUTER DANS SUPABASE (si table stock manquante) :
+create table if not exists stock (
+  id text primary key,
+  categorie text,
+  diametre text,
+  stock integer default 0,
+  stock_min integer default 5,
+  prix_unitaire numeric default 0,
+  updated_at timestamptz default now()
+);
+alter table stock disable row level security;
+
+-- Activer le temps réel sur toutes les tables :
+alter publication supabase_realtime add table stock;
+alter publication supabase_realtime add table commandes;
+alter publication supabase_realtime add table historique;
+alter publication supabase_realtime add table config;
+-->
+</body>
+</html>
