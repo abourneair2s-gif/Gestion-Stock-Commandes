@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>StockPro — Gestion Inventaire Alu</title>
+<title>StockPro — Gestion Inventaire </title>
 <!-- Supabase: chargé en priorité (requis pour la connexion) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Librairies secondaires: chargées après sans bloquer -->
@@ -888,7 +888,7 @@ function renderDashboard(){
     <div class="kpi"><div class="kpi-label">Articles référencés</div><div class="kpi-value">${stock.length}</div></div>
     <div class="kpi"><div class="kpi-label">Valeur inventaire</div><div class="kpi-value" style="font-size:18px;">${totalVal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')} €</div></div>
     <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div></div>
-    <div class="kpi" onclick="showPage('commandes',document.querySelector('[data-page=commandes]'))" style="cursor:pointer;" onmouseover="this.style.outline='2px solid var(--green)'" onmouseout="this.style.outline=''"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
+    <div class="kpi" onclick="goToCommandes()" style="cursor:pointer;" onmouseover="this.style.outline='2px solid var(--green)'" onmouseout="this.style.outline=''"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
   const alertDiv=document.getElementById('dashboard-alerts');
   const top5=alerts.slice(0,5);
   alertDiv.innerHTML=top5.length===0?'<div style="font-size:13px;color:var(--green);padding:10px 0;">✅ Tous les stocks sont OK</div>'
@@ -1606,6 +1606,17 @@ function closeModal(id){
 document.querySelectorAll('.modal-backdrop').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id);}));
 
 // ==================== DÉMARRAGE ====================
+
+// ==================== NAVIGATION KPI ====================
+function goToCommandes(){
+  // Cherche le bouton nav desktop ou mobile avec data-page=commandes
+  let btn=null;
+  document.querySelectorAll('.nav-btn,.mob-btn').forEach(b=>{
+    if(b.getAttribute('data-page')==='commandes') btn=b;
+  });
+  if(btn) btn.click();
+  else showPage('commandes',null);
+}
 
 // ==================== SUPPRIMER COMMANDE ====================
 async function deleteCmd(id){
