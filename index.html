@@ -751,7 +751,7 @@ async function loadAllData() {
     db.from('stock').select('*').order('categorie').order('id'),
     db.from('commandes').select('*').order('created_at', {ascending:false}),
     db.from('historique').select('*').order('created_at', {ascending:false}).limit(500),
-    db.from('config').select('*'),
+    db.from('configuration').select('*'),
   ]);
 
   if (stockRes.error) throw stockRes.error;
@@ -807,7 +807,7 @@ function subscribeRealtime() {
       renderHistorique();
     })
     .on('postgres_changes', {event:'*', schema:'public', table:'config'}, async () => {
-      const {data} = await db.from('config').select('*');
+      const {data} = await db.from('configuration').select('*');
       if (data) data.forEach(row => {
         if (row.key === 'categories') { categories = row.value; renderCategories(); }
         if (row.key === 'cmd_counter') cmdCounter = row.value;
@@ -964,7 +964,7 @@ function renderPareto(){
   withSorties.sort((a,b)=>b.sorties-a.sorties);
   const totalSorties=withSorties.reduce((s,a)=>s+a.sorties,0);
   if(totalSorties===0){
-    document.getElementById('pareto-vital').innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);">Aucune sortie de stock enregistrée. Effectuez des mouvements pour voir l'analyse.</td></tr>';
+    document.getElementById('pareto-vital').innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);">Aucune sortie de stock enregistr\u00e9e. Effectuez des mouvements pour voir l\'analyse.</td></tr>';
     document.getElementById('pareto-other').innerHTML='';
     document.getElementById('pareto-kpi-vital').innerHTML='<div class="kpi-label">🟢 Articles vitaux (20%)</div><div class="kpi-value">—</div>';
     document.getElementById('pareto-kpi-other').innerHTML='<div class="kpi-label">⚪ Articles secondaires (80%)</div><div class="kpi-value">—</div>';
@@ -1271,7 +1271,7 @@ async function saveCommande(){
   const {error} = await db.from('commandes').insert(cmd);
   if(error){showToast('❌ Erreur création commande');return;}
   // Incrémenter compteur
-  await db.from('config').upsert({key:'cmd_counter', value: num+1});
+  await db.from('configuration').upsert({key:'cmd_counter', value: num+1});
   cmdCounter++;
   await db.from('historique').insert({
     type:'cmd', article_id:'#'+String(num).padStart(3,'0'),
@@ -1536,7 +1536,7 @@ async function saveCat(){
     if(newCats.includes(name)){alert('Cette catégorie existe déjà.');return;}
     newCats.push(name);
   }
-  await db.from('config').upsert({key:'categories', value:newCats});
+  await db.from('configuration').upsert({key:'categories', value:newCats});
   document.getElementById('cat-modal-title').textContent='Nouvelle catégorie';
   closeModal('modal-newcat');
   showToast('✅ Catégorie enregistrée');
@@ -1544,7 +1544,7 @@ async function saveCat(){
 async function deleteCat(name){
   if(!confirm('Supprimer la catégorie "'+name+'" ?'))return;
   const newCats=categories.filter(c=>c!==name);
-  await db.from('config').upsert({key:'categories', value:newCats});
+  await db.from('configuration').upsert({key:'categories', value:newCats});
   showToast('Catégorie supprimée');
 }
 
@@ -1556,8 +1556,8 @@ function renderParams(){
 async function saveParams(){
   params.email=document.getElementById('param-email').value.trim();
   params.company=document.getElementById('param-company').value.trim();
-  await db.from('config').upsert({key:'email',value:params.email});
-  await db.from('config').upsert({key:'company',value:params.company});
+  await db.from('configuration').upsert({key:'email',value:params.email});
+  await db.from('configuration').upsert({key:'company',value:params.company});
   showToast('✅ Paramètres enregistrés');
 }
 async function resetData(){
@@ -1567,7 +1567,7 @@ async function resetData(){
   await db.from('commandes').delete().neq('id','00000000-0000-0000-0000-000000000000');
   await db.from('stock').delete().neq('id','placeholder');
   await db.from('stock').insert(INVENTORY_DATA);
-  await db.from('config').upsert({key:'cmd_counter',value:1});
+  await db.from('configuration').upsert({key:'cmd_counter',value:1});
   showToast('✅ Données réinitialisées');
   await loadAllData();
   renderDashboard(); updateBadges();
@@ -1714,7 +1714,7 @@ async function saveSubCat(){
   const fullName=parent+' > '+name;
   if(categories.includes(fullName)){alert('Cette sous-catégorie existe déjà.');return;}
   const newCats=[...categories,fullName];
-  await db.from('config').upsert({key:'categories',value:newCats});
+  await db.from('configuration').upsert({key:'categories',value:newCats});
   categories=newCats;
   closeModal('modal-newsubcat');
   renderCategories(); updateBadges();
