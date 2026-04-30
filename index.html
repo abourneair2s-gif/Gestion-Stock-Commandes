@@ -4,10 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>StockPro — Gestion Inventaire Alu</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<!-- Supabase: chargé en priorité (requis pour la connexion) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Librairies secondaires: chargées après sans bloquer -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" defer></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 :root{
@@ -172,6 +174,9 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 <div id="loading-overlay">
   <div class="spinner"></div>
   <div style="font-size:14px;color:var(--text2);">Connexion à la base de données…</div>
+  <div id="loading-hint" style="display:none;font-size:12px;color:var(--text3);text-align:center;max-width:320px;line-height:1.6;margin-top:8px;padding:10px;background:#fef3e2;border-radius:8px;border-left:3px solid #b87010;">
+    ⚠ Connexion lente.<br>Vérifiez votre clé <strong>anon public</strong> dans<br>Supabase → Settings → API
+  </div>
 </div>
 
 <!-- Toast -->
@@ -249,22 +254,22 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 
     <!-- PARETO -->
     <div class="page" id="page-pareto">
-      <div class="info-box">📈 <strong>Loi de Pareto (80/20)</strong> — Les articles "vitaux" représentent 80% de la valeur d'inventaire.</div>
+      <div class="info-box">📈 <strong>Loi de Pareto (80/20)</strong> — Les articles "vitaux" représentent 80% des <strong>sorties de stock</strong>. Basé sur l'historique réel des mouvements.</div>
       <div class="two-col" style="margin-bottom:14px;">
         <div class="kpi" id="pareto-kpi-vital"></div>
         <div class="kpi" id="pareto-kpi-other"></div>
       </div>
-      <div class="section-header"><div class="section-title">🟢 Articles vitaux — 80% de la valeur</div></div>
+      <div class="section-header"><div class="section-title">🟢 Articles vitaux — 80% des sorties de stock</div></div>
       <div class="table-wrap">
-        <table><thead><tr><th>Rang</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Stock</th><th>Prix unit.</th><th>Valeur</th><th>% cumulé</th><th>Statut</th></tr></thead>
+        <table><thead><tr><th>Rang</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Stock actuel</th><th>Sorties totales</th><th>% cumulé</th><th>Statut</th></tr></thead>
         <tbody id="pareto-vital"></tbody></table>
       </div>
-      <div class="section-header" style="margin-top:8px;"><div class="section-title">⚪ Articles secondaires — 20% restants</div></div>
+      <div class="section-header" style="margin-top:8px;"><div class="section-title">⚪ Articles secondaires — 20% restants des sorties</div></div>
       <div class="table-wrap">
-        <table><thead><tr><th>Rang</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Stock</th><th>Prix unit.</th><th>Valeur</th><th>% cumulé</th></tr></thead>
+        <table><thead><tr><th>Rang</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Stock actuel</th><th>Sorties totales</th><th>% cumulé</th></tr></thead>
         <tbody id="pareto-other"></tbody></table>
       </div>
-      <div class="section-header" style="margin-top:8px;"><div class="section-title">Valeur par catégorie</div></div>
+      <div class="section-header" style="margin-top:8px;"><div class="section-title">Sorties par catégorie</div></div>
       <div id="pareto-cat-bars"></div>
     </div>
 
@@ -288,8 +293,19 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         </div>
       </div>
       <div id="scan-tab-manual" style="display:none;">
-        <div class="form-row"><label class="form-label">Référence article</label><input type="text" id="manual-ref" placeholder="ex: GAI 450, C90 315…" oninput="lookupArticle(this.value)"></div>
-        <div id="lookup-result" style="font-size:12px;min-height:18px;margin-bottom:10px;"></div>
+        <div class="tab-switch" style="margin-bottom:10px;">
+          <button class="tab-sw-btn active" onclick="switchScanManualMode('ref',this)">⌨️ Par référence</button>
+          <button class="tab-sw-btn" onclick="switchScanManualMode('cat',this)">📂 Par catégorie</button>
+        </div>
+        <div id="scan-manual-ref">
+          <div class="form-row"><label class="form-label">Référence article</label><input type="text" id="manual-ref" placeholder="ex: GAI 450, C90 315…" oninput="lookupArticle(this.value)"></div>
+          <div id="lookup-result" style="font-size:12px;min-height:18px;margin-bottom:10px;"></div>
+        </div>
+        <div id="scan-manual-cat" style="display:none;">
+          <div class="cat-pills" id="scan-cat-pills" style="margin-bottom:8px;"></div>
+          <div id="scan-cat-items" style="max-height:200px;overflow-y:auto;margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 0;"></div>
+          <div id="scan-selected-art" style="font-size:13px;color:var(--green);font-weight:600;min-height:18px;margin-bottom:6px;"></div>
+        </div>
         <div class="form-grid col2">
           <div class="form-row"><label class="form-label">Type</label><select id="scan-type"><option value="out">Sortie de stock</option><option value="in">Entrée de stock</option></select></div>
           <div class="form-row"><label class="form-label">Quantité</label><input type="number" id="scan-qty" value="1" min="1"></div>
@@ -349,14 +365,17 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <!-- CATEGORIES -->
     <div class="page" id="page-categories">
       <div class="section-header">
-        <div class="section-title">Gestion des catégories</div>
-        <button class="btn btn-primary btn-sm" onclick="openModal('modal-newcat')">+ Nouvelle catégorie</button>
+        <div class="section-title">Gestion des catégories & sous-catégories</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm" onclick="openNewSubCat()">+ Sous-catégorie</button>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-newcat')">+ Catégorie</button>
+        </div>
       </div>
       <div class="table-wrap">
-        <table><thead><tr><th>Nom de la catégorie</th><th>Articles</th><th></th></tr></thead>
+        <table><thead><tr><th>Nom</th><th>Type</th><th>Articles</th><th></th></tr></thead>
         <tbody id="cat-table"></tbody></table>
       </div>
-      <div class="info-box" style="margin-top:8px;">⚠ La suppression d'une catégorie n'est possible que si elle ne contient aucun article.</div>
+      <div class="info-box" style="margin-top:8px;">⚠ La suppression n'est possible que si la catégorie/sous-catégorie ne contient aucun article.</div>
     </div>
 
     <!-- PARAMETRES -->
@@ -550,6 +569,21 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   </div>
 </div>
 
+<!-- Modal: Nouvelle sous-catégorie -->
+<div class="modal-backdrop" id="modal-newsubcat">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="subcat-modal-title">Nouvelle sous-catégorie</div></div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Catégorie parente</label><select id="subcat-parent"></select></div>
+      <div class="form-row"><label class="form-label">Nom de la sous-catégorie</label><input type="text" id="subcat-name" placeholder="ex: 90° Mâle, Femelle-Femelle…"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-newsubcat')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveSubCat()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ==================== SUPABASE ====================
 const SUPABASE_URL = 'https://cjvlqicfjjhxjhtawbnq.supabase.co';
@@ -698,6 +732,20 @@ async function initApp() {
   }
 }
 
+// Afficher un hint si connexion lente après 5s
+setTimeout(()=>{const h=document.getElementById('loading-hint');if(h)h.style.display='';},5000);
+
+// Sécurité : si l'overlay reste affiché > 12s, on le cache et on affiche l'erreur
+setTimeout(()=>{
+  const ov=document.getElementById('loading-overlay');
+  if(ov&&!ov.classList.contains('hidden')){
+    ov.classList.add('hidden');
+    document.getElementById('toast').textContent='⚠ Connexion lente ou clé Supabase invalide. Vérifiez Settings → API dans Supabase.';
+    document.getElementById('toast').classList.add('show');
+    setTimeout(()=>document.getElementById('toast').classList.remove('show'),8000);
+  }
+},12000);
+
 async function loadAllData() {
   const [stockRes, cmdRes, histRes, configRes] = await Promise.all([
     db.from('stock').select('*').order('categorie').order('id'),
@@ -840,7 +888,7 @@ function renderDashboard(){
     <div class="kpi"><div class="kpi-label">Articles référencés</div><div class="kpi-value">${stock.length}</div></div>
     <div class="kpi"><div class="kpi-label">Valeur inventaire</div><div class="kpi-value" style="font-size:18px;">${totalVal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')} €</div></div>
     <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div></div>
-    <div class="kpi"><div class="kpi-label">Commandes en attente</div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
+    <div class="kpi" onclick="showPage('commandes',document.querySelector('[data-page=commandes]'))" style="cursor:pointer;" onmouseover="this.style.outline='2px solid var(--green)'" onmouseout="this.style.outline=''"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
   const alertDiv=document.getElementById('dashboard-alerts');
   const top5=alerts.slice(0,5);
   alertDiv.innerHTML=top5.length===0?'<div style="font-size:13px;color:var(--green);padding:10px 0;">✅ Tous les stocks sont OK</div>'
@@ -868,7 +916,13 @@ function renderDashboard(){
 function populateCatFilter(){
   const sel=document.getElementById('filter-cat');
   if(sel&&sel.options.length<=1){
-    categories.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
+    const parents=categories.filter(c=>!c.includes(' > ')).sort();
+    parents.forEach(p=>{
+      const o=document.createElement('option');o.value=p;o.textContent=p;sel.appendChild(o);
+      categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>{
+        const o2=document.createElement('option');o2.value=sc;o2.textContent='  ↳ '+sc.split(' > ')[1];sel.appendChild(o2);
+      });
+    });
   }
 }
 function renderStock(){
@@ -901,34 +955,47 @@ function renderStock(){
 
 // ==================== PARETO ====================
 function renderPareto(){
-  const withVal=stock.filter(a=>a.prixUnitaire>0&&a.stock>0).map(a=>({...a,valeur:a.stock*a.prixUnitaire}));
-  withVal.sort((a,b)=>b.valeur-a.valeur);
-  const totalVal=withVal.reduce((s,a)=>s+a.valeur,0);
-  if(totalVal===0){document.getElementById('pareto-vital').innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);">Aucune donnée de valeur disponible.</td></tr>';return;}
-  let cumul=0;const vital=[],other=[];
-  withVal.forEach((a,i)=>{
-    cumul+=a.valeur;const pct=(cumul/totalVal*100);const obj={...a,rang:i+1,pctCumul:pct};
-    if(pct<=82||vital.length<Math.ceil(withVal.length*0.22))vital.push(obj);else other.push(obj);
+  // Calcul des sorties par article depuis l'historique
+  const sorties={};
+  historique.filter(h=>h.type==='out').forEach(h=>{
+    sorties[h.id]=(sorties[h.id]||0)+(h.qty||0);
   });
-  const vv=vital.reduce((s,a)=>s+a.valeur,0);const ov=other.reduce((s,a)=>s+a.valeur,0);
-  document.getElementById('pareto-kpi-vital').innerHTML=`<div class="kpi-label">🟢 Articles vitaux (20%)</div><div class="kpi-value">${vital.length} <span style="font-size:14px;font-weight:400;">articles</span></div><div class="kpi-sub ok">${(vv/totalVal*100).toFixed(0)}% de la valeur — ${vv.toFixed(2).replace('.',',')} €</div>`;
-  document.getElementById('pareto-kpi-other').innerHTML=`<div class="kpi-label">⚪ Articles secondaires (80%)</div><div class="kpi-value">${other.length} <span style="font-size:14px;font-weight:400;">articles</span></div><div class="kpi-sub">${(ov/totalVal*100).toFixed(0)}% de la valeur — ${ov.toFixed(2).replace('.',',')} €</div>`;
+  const withSorties=stock.map(a=>({...a,sorties:sorties[a.id]||0})).filter(a=>a.sorties>0);
+  withSorties.sort((a,b)=>b.sorties-a.sorties);
+  const totalSorties=withSorties.reduce((s,a)=>s+a.sorties,0);
+  if(totalSorties===0){
+    document.getElementById('pareto-vital').innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);">Aucune sortie de stock enregistrée. Effectuez des mouvements pour voir l'analyse.</td></tr>';
+    document.getElementById('pareto-other').innerHTML='';
+    document.getElementById('pareto-kpi-vital').innerHTML='<div class="kpi-label">🟢 Articles vitaux (20%)</div><div class="kpi-value">—</div>';
+    document.getElementById('pareto-kpi-other').innerHTML='<div class="kpi-label">⚪ Articles secondaires (80%)</div><div class="kpi-value">—</div>';
+    document.getElementById('pareto-cat-bars').innerHTML='';
+    return;
+  }
+  let cumul=0;const vital=[],other=[];
+  withSorties.forEach((a,i)=>{
+    cumul+=a.sorties;const pct=(cumul/totalSorties*100);const obj={...a,rang:i+1,pctCumul:pct};
+    if(pct<=82||vital.length<Math.ceil(withSorties.length*0.22))vital.push(obj);else other.push(obj);
+  });
+  const vs=vital.reduce((s,a)=>s+a.sorties,0);const os=other.reduce((s,a)=>s+a.sorties,0);
+  document.getElementById('pareto-kpi-vital').innerHTML=`<div class="kpi-label">🟢 Articles vitaux (20% des références)</div><div class="kpi-value">${vital.length} <span style="font-size:14px;font-weight:400;">articles</span></div><div class="kpi-sub ok">${(vs/totalSorties*100).toFixed(0)}% des sorties — ${vs} unités sorties</div>`;
+  document.getElementById('pareto-kpi-other').innerHTML=`<div class="kpi-label">⚪ Articles secondaires (80% des références)</div><div class="kpi-value">${other.length} <span style="font-size:14px;font-weight:400;">articles</span></div><div class="kpi-sub">${(os/totalSorties*100).toFixed(0)}% des sorties — ${os} unités sorties</div>`;
   document.getElementById('pareto-vital').innerHTML=vital.map((a,i)=>{const s=getStatus(a);return`<tr style="background:${i%2===0?'#f9fdf9':''};">
     <td><span class="badge badge-purple">${a.rang}</span></td><td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
     <td class="${s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger'}">${a.stock}</td>
-    <td>${a.prixUnitaire.toFixed(2).replace('.',',')} €</td><td><strong>${a.valeur.toFixed(2).replace('.',',')} €</strong></td>
+    <td><strong>${a.sorties}</strong> unités</td>
     <td><span style="font-weight:600;color:var(--green);">${a.pctCumul.toFixed(1)}%</span></td><td>${statusLabel(s)}</td></tr>`;}).join('');
   document.getElementById('pareto-other').innerHTML=other.map(a=>`<tr>
     <td>${a.rang}</td><td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
-    <td>${a.stock}</td><td>${a.prixUnitaire.toFixed(2).replace('.',',')} €</td><td>${a.valeur.toFixed(2).replace('.',',')} €</td>
+    <td>${a.stock}</td><td>${a.sorties} unités</td>
     <td>${a.pctCumul.toFixed(1)}%</td></tr>`).join('');
-  const cats=[...new Set(withVal.map(a=>a.categorie))];
-  const catVals=cats.map(c=>({cat:c,val:withVal.filter(a=>a.categorie===c).reduce((s,a)=>s+a.valeur,0)}));
+  // Barres par catégorie (sorties)
+  const cats=[...new Set(withSorties.map(a=>a.categorie))];
+  const catVals=cats.map(c=>({cat:c,val:withSorties.filter(a=>a.categorie===c).reduce((s,a)=>s+a.sorties,0)}));
   catVals.sort((a,b)=>b.val-a.val);const maxV=catVals[0]?.val||1;
   document.getElementById('pareto-cat-bars').innerHTML=catVals.map(c=>`
     <div class="pareto-bar"><div class="pareto-label" title="${c.cat}">${c.cat}</div>
     <div class="pareto-track"><div class="pareto-fill p-vital" style="width:${c.val/maxV*100}%;"></div></div>
-    <div class="pareto-val">${c.val.toFixed(0)} €</div></div>`).join('');
+    <div class="pareto-val">${c.val} unités</div></div>`).join('');
 }
 
 // ==================== MOUVEMENT ====================
@@ -1043,6 +1110,7 @@ function lookupArticle(val){
   else el.textContent='';
 }
 async function processScan(){
+  if(scanSelectedArt){document.getElementById('manual-ref').value=scanSelectedArt.id;}
   const ref=document.getElementById('manual-ref').value.trim();
   const type=document.getElementById('scan-type').value;
   const qty=parseInt(document.getElementById('scan-qty').value)||1;
@@ -1055,6 +1123,7 @@ async function processScan(){
   await db.from('historique').insert({type,article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty,equipe,note:'Saisie manuelle',new_stock:newStock});
   showScanResult(true,(type==='out'?'📤 Sortie':'📥 Entrée')+' enregistrée !',art.categorie+' Ø'+art.diametre+' · '+qty+' u.',newStock);
   document.getElementById('manual-ref').value='';document.getElementById('scan-qty').value=1;document.getElementById('lookup-result').textContent='';
+  scanSelectedArt=null;document.getElementById('scan-selected-art').textContent='';
 }
 
 // ==================== QR CODE ====================
@@ -1107,7 +1176,15 @@ function filterCmdSearch(val){
 }
 function buildCatPills(){
   const pills=document.getElementById('cmd-cat-pills');
-  pills.innerHTML=categories.map((c,i)=>`<div class="cat-pill ${i===0?'active':''}" onclick="selectCatPill(this,'${c}')">${c}</div>`).join('');
+  const parents=categories.filter(c=>!c.includes(' > ')).sort();
+  const all=[...parents];
+  parents.forEach(p=>categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>all.push(sc)));
+  pills.innerHTML=all.map((c,i)=>{
+    const isSub=c.includes(' > ');
+    const label=isSub?'↳ '+c.split(' > ')[1]:c;
+    return`<div class="cat-pill ${i===0?'active':''}" style="${isSub?'font-size:11px;margin-left:8px;':''}" onclick="selectCatPill(this,'${c}')">${label}</div>`;
+  }).join('');
+  if(all.length>0)renderCatItems(all[0]);
 }
 function selectCatPill(el,cat){
   document.querySelectorAll('.cat-pill').forEach(p=>p.classList.remove('active'));
@@ -1176,6 +1253,7 @@ function stopCmdQR(){
 async function saveCommande(){
   if(!document.getElementById('cmd-chantier').value.trim()){alert('Veuillez indiquer le chantier.');return;}
   if(cmdItems.length===0){alert('Ajoutez au moins un article.');return;}
+  // Les articles avec stock=0 sont autorisés (gestion des reliquats)
   document.querySelectorAll('.cmd-item-qty').forEach(inp=>{
     const id=inp.closest('.cmd-item').querySelector('code').textContent;
     const item=cmdItems.find(i=>i.id===id);if(item)item.qty=parseInt(inp.value)||1;
@@ -1201,8 +1279,60 @@ async function saveCommande(){
     qty:cmd.items.reduce((s,i)=>s+i.qty,0),
     equipe:cmd.nom||cmd.chantier, note:cmd.items.length+' article(s)', new_stock:null
   });
+  // Envoi email via Resend si email configuré
+  if(params.email){
+    try{
+      const urgenceColor=cmd.urgence==='critique'?'#c0392b':cmd.urgence==='urgent'?'#b87010':'#1a8c66';
+      const itemsHtml=cmd.items.map(i=>{
+        const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:0,stockMin:0};
+        return`<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;">${i.id}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${art.categorie} &Oslash;${art.diametre}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:600;">${i.qty}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;color:${art.stock<art.stockMin?'#c0392b':'#1a8c66'}">${art.stock} en stock</td></tr>`;
+      }).join('');
+      await fetch('https://api.resend.com/emails',{
+        method:'POST',
+        headers:{'Authorization':'Bearer re_2DgnvfhD_ERQfYuYTiCZny3jjABaSVRWW','Content-Type':'application/json'},
+        body:JSON.stringify({
+          from:'StockPro <onboarding@resend.dev>',
+          to:params.email,
+          subject:`Nouvelle commande #${String(cmd.num).padStart(3,'0')} - ${cmd.chantier} (${cmd.urgence})`,
+          html:`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+            <div style="background:#1a8c66;color:white;padding:20px;border-radius:10px 10px 0 0;">
+              <h1 style="margin:0;font-size:20px;">Nouvelle demande de materiel</h1>
+              <p style="margin:4px 0 0;opacity:.85;font-size:13px;">StockPro - Gestion Inventaire Alu</p>
+            </div>
+            <div style="background:white;padding:24px;border-radius:0 0 10px 10px;border:1px solid #eee;">
+              <table style="width:100%;margin-bottom:20px;font-size:14px;">
+                <tr><td style="color:#666;padding:4px 0;width:120px;">Numero</td><td style="font-weight:600;">#${String(cmd.num).padStart(3,'0')}</td></tr>
+                <tr><td style="color:#666;padding:4px 0;">Chantier</td><td style="font-weight:600;">${cmd.chantier}</td></tr>
+                <tr><td style="color:#666;padding:4px 0;">Demandeur</td><td>${cmd.nom||'--'}</td></tr>
+                <tr><td style="color:#666;padding:4px 0;">Urgence</td><td><span style="background:${urgenceColor};color:white;padding:2px 10px;border-radius:20px;font-size:12px;">${cmd.urgence}</span></td></tr>
+                ${cmd.notes?`<tr><td style="color:#666;padding:4px 0;">Notes</td><td>${cmd.notes}</td></tr>`:''}
+              </table>
+              <h3 style="font-size:14px;margin:0 0 10px;">Articles demandes</h3>
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead><tr style="background:#f5f4f0;">
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;color:#999;">Reference</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;color:#999;">Article</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;color:#999;">Qte</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:11px;color:#999;">Stock actuel</th>
+                </tr></thead>
+                <tbody>${itemsHtml}</tbody>
+              </table>
+              <div style="margin-top:20px;padding:12px;background:#e6f5ef;border-radius:8px;font-size:12px;color:#0f5c44;">
+                Connectez-vous a StockPro pour approuver ou refuser cette commande.
+              </div>
+            </div>
+          </div>`
+        })
+      });
+      showToast('Commande soumise - email envoye a '+params.email);
+    }catch(e){
+      console.error('Erreur email:',e);
+      showToast('Commande soumise (email non envoye)');
+    }
+  } else {
+    showToast('Commande soumise');
+  }
   closeModal('modal-commande');
-  showToast('✅ Commande soumise');
 }
 function renderCommandes(){
   const tbody=document.getElementById('commandes-table');
@@ -1218,6 +1348,8 @@ function renderCommandes(){
       <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
       ${c.statut==='en_attente'?`<button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
       <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✗</button>`:''}
+      ${c.statut!=='en_attente'?`<button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;" title="Imprimer">🖨</button>
+      <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')" title="Supprimer">🗑</button>`:`<button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;" title="Imprimer">🖨</button>`}
     </td></tr>`).join('');
   updateBadges();
 }
@@ -1235,6 +1367,8 @@ function viewCmd(id){
     </tbody></table></div>`;
   document.getElementById('cmd-detail-footer').innerHTML=`
     <button class="btn" onclick="closeModal('modal-cmd-detail')">Fermer</button>
+    <button class="btn btn-sm" onclick="printCmd('${c.id}')">🖨 Imprimer</button>
+    ${c.statut!=='en_attente'?`<button class="btn btn-danger btn-sm" onclick="deleteCmd('${c.id}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`:''}
     ${c.statut==='en_attente'?`
       <button class="btn btn-danger btn-sm" onclick="refuserCmd('${c.id}');closeModal('modal-cmd-detail');">✗ Refuser</button>
       <button class="btn btn-primary btn-sm" onclick="approuverCmd('${c.id}');closeModal('modal-cmd-detail');">✓ Approuver et déduire du stock</button>`:''}`;
@@ -1308,7 +1442,17 @@ function editArticle(id){
 }
 function populateArtCatSelect(selected){
   const sel=document.getElementById('art-cat');sel.innerHTML='';
-  categories.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;if(c===selected)o.selected=true;sel.appendChild(o);});
+  const parents=categories.filter(c=>!c.includes(' > ')).sort();
+  parents.forEach(p=>{
+    const o=document.createElement('option');o.value=p;o.textContent=p;if(p===selected)o.selected=true;sel.appendChild(o);
+    categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>{
+      const o2=document.createElement('option');o2.value=sc;o2.textContent='  ↳ '+sc.split(' > ')[1];if(sc===selected)o2.selected=true;sel.appendChild(o2);
+    });
+  });
+  // Catégories sans parent connu
+  categories.filter(c=>c.includes(' > ')&&!parents.includes(c.split(' > ')[0])).forEach(c=>{
+    const o=document.createElement('option');o.value=c;o.textContent=c;if(c===selected)o.selected=true;sel.appendChild(o);
+  });
 }
 async function saveArticle(){
   const id=document.getElementById('art-id').value.trim().toUpperCase();
@@ -1333,13 +1477,41 @@ async function saveArticle(){
 
 // ==================== CATEGORIES ====================
 function renderCategories(){
-  document.getElementById('cat-table').innerHTML=categories.map(c=>{
-    const count=stock.filter(a=>a.categorie===c).length;
-    return`<tr><td class="cat-list-name">${c}</td><td>${count} article(s)</td>
+  // Trier : parents d'abord, puis sous-catégories groupées
+  const parents=categories.filter(c=>!c.includes(' > ')).sort();
+  const rows=[];
+  parents.forEach(p=>{
+    const pCount=stock.filter(a=>a.categorie===p).length;
+    rows.push(`<tr style="background:#fafaf8;">
+      <td class="cat-list-name"><strong>${p}</strong></td>
+      <td><span class="badge badge-blue">Catégorie</span></td>
+      <td>${pCount} article(s)</td>
       <td style="text-align:right;">
-        <button class="btn btn-xs" onclick="editCat('${c}')">✏ Renommer</button>
-        ${count===0?`<button class="btn btn-xs btn-danger" style="margin-left:4px;" onclick="deleteCat('${c}')">🗑 Supprimer</button>`:''}
-      </td></tr>`;}).join('');
+        <button class="btn btn-xs" onclick="editCat('${p}')">✏</button>
+        ${pCount===0&&!categories.some(c=>c.startsWith(p+' > '))?`<button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCat('${p}')">🗑</button>`:''}
+      </td></tr>`);
+    // Sous-catégories de ce parent
+    categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>{
+      const scName=sc.split(' > ')[1];
+      const scCount=stock.filter(a=>a.categorie===sc).length;
+      rows.push(`<tr>
+        <td class="cat-list-name" style="padding-left:28px;color:var(--text2);">↳ ${scName}</td>
+        <td><span class="badge badge-gray">Sous-catégorie</span></td>
+        <td>${scCount} article(s)</td>
+        <td style="text-align:right;">
+          <button class="btn btn-xs" onclick="editCat('${sc}')">✏</button>
+          ${scCount===0?`<button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCat('${sc}')">🗑</button>`:''}
+        </td></tr>`);
+    });
+  });
+  // Catégories orphelines (sans parent connu)
+  categories.filter(c=>c.includes(' > ')&&!parents.includes(c.split(' > ')[0])).forEach(c=>{
+    const count=stock.filter(a=>a.categorie===c).length;
+    rows.push(`<tr><td class="cat-list-name">${c}</td><td><span class="badge badge-warn">Orpheline</span></td><td>${count}</td><td style="text-align:right;">
+      ${count===0?`<button class="btn btn-xs btn-danger" onclick="deleteCat('${c}')">🗑</button>`:''}
+    </td></tr>`);
+  });
+  document.getElementById('cat-table').innerHTML=rows.join('');
 }
 function editCat(name){
   editingCat=name;
@@ -1434,6 +1606,121 @@ function closeModal(id){
 document.querySelectorAll('.modal-backdrop').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id);}));
 
 // ==================== DÉMARRAGE ====================
+
+// ==================== SUPPRIMER COMMANDE ====================
+async function deleteCmd(id){
+  if(!confirm('Supprimer définitivement cette commande ?'))return;
+  const {error}=await db.from('commandes').delete().eq('id',id);
+  if(error){showToast('❌ Erreur : '+error.message);return;}
+  commandes=commandes.filter(c=>c.id!==id);
+  renderCommandes(); updateBadges();
+  showToast('🗑 Commande supprimée');
+}
+
+// ==================== IMPRIMER COMMANDE ====================
+function printCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  const urgColors={'normale':'#1a8c66','urgent':'#b87010','critique':'#c0392b'};
+  const statColors={'en_attente':'#b87010','approuvee':'#1a8c66','refusee':'#c0392b'};
+  const statLabels={'en_attente':'En attente','approuvee':'Approuvée','refusee':'Refusée'};
+  const itemsHtml=(c.items||[]).map(item=>{
+    const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:'?'};
+    const reliquat=typeof art.stock==='number'&&art.stock<item.qty?'⚠ Reliquat '+(item.qty-art.stock):'';
+    return`<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:monospace;">${item.id}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;">${art.categorie} Ø${art.diametre}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:700;">${item.qty}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;color:${typeof art.stock==='number'&&art.stock<1?'#c0392b':'#1a8c66'};">${art.stock}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:11px;color:#b87010;">${reliquat}</td></tr>`;
+  }).join('');
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>Commande #${String(c.num).padStart(3,'0')}</title>
+  <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:-apple-system,sans-serif;padding:24px;color:#1a1917;font-size:13px;}
+  h1{font-size:20px;margin-bottom:4px;}table{width:100%;border-collapse:collapse;}th{background:#f5f4f0;padding:8px 12px;text-align:left;font-size:11px;color:#999;border-bottom:2px solid #e2e0d8;}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;color:#fff;}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0;padding:12px;background:#f5f4f0;border-radius:8px;}
+  .meta-item{font-size:12px;}.meta-label{color:#999;margin-bottom:2px;}.footer{margin-top:16px;font-size:11px;color:#999;text-align:center;}
+  @media print{button{display:none!important;}}</style></head>
+  <body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div><h1>📋 Commande #${String(c.num).padStart(3,'0')}</h1><div style="font-size:12px;color:#999;margin-top:2px;">${params.company||'StockPro'} · ${new Date(c.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div></div>
+    <div><span class="badge" style="background:${urgColors[c.urgence]||'#999'};">${c.urgence}</span>&nbsp;<span class="badge" style="background:${statColors[c.statut]||'#999'};">${statLabels[c.statut]||c.statut}</span></div>
+  </div>
+  <div class="meta">
+    <div class="meta-item"><div class="meta-label">Chantier / Service</div><strong>${c.chantier}</strong></div>
+    <div class="meta-item"><div class="meta-label">Demandeur</div>${c.nom||'—'}</div>
+    ${c.notes?`<div class="meta-item" style="grid-column:1/-1;"><div class="meta-label">Notes</div>${c.notes}</div>`:''}
+  </div>
+  <table><thead><tr><th>Référence</th><th>Article</th><th style="text-align:center;">Qté demandée</th><th style="text-align:center;">Stock actuel</th><th>Reliquat</th></tr></thead>
+  <tbody>${itemsHtml}</tbody></table>
+  <div class="footer">StockPro — Imprimé le ${new Date().toLocaleDateString('fr-FR')} · ${(c.items||[]).reduce((s,i)=>s+i.qty,0)} unité(s) au total</div>
+  <div style="text-align:center;margin-top:16px;"><button onclick="window.print()" style="padding:8px 20px;background:#1a8c66;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🖨 Imprimer</button></div>
+  </body></html>`);
+  w.document.close();
+}
+
+// ==================== SCANNER : MODE CATEGORIES ====================
+let scanSelectedArt=null;
+function switchScanManualMode(mode,btn){
+  document.querySelectorAll('#scan-tab-manual .tab-sw-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('scan-manual-ref').style.display=mode==='ref'?'':'none';
+  document.getElementById('scan-manual-cat').style.display=mode==='cat'?'':'none';
+  if(mode==='cat'){buildScanCatPills();}
+}
+function buildScanCatPills(){
+  const pills=document.getElementById('scan-cat-pills');
+  pills.innerHTML=categories.map((c,i)=>`<div class="cat-pill ${i===0?'active':''}" onclick="selectScanCatPill(this,'${c}')">${c}</div>`).join('');
+  if(categories.length>0)renderScanCatItems(categories[0]);
+}
+function selectScanCatPill(el,cat){
+  document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');renderScanCatItems(cat);
+}
+function renderScanCatItems(cat){
+  const items=stock.filter(a=>a.categorie===cat||a.categorie.startsWith(cat+' > '));
+  document.getElementById('scan-cat-items').innerHTML=items.map(a=>{const s=getStatus(a);
+    return`<div onclick="selectScanArt('${a.id}',this)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer;" onmouseover="this.style.background='#f5f4f0'" onmouseout="this.style.background=(scanSelectedArt&&scanSelectedArt.id==='${a.id}')?'#e6f5ef':''">
+      <span><code>${a.id}</code> Ø${a.diametre}</span>
+      <span style="color:${s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)'};">${a.stock} unités</span></div>`;}).join('');
+}
+function selectScanArt(id,el){
+  scanSelectedArt=stock.find(a=>a.id===id);
+  document.querySelectorAll('#scan-cat-items > div').forEach(d=>d.style.background='');
+  el.style.background='#e6f5ef';
+  document.getElementById('scan-selected-art').textContent=scanSelectedArt?'✅ Sélectionné : '+id:'';
+  // Remplir aussi le champ ref pour la validation
+  document.getElementById('manual-ref').value=id;
+}
+
+// ==================== SOUS-CATEGORIES ====================
+// Les sous-catégories sont stockées comme "Parent > Enfant" dans le même tableau categories
+let editingSubCat=null;
+function openNewSubCat(){
+  editingSubCat=null;
+  document.getElementById('subcat-modal-title').textContent='Nouvelle sous-catégorie';
+  document.getElementById('subcat-name').value='';
+  // Peupler le select avec les catégories parentes (pas déjà des sous-cat)
+  const parentSel=document.getElementById('subcat-parent');
+  parentSel.innerHTML='';
+  categories.filter(c=>!c.includes(' > ')).forEach(c=>{
+    const o=document.createElement('option');o.value=c;o.textContent=c;parentSel.appendChild(o);
+  });
+  openModal('modal-newsubcat');
+}
+async function saveSubCat(){
+  const parent=document.getElementById('subcat-parent').value;
+  const name=document.getElementById('subcat-name').value.trim();
+  if(!name){alert('Nom requis.');return;}
+  const fullName=parent+' > '+name;
+  if(categories.includes(fullName)){alert('Cette sous-catégorie existe déjà.');return;}
+  const newCats=[...categories,fullName];
+  await db.from('config').upsert({key:'categories',value:newCats});
+  categories=newCats;
+  closeModal('modal-newsubcat');
+  renderCategories(); updateBadges();
+  showToast('✅ Sous-catégorie créée');
+}
+
 initApp();
 </script>
 
