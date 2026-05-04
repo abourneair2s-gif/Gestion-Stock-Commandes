@@ -751,7 +751,7 @@ async function loadAllData() {
     db.from('stock').select('*').order('categorie').order('id'),
     db.from('commandes').select('*').order('created_at', {ascending:false}),
     db.from('historique').select('*').order('created_at', {ascending:false}).limit(500),
-    db.from('configuration').select('*'),
+    db.from('config').select('*'),
   ]);
 
   if (stockRes.error) throw stockRes.error;
@@ -807,7 +807,7 @@ function subscribeRealtime() {
       renderHistorique();
     })
     .on('postgres_changes', {event:'*', schema:'public', table:'config'}, async () => {
-      const {data} = await db.from('configuration').select('*');
+      const {data} = await db.from('config').select('*');
       if (data) data.forEach(row => {
         if (row.key === 'categories') { categories = row.value; renderCategories(); }
         if (row.key === 'cmd_counter') cmdCounter = row.value;
@@ -1291,7 +1291,7 @@ async function saveCommande(){
   const {error} = await db.from('commandes').insert(cmd);
   if(error){showToast('❌ Erreur création commande');return;}
   // Incrémenter compteur
-  await db.from('configuration').upsert({key:'cmd_counter', value: num+1},{onConflict:'key'});
+  await db.from('config').upsert({key:'cmd_counter', value: num+1},{onConflict:'key'});
   cmdCounter++;
   await db.from('historique').insert({
     type:'cmd', article_id:'#'+String(num).padStart(3,'0'),
@@ -1557,11 +1557,11 @@ async function saveCat(){
     newCats.push(name);
   }
   console.log('Sauvegarde catégories:', newCats);
-  const {data:upsertData, error}=await db.from('configuration').upsert({key:'categories', value:newCats},{onConflict:'key'}).select();
+  const {data:upsertData, error}=await db.from('config').upsert({key:'categories', value:newCats},{onConflict:'key'}).select();
   console.log('Résultat upsert:', upsertData, error);
   if(error){showToast('❌ Erreur Supabase : '+error.message);return;}
   // Relire depuis Supabase pour confirmer
-  const {data:check}=await db.from('configuration').select('*').eq('key','categories').single();
+  const {data:check}=await db.from('config').select('*').eq('key','categories').single();
   console.log('Vérification Supabase:', check);
   categories=newCats;
   document.getElementById('cat-modal-title').textContent='Nouvelle catégorie';
@@ -1572,7 +1572,7 @@ async function saveCat(){
 async function deleteCat(name){
   if(!confirm('Supprimer la catégorie "'+name+'" ?'))return;
   const newCats=categories.filter(c=>c!==name);
-  const {error}=await db.from('configuration').upsert({key:'categories', value:newCats},{onConflict:'key'});
+  const {error}=await db.from('config').upsert({key:'categories', value:newCats},{onConflict:'key'});
   if(error){showToast('❌ Erreur : '+error.message);return;}
   categories=newCats;
   renderCategories(); renderDashboard(); updateBadges();
@@ -1587,8 +1587,8 @@ function renderParams(){
 async function saveParams(){
   params.email=document.getElementById('param-email').value.trim();
   params.company=document.getElementById('param-company').value.trim();
-  await db.from('configuration').upsert({key:'email',value:params.email},{onConflict:'key'});
-  await db.from('configuration').upsert({key:'company',value:params.company},{onConflict:'key'});
+  await db.from('config').upsert({key:'email',value:params.email},{onConflict:'key'});
+  await db.from('config').upsert({key:'company',value:params.company},{onConflict:'key'});
   showToast('✅ Paramètres enregistrés');
 }
 async function resetData(){
@@ -1598,7 +1598,7 @@ async function resetData(){
   await db.from('commandes').delete().neq('id','00000000-0000-0000-0000-000000000000');
   await db.from('stock').delete().neq('id','placeholder');
   await db.from('stock').insert(INVENTORY_DATA);
-  await db.from('configuration').upsert({key:'cmd_counter',value:1},{onConflict:'key'});
+  await db.from('config').upsert({key:'cmd_counter',value:1},{onConflict:'key'});
   showToast('✅ Données réinitialisées');
   await loadAllData();
   renderDashboard(); updateBadges();
@@ -1763,7 +1763,7 @@ async function saveSubCat(){
   const fullName=parent+' > '+name;
   if(categories.includes(fullName)){alert('Cette sous-catégorie existe déjà.');return;}
   const newCats=[...categories,fullName];
-  await db.from('configuration').upsert({key:'categories',value:newCats});
+  await db.from('config').upsert({key:'categories',value:newCats});
   categories=newCats;
   closeModal('modal-newsubcat');
   renderCategories(); updateBadges();
