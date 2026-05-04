@@ -1291,7 +1291,7 @@ async function saveCommande(){
   const {error} = await db.from('commandes').insert(cmd);
   if(error){showToast('❌ Erreur création commande');return;}
   // Incrémenter compteur
-  await db.from('configuration').upsert({key:'cmd_counter', value: num+1});
+  await db.from('configuration').upsert({key:'cmd_counter', value: num+1},{onConflict:'key'});
   cmdCounter++;
   await db.from('historique').insert({
     type:'cmd', article_id:'#'+String(num).padStart(3,'0'),
@@ -1556,7 +1556,7 @@ async function saveCat(){
     if(newCats.includes(name)){alert('Cette catégorie existe déjà.');return;}
     newCats.push(name);
   }
-  const {error}=await db.from('configuration').upsert({key:'categories', value:newCats});
+  const {error}=await db.from('configuration').upsert({key:'categories', value:newCats},{onConflict:'key'});
   if(error){showToast('❌ Erreur : '+error.message);return;}
   categories=newCats;
   document.getElementById('cat-modal-title').textContent='Nouvelle catégorie';
@@ -1567,7 +1567,7 @@ async function saveCat(){
 async function deleteCat(name){
   if(!confirm('Supprimer la catégorie "'+name+'" ?'))return;
   const newCats=categories.filter(c=>c!==name);
-  const {error}=await db.from('configuration').upsert({key:'categories', value:newCats});
+  const {error}=await db.from('configuration').upsert({key:'categories', value:newCats},{onConflict:'key'});
   if(error){showToast('❌ Erreur : '+error.message);return;}
   categories=newCats;
   renderCategories(); renderDashboard(); updateBadges();
@@ -1582,8 +1582,8 @@ function renderParams(){
 async function saveParams(){
   params.email=document.getElementById('param-email').value.trim();
   params.company=document.getElementById('param-company').value.trim();
-  await db.from('configuration').upsert({key:'email',value:params.email});
-  await db.from('configuration').upsert({key:'company',value:params.company});
+  await db.from('configuration').upsert({key:'email',value:params.email},{onConflict:'key'});
+  await db.from('configuration').upsert({key:'company',value:params.company},{onConflict:'key'});
   showToast('✅ Paramètres enregistrés');
 }
 async function resetData(){
@@ -1593,7 +1593,7 @@ async function resetData(){
   await db.from('commandes').delete().neq('id','00000000-0000-0000-0000-000000000000');
   await db.from('stock').delete().neq('id','placeholder');
   await db.from('stock').insert(INVENTORY_DATA);
-  await db.from('configuration').upsert({key:'cmd_counter',value:1});
+  await db.from('configuration').upsert({key:'cmd_counter',value:1},{onConflict:'key'});
   showToast('✅ Données réinitialisées');
   await loadAllData();
   renderDashboard(); updateBadges();
