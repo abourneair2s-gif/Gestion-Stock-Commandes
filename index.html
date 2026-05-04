@@ -143,7 +143,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 /* Toast */
 #toast{position:fixed;bottom:24px;right:24px;background:#1a1917;color:#fff;padding:10px 18px;border-radius:var(--radius-sm);font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;}
 #toast.show{opacity:1;}
-#mobile-nav{display:none;background:var(--surface);border-top:1px solid var(--border);padding:6px 0 env(safe-area-inset-bottom);flex-shrink:0;}
+#mobile-nav{display:none;background:var(--surface);border-bottom:1px solid var(--border);padding:env(safe-area-inset-top) 0 6px;flex-shrink:0;order:-1;}
 #mobile-nav-inner{display:flex;justify-content:space-around;}
 .mob-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border:none;background:none;color:var(--text3);font-size:10px;cursor:pointer;}
 .mob-btn.active{color:var(--green);}
@@ -209,6 +209,15 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <div id="topbar-title">Tableau de bord</div>
     <button class="btn btn-primary btn-sm" id="topbar-action" style="display:none" onclick="">+ Article</button>
   </div>
+<div id="mobile-nav">
+  <div id="mobile-nav-inner">
+    <button class="mob-btn active" onclick="showPage('dashboard',this)" data-page="dashboard"><span class="mob-btn-icon">📊</span>Bord</button>
+    <button class="mob-btn" onclick="showPage('stock',this)" data-page="stock"><span class="mob-btn-icon">📦</span>Stock</button>
+    <button class="mob-btn" onclick="showPage('scan',this)" data-page="scan"><span class="mob-btn-icon">📷</span>Scanner</button>
+    <button class="mob-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="mob-btn-icon">📋</span>Commandes</button>
+    <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
+  </div>
+
   <div id="content">
 
     <!-- DASHBOARD -->
@@ -410,17 +419,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   </div>
 </div>
 
-<!-- MOBILE NAV -->
-<div id="mobile-nav">
-  <div id="mobile-nav-inner">
-    <button class="mob-btn active" onclick="showPage('dashboard',this)" data-page="dashboard"><span class="mob-btn-icon">📊</span>Bord</button>
-    <button class="mob-btn" onclick="showPage('stock',this)" data-page="stock"><span class="mob-btn-icon">📦</span>Stock</button>
-    <button class="mob-btn" onclick="showPage('scan',this)" data-page="scan"><span class="mob-btn-icon">📷</span>Scanner</button>
-    <button class="mob-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="mob-btn-icon">📋</span>Commandes</button>
-    <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
-  </div>
-</div>
-</div>
+</div></div>
 
 <!-- ===== MODALS ===== -->
 
@@ -492,12 +491,30 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
           <button class="btn btn-sm" onclick="stopCmdQR()" id="btn-cmd-qr-stop" style="display:none;">⏹ Arrêter</button>
         </div>
       </div>
+      <!-- Panneau de validation quantité -->
+      <div id="cmd-qty-picker" style="display:none;flex-direction:column;gap:10px;background:#e6f5ef;border:3px solid var(--green);border-radius:10px;padding:14px;margin-top:10px;">
+        <div style="font-weight:700;font-size:14px;color:var(--green);">📦 Article sélectionné</div>
+        <div style="font-weight:700;font-size:15px;" id="cmd-qty-picker-id"></div>
+        <div style="font-size:12px;color:var(--text2);" id="cmd-qty-picker-desc"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+          <button onclick="document.getElementById('cmd-qty-picker-input').value=Math.max(1,parseInt(document.getElementById('cmd-qty-picker-input').value||1)-1)" style="width:44px;height:44px;font-size:22px;border:2px solid var(--green);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;color:var(--green);">−</button>
+          <input type="number" id="cmd-qty-picker-input" value="1" min="1" style="width:70px;height:44px;font-size:22px;font-weight:700;text-align:center;border:2px solid var(--green);border-radius:8px;padding:4px;">
+          <button onclick="document.getElementById('cmd-qty-picker-input').value=parseInt(document.getElementById('cmd-qty-picker-input').value||1)+1" style="width:44px;height:44px;font-size:22px;border:2px solid var(--green);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;color:var(--green);">+</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button class="btn" onclick="cancelCmdItem()" style="flex:1;padding:12px;font-size:14px;">✕ Annuler</button>
+          <button class="btn btn-primary" onclick="confirmCmdItem()" style="flex:2;padding:12px;font-size:16px;font-weight:700;">✅ Valider l'article</button>
+        </div>
+      </div>
       <div id="cmd-items-list" style="margin-top:12px;min-height:40px;"></div>
       <div id="cmd-items-empty" style="font-size:12px;color:var(--text3);text-align:center;padding:10px;">Aucun article ajouté.</div>
     </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-commande')">Annuler</button>
-      <button class="btn btn-primary" onclick="saveCommande()">Soumettre la demande</button>
+    <div class="modal-footer" style="flex-direction:column;gap:8px;padding-top:12px;border-top:2px dashed var(--border);">
+      <div style="font-size:11px;color:var(--text3);text-align:center;">— Vérifiez la liste des articles avant de soumettre —</div>
+      <div style="display:flex;gap:8px;width:100%;">
+        <button class="btn" onclick="closeModal('modal-commande')" style="flex:1;">Annuler</button>
+        <button class="btn btn-primary" onclick="saveCommande()" style="flex:2;background:var(--blue);">📤 Soumettre la commande</button>
+      </div>
     </div>
   </div>
 </div>
@@ -885,8 +902,6 @@ function renderDashboard(){
   const alerts=getAlerts(),pending=getCmdPending();
   const totalVal=stock.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
   document.getElementById('kpi-grid').innerHTML=`
-    <div class="kpi"><div class="kpi-label">Articles référencés</div><div class="kpi-value">${stock.length}</div></div>
-    <div class="kpi"><div class="kpi-label">Valeur inventaire</div><div class="kpi-value" style="font-size:18px;">${totalVal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')} €</div></div>
     <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div></div>
     <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
   const alertDiv=document.getElementById('dashboard-alerts');
@@ -900,15 +915,19 @@ function renderDashboard(){
     ?'<tr><td colspan="3" style="text-align:center;color:var(--text3);font-size:12px;">Aucune commande</td></tr>'
     :recent.map(c=>`<tr><td>${c.chantier}</td><td style="font-size:11px;">${c.items?c.items.length+' article(s)':'—'}</td><td>${cmdBadge(c.statut)}</td></tr>`).join('');
   const cats=[...new Set(stock.map(a=>a.categorie))];
+  const totalArticles=stock.length;
+  const totalValeur=totalVal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f');
   document.getElementById('dash-categories').innerHTML=cats.map(cat=>{
     const items=stock.filter(a=>a.categorie===cat);
     const val=items.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
     const critiques=items.filter(a=>getStatus(a)!=='ok').length;
     return`<tr><td><strong>${cat}</strong></td><td>${items.length}</td>
-      <td>${val>0?val.toFixed(2).replace('.',',')+' €':'—'}</td>
+      <td>${val>0?val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+' €':'—'}</td>
       <td class="${critiques>0?'stock-danger':''}">${critiques>0?critiques+' article(s)':'—'}</td>
       <td>${critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>'}</td></tr>`;
-  }).join('');
+  }).join('')+`<tr style="background:#fafaf8;border-top:2px solid var(--border);font-size:12px;color:var(--text3);">
+    <td colspan="2" style="padding:6px 12px;">Total : <strong>${totalArticles}</strong> articles référencés</td>
+    <td colspan="3" style="padding:6px 12px;">Valeur inventaire : <strong>${totalValeur} €</strong></td></tr>`;
   updateBadges();
 }
 
@@ -1219,11 +1238,29 @@ function renderCatItems(cat){
   }).join('');
 }
 function addCmdItem(id){
+  const art=stock.find(a=>a.id===id);if(!art)return;
+  // Afficher le panneau de saisie quantité
+  document.getElementById('cmd-qty-picker-id').textContent=id;
+  document.getElementById('cmd-qty-picker-desc').textContent=art.categorie+' Ø'+art.diametre+(art.stock>0?' · '+art.stock+' en stock':' · Reliquat');
   const existing=cmdItems.find(i=>i.id===id);
-  if(existing){existing.qty++;renderCmdItems();return;}
-  cmdItems.push({id,qty:1});renderCmdItems();
+  document.getElementById('cmd-qty-picker-input').value=existing?existing.qty:1;
+  document.getElementById('cmd-qty-picker').style.display='flex';document.getElementById('cmd-qty-picker').style.flexDirection='column';
+  document.getElementById('cmd-qty-picker-input').focus();
   document.getElementById('cmd-search-dropdown').style.display='none';
   document.getElementById('cmd-art-search').value='';
+  // Stocker l'id en cours
+  document.getElementById('cmd-qty-picker').dataset.artId=id;
+}
+function confirmCmdItem(){
+  const id=document.getElementById('cmd-qty-picker').dataset.artId;
+  const qty=parseInt(document.getElementById('cmd-qty-picker-input').value)||1;
+  const existing=cmdItems.find(i=>i.id===id);
+  if(existing){existing.qty=qty;}else{cmdItems.push({id,qty});}
+  document.getElementById('cmd-qty-picker').style.display='none';
+  renderCmdItems();
+}
+function cancelCmdItem(){
+  document.getElementById('cmd-qty-picker').style.display='none';
 }
 function removeCmdItem(id){cmdItems=cmdItems.filter(i=>i.id!==id);renderCmdItems();}
 function renderCmdItems(){
@@ -1233,10 +1270,14 @@ function renderCmdItems(){
   empty.style.display='none';
   list.innerHTML=cmdItems.map(item=>{
     const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:0};
+    const stockLabel=art.stock<=0?'<span style="color:var(--red);">Reliquat</span>':art.stock+' en stock';
     return`<div class="cmd-item">
-      <div class="cmd-item-info"><strong><code>${item.id}</code></strong><br><small>${art.categorie} Ø${art.diametre} · ${art.stock} en stock</small></div>
-      <input type="number" class="cmd-item-qty" value="${item.qty}" min="1" onchange="updateCmdQty('${item.id}',this.value)">
-      <button class="cmd-item-del" onclick="removeCmdItem('${item.id}')">🗑</button>
+      <div class="cmd-item-info"><strong><code>${item.id}</code></strong><br><small>${art.categorie} Ø${art.diametre} · ${stockLabel}</small></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:15px;font-weight:700;color:var(--blue);">×${item.qty}</span>
+        <button class="btn btn-xs" onclick="addCmdItem('${item.id}')" title="Modifier quantité">✏</button>
+        <button class="cmd-item-del" onclick="removeCmdItem('${item.id}')" title="Supprimer">🗑</button>
+      </div>
     </div>`;}).join('');
 }
 function updateCmdQty(id,val){const item=cmdItems.find(i=>i.id===id);if(item)item.qty=parseInt(val)||1;}
@@ -1492,7 +1533,17 @@ async function saveArticle(){
   if(error){showToast('❌ Erreur : '+error.message);return;}
   document.getElementById('art-id').disabled=false;
   closeModal('modal-article');
-  showToast('✅ Article enregistré');
+  // Rechargement du stock puis affichage QR si nouvel article
+  const {data:stockData}=await db.from('stock').select('*').order('categorie').order('id');
+  if(stockData) stock=stockData.map(adaptArticle);
+  renderStock(); renderDashboard(); updateBadges();
+  // Afficher le QR automatiquement uniquement pour un nouvel article
+  if(!existing){
+    setTimeout(()=>showQR(id), 300);
+    showToast('✅ Article créé — QR code généré');
+  } else {
+    showToast('✅ Article modifié');
+  }
 }
 
 // ==================== CATEGORIES ====================
