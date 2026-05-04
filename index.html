@@ -1556,13 +1556,18 @@ async function saveCat(){
     if(newCats.includes(name)){alert('Cette catégorie existe déjà.');return;}
     newCats.push(name);
   }
-  const {error}=await db.from('configuration').upsert({key:'categories', value:newCats},{onConflict:'key'});
-  if(error){showToast('❌ Erreur : '+error.message);return;}
+  console.log('Sauvegarde catégories:', newCats);
+  const {data:upsertData, error}=await db.from('configuration').upsert({key:'categories', value:newCats},{onConflict:'key'}).select();
+  console.log('Résultat upsert:', upsertData, error);
+  if(error){showToast('❌ Erreur Supabase : '+error.message);return;}
+  // Relire depuis Supabase pour confirmer
+  const {data:check}=await db.from('configuration').select('*').eq('key','categories').single();
+  console.log('Vérification Supabase:', check);
   categories=newCats;
   document.getElementById('cat-modal-title').textContent='Nouvelle catégorie';
   closeModal('modal-newcat');
   renderCategories(); renderDashboard(); updateBadges();
-  showToast('✅ Catégorie enregistrée');
+  showToast('✅ Catégorie enregistrée ('+newCats.length+' catégories)');
 }
 async function deleteCat(name){
   if(!confirm('Supprimer la catégorie "'+name+'" ?'))return;
