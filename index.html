@@ -1556,16 +1556,22 @@ async function saveCat(){
     if(newCats.includes(name)){alert('Cette catégorie existe déjà.');return;}
     newCats.push(name);
   }
-  await db.from('configuration').upsert({key:'categories', value:newCats});
+  const {error}=await db.from('configuration').upsert({key:'categories', value:newCats});
+  if(error){showToast('❌ Erreur : '+error.message);return;}
+  categories=newCats;
   document.getElementById('cat-modal-title').textContent='Nouvelle catégorie';
   closeModal('modal-newcat');
+  renderCategories(); renderDashboard(); updateBadges();
   showToast('✅ Catégorie enregistrée');
 }
 async function deleteCat(name){
   if(!confirm('Supprimer la catégorie "'+name+'" ?'))return;
   const newCats=categories.filter(c=>c!==name);
-  await db.from('configuration').upsert({key:'categories', value:newCats});
-  showToast('Catégorie supprimée');
+  const {error}=await db.from('configuration').upsert({key:'categories', value:newCats});
+  if(error){showToast('❌ Erreur : '+error.message);return;}
+  categories=newCats;
+  renderCategories(); renderDashboard(); updateBadges();
+  showToast('🗑 Catégorie supprimée');
 }
 
 // ==================== PARAMETRES ====================
