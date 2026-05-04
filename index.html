@@ -196,6 +196,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <button class="nav-btn" onclick="showPage('scan',this)" data-page="scan"><span class="nav-icon">📷</span>Scanner QR</button>
   <div class="sb-section">Gestion</div>
   <button class="nav-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="nav-icon">📋</span>Commandes <span class="badge-sb" id="sb-cmd-count" style="display:none">0</span></button>
+  <button class="nav-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="nav-icon">🏗</span>Chantiers</button>
   <div class="sb-section">Admin</div>
   <button class="nav-btn" onclick="showPage('alertes',this)" data-page="alertes"><span class="nav-icon">🔔</span>Alertes <span class="badge-sb" id="sb-alert-count" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showPage('historique',this)" data-page="historique"><span class="nav-icon">📜</span>Historique</button>
@@ -215,6 +216,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <button class="mob-btn" onclick="showPage('stock',this)" data-page="stock"><span class="mob-btn-icon">📦</span>Stock</button>
     <button class="mob-btn" onclick="showPage('scan',this)" data-page="scan"><span class="mob-btn-icon">📷</span>Scanner</button>
     <button class="mob-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="mob-btn-icon">📋</span>Commandes</button>
+    <button class="mob-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="mob-btn-icon">🏗</span>Chantiers</button>
     <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
   </div>
 
@@ -421,6 +423,28 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 
 </div></div>
 
+<!-- CHANTIERS PAGE -->
+<div class="page" id="page-chantiers">
+  <div class="section-header">
+    <div class="section-title">Gestion des chantiers</div>
+    <button class="btn btn-primary btn-sm" onclick="openNewChantier()">+ Nouveau chantier</button>
+  </div>
+  <div class="table-wrap" style="margin-bottom:16px;">
+    <table><thead><tr><th>Chantier</th><th>Commandes</th><th>Mouvements</th><th>Articles sortis</th><th>Coût total</th><th></th></tr></thead>
+    <tbody id="chantiers-table"></tbody></table>
+  </div>
+  <div id="chantier-detail" style="display:none;">
+    <div class="section-header" style="margin-top:8px;">
+      <div class="section-title" id="chantier-detail-title">Détail chantier</div>
+      <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>Date</th><th>Type</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Qté</th><th>Source</th></tr></thead>
+      <tbody id="chantier-detail-table"></tbody></table>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODALS ===== -->
 
 <!-- Modal: Nouvel article -->
@@ -450,7 +474,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 <div class="modal-backdrop" id="modal-commande">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <div class="modal-title">Nouvelle demande de matériel</div>
+      <div class="modal-title" id="cmd-modal-title">Nouvelle demande de matériel</div>
       <button class="btn btn-xs" onclick="closeModal('modal-commande')">✕</button>
     </div>
     <div class="modal-body">
@@ -550,7 +574,10 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <div class="form-row"><label class="form-label">Type</label><select id="mv-type"><option value="out">Sortie</option><option value="in">Entrée</option></select></div>
         <div class="form-row"><label class="form-label">Quantité</label><input type="number" id="mv-qty" value="1" min="1"></div>
       </div>
-      <div class="form-row"><label class="form-label">Chantier / Utilisateur</label><input type="text" id="mv-equipe" placeholder="Qui effectue ce mouvement ?"></div>
+      <div class="form-row"><label class="form-label">Chantier</label>
+        <select id="mv-chantier"><option value="">— Aucun chantier —</option></select>
+      </div>
+      <div class="form-row"><label class="form-label">Utilisateur (optionnel)</label><input type="text" id="mv-equipe" placeholder="Nom de la personne"></div>
       <div class="form-row"><label class="form-label">Note (optionnel)</label><input type="text" id="mv-note" placeholder="Chantier, raison…"></div>
     </div>
     <div class="modal-footer">
@@ -569,6 +596,21 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     </div>
     <div class="modal-body" id="cmd-detail-body"></div>
     <div class="modal-footer" id="cmd-detail-footer"></div>
+  </div>
+</div>
+
+<!-- Modal: Nouveau chantier -->
+<div class="modal-backdrop" id="modal-chantier">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="chantier-modal-title">Nouveau chantier</div></div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Nom du chantier</label><input type="text" id="chantier-name" placeholder="ex: Résidence Les Pins, Site A…"></div>
+      <div class="form-row"><label class="form-label">Description (optionnel)</label><input type="text" id="chantier-desc" placeholder="Adresse, responsable…"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-chantier')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveChantier()">Enregistrer</button>
+    </div>
   </div>
 </div>
 
@@ -689,6 +731,7 @@ const INVENTORY_DATA = [
 let stock = [];
 let commandes = [];
 let historique = [];
+let chantiers = []; // [{nom, desc}]
 let categories = [...DEFAULT_CATEGORIES];
 let cmdCounter = 1;
 let params = {email:'',company:''};
@@ -793,6 +836,7 @@ async function loadAllData() {
   if (configRes.data) {
     configRes.data.forEach(row => {
       if (row.key === 'categories') categories = row.value;
+      if (row.key === 'chantiers') chantiers = Array.isArray(row.value)?row.value:[];
       if (row.key === 'cmd_counter') cmdCounter = row.value;
       if (row.key === 'email') params.email = row.value;
       if (row.key === 'company') params.company = row.value;
@@ -827,6 +871,7 @@ function subscribeRealtime() {
       const {data} = await db.from('config').select('*');
       if (data) data.forEach(row => {
         if (row.key === 'categories') { categories = row.value; renderCategories(); }
+        if (row.key === 'chantiers') { chantiers = Array.isArray(row.value)?row.value:[]; renderChantiers(); }
         if (row.key === 'cmd_counter') cmdCounter = row.value;
       });
     })
@@ -883,7 +928,7 @@ function showPage(page,el){
   document.querySelectorAll('[data-page="'+page+'"]').forEach(b=>b.classList.add('active'));
   const titles={dashboard:'Tableau de bord',stock:'Articles & Stock',pareto:'Analyse Pareto (80/20)',
     scan:'Scanner QR',commandes:'Commandes chantiers',alertes:'Alertes de stock',
-    historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres'};
+    chantiers:'Suivi par chantier',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres'};
   document.getElementById('topbar-title').textContent=titles[page]||page;
   const ab=document.getElementById('topbar-action');
   if(page==='stock'){ab.style.display='';ab.textContent='+ Article';ab.onclick=()=>openNewArticle();}
@@ -891,8 +936,8 @@ function showPage(page,el){
   else if(page==='categories'){ab.style.display='';ab.textContent='+ Catégorie';ab.onclick=()=>openModal('modal-newcat');}
   else ab.style.display='none';
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
-    commandes:renderCommandes,alertes:renderAlertes,historique:renderHistorique,
-    categories:renderCategories,parametres:renderParams};
+    commandes:renderCommandes,chantiers:renderChantiers,alertes:renderAlertes,historique:renderHistorique,
+    chantiers:renderChantiers,categories:renderCategories,parametres:renderParams};
   if(renders[page])renders[page]();
   if(page!=='scan'){stopQRScan();stopCmdQR();}
 }
@@ -1025,28 +1070,35 @@ function openMouvement(id){
   currentMvArticle=stock.find(a=>a.id===id);if(!currentMvArticle)return;
   document.getElementById('mv-title').textContent='Mouvement — '+currentMvArticle.categorie+' Ø'+currentMvArticle.diametre;
   document.getElementById('mv-info').innerHTML=`<strong>${currentMvArticle.id}</strong> · ${currentMvArticle.categorie} Ø${currentMvArticle.diametre}<br>Stock actuel : <strong>${currentMvArticle.stock}</strong> · Min. : ${currentMvArticle.stockMin}`;
-  document.getElementById('mv-qty').value=1;document.getElementById('mv-equipe').value='';document.getElementById('mv-note').value='';
+  document.getElementById('mv-qty').value=1;
+  document.getElementById('mv-equipe').value='';
+  document.getElementById('mv-note').value='';
+  // Peupler le select chantier
+  const sel=document.getElementById('mv-chantier');
+  sel.innerHTML='<option value="">— Aucun chantier —</option>';
+  chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom+(c.desc?' ('+c.desc+')':'');sel.appendChild(o);});
   openModal('modal-mouvement');
 }
 async function confirmMouvement(){
   if(!currentMvArticle)return;
   const type=document.getElementById('mv-type').value;
   const qty=parseInt(document.getElementById('mv-qty').value)||1;
-  const equipe=document.getElementById('mv-equipe').value||'Inconnu';
+  const chantierNom=document.getElementById('mv-chantier').value||'';
+  const equipe=document.getElementById('mv-equipe').value||'';
   const note=document.getElementById('mv-note').value;
   const art=stock.find(a=>a.id===currentMvArticle.id);
   if(type==='out'&&qty>art.stock){alert('Stock insuffisant ! Stock actuel : '+art.stock);return;}
   const newStock=type==='out'?art.stock-qty:art.stock+qty;
-  // Mise à jour Supabase
   const {error:e1} = await db.from('stock').update({stock:newStock}).eq('id',art.id);
   if(e1){showToast('❌ Erreur mise à jour stock');return;}
   const {error:e2} = await db.from('historique').insert({
     type, article_id:art.id, categorie:art.categorie, diametre:art.diametre,
-    qty, equipe, note, new_stock:newStock
+    qty, equipe:equipe||(chantierNom||'Inconnu'), note:note||(chantierNom?'Chantier: '+chantierNom:''),
+    new_stock:newStock, chantier:chantierNom||null
   });
   if(e2) console.error('Erreur historique:', e2);
   closeModal('modal-mouvement');
-  showToast('✅ Mouvement enregistré');
+  showToast('✅ Mouvement enregistré'+(chantierNom?' → '+chantierNom:''));
 }
 
 // ==================== SCAN ====================
@@ -1172,9 +1224,13 @@ function printQR(){
 
 // ==================== COMMANDES ====================
 function openCmdModal(){
+  editingCmdId=null;
   cmdItems=[];
   ['cmd-chantier','cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cmd-urgence').value='normale';
+  // Remettre le titre du modal
+  const title=document.getElementById('cmd-modal-title');
+  if(title) title.textContent='Nouvelle demande';
   renderCmdItems();switchAddMode('search');buildCatPills();
   openModal('modal-commande');
 }
@@ -1314,24 +1370,40 @@ function stopCmdQR(){
 async function saveCommande(){
   if(!document.getElementById('cmd-chantier').value.trim()){alert('Veuillez indiquer le chantier.');return;}
   if(cmdItems.length===0){alert('Ajoutez au moins un article.');return;}
-  // Les articles avec stock=0 sont autorisés (gestion des reliquats)
   document.querySelectorAll('.cmd-item-qty').forEach(inp=>{
     const id=inp.closest('.cmd-item').querySelector('code').textContent;
     const item=cmdItems.find(i=>i.id===id);if(item)item.qty=parseInt(inp.value)||1;
   });
+  const chantier=document.getElementById('cmd-chantier').value.trim();
+  const nom=document.getElementById('cmd-nom').value;
+  const urgence=document.getElementById('cmd-urgence').value;
+  const notes=document.getElementById('cmd-notes').value;
+  const items=cmdItems.map(i=>({...i}));
+
+  // MODE EDITION : mise à jour de la commande existante
+  if(editingCmdId){
+    const {error}=await db.from('commandes').update({chantier,nom,urgence,notes,items}).eq('id',editingCmdId);
+    if(error){showToast('❌ Erreur modification commande');return;}
+    const idx=commandes.findIndex(c=>c.id===editingCmdId);
+    if(idx>-1){commandes[idx]={...commandes[idx],chantier,nom,urgence,notes,items};}
+    editingCmdId=null;
+    cmdItems=[];
+    closeModal('modal-commande');
+    renderCommandes(); updateBadges();
+    showToast('✅ Commande modifiée');
+    return;
+  }
+
+  // MODE CREATION
   const num = cmdCounter;
   const cmd = {
     num,
-    chantier:document.getElementById('cmd-chantier').value.trim(),
-    nom:document.getElementById('cmd-nom').value,
-    urgence:document.getElementById('cmd-urgence').value,
-    notes:document.getElementById('cmd-notes').value,
-    items:cmdItems.map(i=>({...i})),
+    chantier,nom,urgence,notes,
+    items,
     statut:'en_attente'
   };
   const {error} = await db.from('commandes').insert(cmd);
   if(error){showToast('❌ Erreur création commande');return;}
-  // Incrémenter compteur
   await db.from('config').upsert({key:'cmd_counter', value: num+1},{onConflict:'key'});
   cmdCounter++;
   await db.from('historique').insert({
@@ -1407,7 +1479,8 @@ function renderCommandes(){
     <td>${cmdBadge(c.statut)}</td>
     <td style="text-align:right;">
       <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
-      ${c.statut==='en_attente'?`<button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
+      ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
+      <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
       <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✗</button>`:''}
       ${c.statut!=='en_attente'?`<button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;" title="Imprimer">🖨</button>
       <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')" title="Supprimer">🗑</button>`:`<button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;" title="Imprimer">🖨</button>`}
@@ -1431,10 +1504,30 @@ function viewCmd(id){
     <button class="btn btn-sm" onclick="printCmd('${c.id}')">🖨 Imprimer</button>
     ${c.statut!=='en_attente'?`<button class="btn btn-danger btn-sm" onclick="deleteCmd('${c.id}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`:''}
     ${c.statut==='en_attente'?`
+      <button class="btn btn-sm" onclick="editCmd('${c.id}');closeModal('modal-cmd-detail');">✏ Modifier</button>
       <button class="btn btn-danger btn-sm" onclick="refuserCmd('${c.id}');closeModal('modal-cmd-detail');">✗ Refuser</button>
       <button class="btn btn-primary btn-sm" onclick="approuverCmd('${c.id}');closeModal('modal-cmd-detail');">✓ Approuver et déduire du stock</button>`:''}`;
   openModal('modal-cmd-detail');
 }
+function editCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  if(c.statut!=='en_attente'){showToast('⚠ Seules les commandes en attente peuvent être modifiées.');return;}
+  // Pré-remplir le modal commande avec les données existantes
+  editingCmdId=id;
+  document.getElementById('cmd-modal-title')?document.getElementById('cmd-modal-title').textContent='Modifier commande #'+String(c.num).padStart(3,'0'):'';
+  document.getElementById('cmd-chantier').value=c.chantier||'';
+  document.getElementById('cmd-nom').value=c.nom||'';
+  document.getElementById('cmd-notes').value=c.notes||'';
+  document.getElementById('cmd-urgence').value=c.urgence||'normale';
+  // Recharger les articles
+  cmdItems=(c.items||[]).map(i=>({...i}));
+  renderCmdItems();
+  switchAddMode('search');
+  buildCatPills();
+  openModal('modal-commande');
+}
+let editingCmdId=null;
+
 async function approuverCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c||c.statut!=='en_attente')return;
   const msgs=[];
@@ -1821,6 +1914,131 @@ async function saveSubCat(){
   showToast('✅ Sous-catégorie créée');
 }
 
+
+// ==================== CHANTIERS ====================
+let editingChantier=null;
+
+function openNewChantier(){
+  editingChantier=null;
+  document.getElementById('chantier-modal-title').textContent='Nouveau chantier';
+  document.getElementById('chantier-name').value='';
+  document.getElementById('chantier-desc').value='';
+  openModal('modal-chantier');
+}
+function editChantier(nom){
+  const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  editingChantier=nom;
+  document.getElementById('chantier-modal-title').textContent='Modifier chantier';
+  document.getElementById('chantier-name').value=c.nom;
+  document.getElementById('chantier-desc').value=c.desc||'';
+  openModal('modal-chantier');
+}
+async function saveChantier(){
+  const nom=document.getElementById('chantier-name').value.trim();
+  const desc=document.getElementById('chantier-desc').value.trim();
+  if(!nom){alert('Nom requis.');return;}
+  let newList=[...chantiers];
+  if(editingChantier){
+    const idx=newList.findIndex(c=>c.nom===editingChantier);
+    if(idx>-1) newList[idx]={nom,desc};
+    editingChantier=null;
+  } else {
+    if(newList.find(c=>c.nom===nom)){alert('Ce chantier existe déjà.');return;}
+    newList.push({nom,desc});
+  }
+  const {error}=await db.from('config').upsert({key:'chantiers',value:newList},{onConflict:'key'});
+  if(error){showToast('❌ Erreur : '+error.message);return;}
+  chantiers=newList;
+  closeModal('modal-chantier');
+  renderChantiers();
+  showToast('✅ Chantier enregistré');
+}
+async function deleteChantier(nom){
+  if(!confirm('Supprimer le chantier "'+nom+'" ?\nL\'historique associé sera conservé.'))return;
+  const newList=chantiers.filter(c=>c.nom!==nom);
+  const {error}=await db.from('config').upsert({key:'chantiers',value:newList},{onConflict:'key'});
+  if(error){showToast('❌ Erreur : '+error.message);return;}
+  chantiers=newList;
+  renderChantiers();
+  showToast('🗑 Chantier supprimé');
+}
+function renderChantiers(){
+  const tbody=document.getElementById('chantiers-table');
+  if(!tbody) return;
+  if(chantiers.length===0){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px;">Aucun chantier. Créez-en un avec le bouton ci-dessus.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=chantiers.map(c=>{
+    // Mouvements manuels liés à ce chantier
+    const mvts=historique.filter(h=>h.chantier===c.nom&&h.type==='out');
+    // Commandes approuvées liées à ce chantier
+    const cmds=commandes.filter(x=>x.chantier===c.nom&&x.statut==='approuvee');
+    const totalMvtQty=mvts.reduce((s,h)=>s+h.qty,0);
+    const totalCmdQty=cmds.reduce((s,x)=>(x.items||[]).reduce((a,i)=>a+i.qty,0)+s,0);
+    const totalQty=totalMvtQty+totalCmdQty;
+    // Coût total (mouvements manuels avec prix connu)
+    const cout=mvts.reduce((s,h)=>{const art=stock.find(a=>a.id===h.article_id);return s+(art?art.prixUnitaire*h.qty:0);},0)
+      +cmds.reduce((s,x)=>(x.items||[]).reduce((a,i)=>{const art=stock.find(a=>a.id===i.id);return a+(art?art.prixUnitaire*i.qty:0);},0)+s,0);
+    return`<tr>
+      <td><strong>${c.nom}</strong>${c.desc?'<br><small style="color:var(--text3);">'+c.desc+'</small>':''}</td>
+      <td>${cmds.length} commande(s)</td>
+      <td>${mvts.length} mouvement(s)</td>
+      <td><strong>${totalQty}</strong> unité(s)</td>
+      <td>${cout>0?cout.toFixed(2).replace('.',',')+' €':'—'}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-xs" onclick="showChantierDetail('${c.nom}')">📊 Détail</button>
+        <button class="btn btn-xs" style="margin-left:3px;" onclick="editChantier('${c.nom}')">✏</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteChantier('${c.nom}')">🗑</button>
+      </td></tr>`;
+  }).join('');
+}
+function showChantierDetail(nom){
+  const detail=document.getElementById('chantier-detail');
+  document.getElementById('chantier-detail-title').textContent='📊 Détail — '+nom;
+  // Mouvements manuels
+  const mvts=historique.filter(h=>h.chantier===nom&&h.type==='out').map(h=>({
+    date:new Date(h.created_at||h.date),
+    type:'Mouvement manuel',
+    article_id:h.article_id,
+    categorie:h.categorie,
+    diametre:h.diametre,
+    qty:h.qty,
+    source:'Stock'
+  }));
+  // Commandes approuvées
+  const cmdRows=[];
+  commandes.filter(x=>x.chantier===nom&&x.statut==='approuvee').forEach(x=>{
+    (x.items||[]).forEach(i=>{
+      const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?'};
+      cmdRows.push({
+        date:new Date(x.created_at),
+        type:'Commande #'+String(x.num).padStart(3,'0'),
+        article_id:i.id,
+        categorie:art.categorie,
+        diametre:art.diametre,
+        qty:i.qty,
+        source:'Commande'
+      });
+    });
+  });
+  const all=[...mvts,...cmdRows].sort((a,b)=>b.date-a.date);
+  if(all.length===0){
+    document.getElementById('chantier-detail-table').innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">Aucun mouvement pour ce chantier.</td></tr>';
+  } else {
+    document.getElementById('chantier-detail-table').innerHTML=all.map(r=>`<tr>
+      <td style="font-size:11px;">${r.date.toLocaleDateString('fr-FR')}</td>
+      <td><small style="color:var(--text3);">${r.type}</small></td>
+      <td><code>${r.article_id}</code></td>
+      <td>${r.categorie}</td>
+      <td>${r.diametre}</td>
+      <td><strong>${r.qty}</strong></td>
+      <td><span class="badge ${r.source==='Commande'?'badge-blue':'badge-gray'}">${r.source}</span></td>
+    </tr>`).join('');
+  }
+  detail.style.display='';
+  detail.scrollIntoView({behavior:'smooth',block:'start'});
+}
 initApp();
 </script>
 
