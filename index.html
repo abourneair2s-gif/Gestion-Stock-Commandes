@@ -1179,27 +1179,44 @@ function filterCmdSearch(val){
 }
 function buildCatPills(){
   const pills=document.getElementById('cmd-cat-pills');
+  if(!pills) return;
+  // Reconstruire à partir des catégories actuelles
   const parents=categories.filter(c=>!c.includes(' > ')).sort();
   const all=[...parents];
   parents.forEach(p=>categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>all.push(sc)));
+  if(all.length===0){
+    pills.innerHTML='<div style="color:var(--text3);font-size:12px;">Aucune catégorie</div>';
+    return;
+  }
   pills.innerHTML=all.map((c,i)=>{
     const isSub=c.includes(' > ');
     const label=isSub?'↳ '+c.split(' > ')[1]:c;
-    return`<div class="cat-pill ${i===0?'active':''}" style="${isSub?'font-size:11px;margin-left:8px;':''}" onclick="selectCatPill(this,'${c}')">${label}</div>`;
+    const escapedCat=c.replace(/'/g,"\'");
+    return`<div class="cmd-cat-pill cat-pill ${i===0?'active':''}" style="${isSub?'font-size:11px;margin-left:8px;':''}" onclick="selectCatPill(this,'${escapedCat}')">${label}</div>`;
   }).join('');
-  if(all.length>0)renderCatItems(all[0]);
+  renderCatItems(all[0]);
 }
 function selectCatPill(el,cat){
-  document.querySelectorAll('.cat-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active');renderCatItems(cat);
+  // Scoper uniquement aux pills du modal commande
+  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  renderCatItems(cat);
 }
 function renderCatItems(cat){
   const items=stock.filter(a=>a.categorie===cat);
-  document.getElementById('cmd-cat-items').innerHTML=items.map(a=>{const s=getStatus(a);
+  if(items.length===0){
+    document.getElementById('cmd-cat-items').innerHTML='<div style="padding:12px;color:var(--text3);font-size:13px;">Aucun article dans cette catégorie.</div>';
+    return;
+  }
+  document.getElementById('cmd-cat-items').innerHTML=items.map(a=>{
+    const s=getStatus(a);
+    const stockColor=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
+    const stockLabel=a.stock<=0?'Reliquat':a.stock+' unités';
     return`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
       <span><code>${a.id}</code> Ø${a.diametre}</span>
-      <span style="color:${s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)'};">${a.stock} unités</span>
-      <button class="btn btn-xs btn-primary" onclick="addCmdItem('${a.id}')">+ Ajouter</button></div>`;}).join('');
+      <span style="color:${stockColor};">${stockLabel}</span>
+      <button class="btn btn-xs btn-primary" onclick="addCmdItem('${a.id}')">+ Ajouter</button></div>`;
+  }).join('');
 }
 function addCmdItem(id){
   const existing=cmdItems.find(i=>i.id===id);
