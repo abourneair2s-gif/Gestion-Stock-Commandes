@@ -154,7 +154,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   #sidebar{display:none;}
   #mobile-nav{display:block;}
   #app{flex-direction:column;}
-  #main{height:calc(100vh - 56px);}
+  #main{height:calc(100vh - 56px);overflow-y:auto;}
   #topbar{padding:10px 12px;}
   #content{padding:10px;}
   .kpi-grid{grid-template-columns:repeat(2,1fr);}
@@ -338,7 +338,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <div class="page" id="page-commandes">
       <div class="section-header">
         <div class="section-title">Demandes de matériel par chantier</div>
-        <button class="btn btn-primary btn-sm" onclick="openModal('modal-commande')">+ Nouvelle demande</button>
+        <button class="btn btn-primary btn-sm" onclick="openCmdModal()">+ Nouvelle demande</button>
       </div>
       <div class="table-wrap">
         <table><thead><tr><th>N°</th><th>Date</th><th>Chantier</th><th>Articles</th><th>Urgence</th><th>Statut</th><th></th></tr></thead>
@@ -1268,6 +1268,7 @@ function filterCmdSearch(val){
 function buildCatPills(){
   const pills=document.getElementById('cmd-cat-pills');
   if(!pills) return;
+  console.log('buildCatPills: categories=', categories);
   // Reconstruire à partir des catégories actuelles
   const parents=categories.filter(c=>!c.includes(' > ')).sort();
   const all=[...parents];
