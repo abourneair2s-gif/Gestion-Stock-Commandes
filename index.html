@@ -143,7 +143,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 /* Toast */
 #toast{position:fixed;bottom:24px;right:24px;background:#1a1917;color:#fff;padding:10px 18px;border-radius:var(--radius-sm);font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;}
 #toast.show{opacity:1;}
-#mobile-nav{display:none;background:var(--surface);border-bottom:1px solid var(--border);padding:env(safe-area-inset-top) 0 6px;flex-shrink:0;order:-1;}
+#mobile-nav{display:none;background:var(--surface);border-top:1px solid var(--border);padding:6px 0 env(safe-area-inset-bottom);flex-shrink:0;}
 #mobile-nav-inner{display:flex;justify-content:space-around;}
 .mob-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border:none;background:none;color:var(--text3);font-size:10px;cursor:pointer;}
 .mob-btn.active{color:var(--green);}
@@ -219,8 +219,9 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <button class="mob-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="mob-btn-icon">🏗</span>Chantiers</button>
     <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
   </div>
+</div>
 
-  <div id="content">
+<div id="content">
 
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
