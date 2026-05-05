@@ -154,9 +154,9 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   #sidebar{display:none;}
   #mobile-nav{display:block;}
   #app{flex-direction:column;}
-  #main{height:calc(100vh - 56px);overflow-y:auto;}
+  #main{height:calc(100vh - 56px);overflow:hidden;}
   #topbar{padding:10px 12px;}
-  #content{padding:10px;}
+  #content{padding:10px;overflow-y:auto;flex:1;height:0;}
   .kpi-grid{grid-template-columns:repeat(2,1fr);}
   .two-col,.form-grid.col2,.form-grid.col3{grid-template-columns:1fr;}
   .table-wrap{overflow-x:auto;}
