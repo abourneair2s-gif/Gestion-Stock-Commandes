@@ -426,14 +426,18 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 
 <!-- CHANTIERS PAGE -->
 <div class="page" id="page-chantiers">
-  <!-- Bouton + liste chantiers en haut -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+  <!-- Bouton en haut -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
     <div class="section-title">🏗 Chantiers</div>
-    <button class="btn btn-primary btn-sm" onclick="openNewChantier()">+ Nouveau chantier</button>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-sm" onclick="exportChantiers()" style="color:var(--green);border-color:var(--green);">📥 Export Excel</button>
+      <button class="btn btn-primary btn-sm" onclick="openNewChantier()">+ Nouveau chantier</button>
+    </div>
   </div>
-  <!-- Cartes chantiers visibles en haut -->
-  <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;"></div>
-  <!-- Tableau détaillé -->
+  <!-- Cartes chantiers IMMEDIATEMENT visibles -->
+  <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;"></div>
+  <!-- Détail chantier sélectionné (affiché ici, avant le tableau) -->
+  <!-- Tableau récapitulatif -->
   <div class="section-header" style="margin-top:4px;">
     <div class="section-title" style="font-size:13px;color:var(--text2);">Récapitulatif</div>
   </div>
@@ -441,6 +445,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <table><thead><tr><th>Chantier</th><th>Commandes</th><th>Mouvements</th><th>Articles sortis</th><th>Coût total</th><th></th></tr></thead>
     <tbody id="chantiers-table"></tbody></table>
   </div>
+  <!-- Détail chantier -->
   <div id="chantier-detail" style="display:none;">
     <div class="section-header" style="margin-top:8px;">
       <div class="section-title" id="chantier-detail-title">Détail chantier</div>
@@ -1766,6 +1771,80 @@ async function resetData(){
 }
 
 // ==================== EXPORT ====================
+function exportChantiers(){
+  if(typeof XLSX==='undefined'){showToast('❌ Librairie Excel non chargée, réessayez.');return;}
+  const wb=XLSX.utils.book_new();
+  const date=new Date().toLocaleDateString('fr-FR').replace(/\//g,'-');
+
+  // ---- Onglet récapitulatif global ----
+  const recapRows=[['Chantier','Description','Commandes','Mouvements manuels','Unités sorties total','Coût estimé (€)']];
+  chantiers.forEach(c=>{
+    const mvts=historique.filter(h=>h.chantier===c.nom&&h.type==='out');
+    const cmds=commandes.filter(x=>x.chantier===c.nom&&x.statut==='approuvee');
+    const totalMvtQty=mvts.reduce((s,h)=>s+h.qty,0);
+    const totalCmdQty=cmds.reduce((s,x)=>(x.items||[]).reduce((a,i)=>a+i.qty,0)+s,0);
+    const totalQty=totalMvtQty+totalCmdQty;
+    const cout=mvts.reduce((s,h)=>{const art=stock.find(a=>a.id===h.article_id);return s+(art?art.prixUnitaire*h.qty:0);},0)
+      +cmds.reduce((s,x)=>(x.items||[]).reduce((a,i)=>{const art=stock.find(a=>a.id===i.id);return a+(art?art.prixUnitaire*i.qty:0);},0)+s,0);
+    recapRows.push([c.nom,c.desc||'',cmds.length,mvts.length,totalQty,+cout.toFixed(2)]);
+  });
+  // Ligne total
+  const totalUnites=recapRows.slice(1).reduce((s,r)=>s+r[4],0);
+  const totalCout=recapRows.slice(1).reduce((s,r)=>s+r[5],0);
+  recapRows.push(['TOTAL','','','',totalUnites,+totalCout.toFixed(2)]);
+  const wsRecap=XLSX.utils.aoa_to_sheet(recapRows);
+  wsRecap['!cols']=[{wch:25},{wch:30},{wch:12},{wch:18},{wch:18},{wch:15}];
+  XLSX.utils.book_append_sheet(wb,wsRecap,'Récapitulatif');
+
+  // ---- Un onglet par chantier ----
+  chantiers.forEach(c=>{
+    const rows=[
+      ['Chantier :',c.nom],
+      ['Description :',c.desc||'—'],
+      ['Export le :',new Date().toLocaleDateString('fr-FR')],
+      [],
+      ['Date','Source','N° Commande','Référence article','Catégorie','Diamètre','Quantité','Prix unit. (€)','Coût (€)']
+    ];
+    // Mouvements manuels
+    historique.filter(h=>h.chantier===c.nom&&h.type==='out').forEach(h=>{
+      const art=stock.find(a=>a.id===h.article_id)||{categorie:'?',diametre:'?',prixUnitaire:0};
+      const prix=art.prixUnitaire||0;
+      rows.push([
+        new Date(h.created_at||h.ts).toLocaleDateString('fr-FR'),
+        'Mouvement','—',h.article_id,art.categorie,art.diametre,h.qty,
+        prix>0?+prix.toFixed(2):'—',prix>0?+(prix*h.qty).toFixed(2):'—'
+      ]);
+    });
+    // Commandes approuvées
+    commandes.filter(x=>x.chantier===c.nom&&x.statut==='approuvee').forEach(x=>{
+      (x.items||[]).forEach(i=>{
+        const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',prixUnitaire:0};
+        const prix=art.prixUnitaire||0;
+        rows.push([
+          new Date(x.created_at).toLocaleDateString('fr-FR'),
+          'Commande','#'+String(x.num).padStart(3,'0'),i.id,art.categorie,art.diametre,i.qty,
+          prix>0?+prix.toFixed(2):'—',prix>0?+(prix*i.qty).toFixed(2):'—'
+        ]);
+      });
+    });
+    // Ligne total
+    const totalQty=rows.slice(5).reduce((s,r)=>s+(typeof r[6]==='number'?r[6]:0),0);
+    const totalCout=rows.slice(5).reduce((s,r)=>s+(typeof r[8]==='number'?r[8]:0),0);
+    rows.push([]);
+    rows.push(['','','','','','TOTAL',totalQty,'',+totalCout.toFixed(2)]);
+
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:14},{wch:14},{wch:14},{wch:16},{wch:16},{wch:10},{wch:10},{wch:14},{wch:12}];
+    // Nom onglet : limité à 31 caractères
+    const sheetName=c.nom.substring(0,31).replace(/[\/*?:[\]]/g,'_');
+    XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  });
+
+  if(wb.SheetNames.length===0){showToast('⚠ Aucun chantier à exporter.');return;}
+  XLSX.writeFile(wb,'Chantiers_'+date+'.xlsx');
+  showToast('✅ Export Excel téléchargé');
+}
+
 function exportExcel(){
   const ws1=XLSX.utils.aoa_to_sheet([
     ['Référence','Catégorie','Diamètre','Stock','Stock min','Prix unit. (€)','Valeur (€)','Statut'],
