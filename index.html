@@ -426,9 +426,16 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 
 <!-- CHANTIERS PAGE -->
 <div class="page" id="page-chantiers">
-  <div class="section-header">
-    <div class="section-title">Gestion des chantiers</div>
+  <!-- Bouton + liste chantiers en haut -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+    <div class="section-title">🏗 Chantiers</div>
     <button class="btn btn-primary btn-sm" onclick="openNewChantier()">+ Nouveau chantier</button>
+  </div>
+  <!-- Cartes chantiers visibles en haut -->
+  <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;"></div>
+  <!-- Tableau détaillé -->
+  <div class="section-header" style="margin-top:4px;">
+    <div class="section-title" style="font-size:13px;color:var(--text2);">Récapitulatif</div>
   </div>
   <div class="table-wrap" style="margin-bottom:16px;">
     <table><thead><tr><th>Chantier</th><th>Commandes</th><th>Mouvements</th><th>Articles sortis</th><th>Coût total</th><th></th></tr></thead>
@@ -480,8 +487,10 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     </div>
     <div class="modal-body">
       <div class="form-grid col2">
-        <div class="form-row"><label class="form-label">Chantier / Service</label>
-          <input type="text" id="cmd-chantier" placeholder="Nom du chantier ou service">
+        <div class="form-row"><label class="form-label">Chantier</label>
+          <select id="cmd-chantier">
+            <option value="">— Sélectionner un chantier —</option>
+          </select>
         </div>
         <div class="form-row"><label class="form-label">Urgence</label>
           <select id="cmd-urgence"><option value="normale">Normale</option><option value="urgent">Urgent</option><option value="critique">Critique</option></select>
@@ -1227,9 +1236,12 @@ function printQR(){
 function openCmdModal(){
   editingCmdId=null;
   cmdItems=[];
-  ['cmd-chantier','cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  // Peupler le select chantier
+  const selC=document.getElementById('cmd-chantier');
+  selC.innerHTML='<option value="">— Sélectionner un chantier —</option>';
+  chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom+(c.desc?' ('+c.desc+')':'');selC.appendChild(o);});
+  ['cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cmd-urgence').value='normale';
-  // Remettre le titre du modal
   const title=document.getElementById('cmd-modal-title');
   if(title) title.textContent='Nouvelle demande';
   renderCmdItems();switchAddMode('search');buildCatPills();
@@ -1267,7 +1279,7 @@ function buildCatPills(){
   pills.innerHTML=all.map((c,i)=>{
     const isSub=c.includes(' > ');
     const label=isSub?'↳ '+c.split(' > ')[1]:c;
-    const escapedCat=c.replace(/'/g,"\'");
+    const escapedCat=c.replace(/'/g,'&#39;');
     return`<div class="cmd-cat-pill cat-pill ${i===0?'active':''}" style="${isSub?'font-size:11px;margin-left:8px;':''}" onclick="selectCatPill(this,'${escapedCat}')">${label}</div>`;
   }).join('');
   renderCatItems(all[0]);
@@ -1516,7 +1528,10 @@ function editCmd(id){
   // Pré-remplir le modal commande avec les données existantes
   editingCmdId=id;
   document.getElementById('cmd-modal-title')?document.getElementById('cmd-modal-title').textContent='Modifier commande #'+String(c.num).padStart(3,'0'):'';
-  document.getElementById('cmd-chantier').value=c.chantier||'';
+  // Peupler le select chantier
+  const selCE=document.getElementById('cmd-chantier');
+  selCE.innerHTML='<option value="">— Sélectionner un chantier —</option>';
+  chantiers.forEach(ch=>{const o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom+(ch.desc?' ('+ch.desc+')':'');if(ch.nom===c.chantier)o.selected=true;selCE.appendChild(o);});
   document.getElementById('cmd-nom').value=c.nom||'';
   document.getElementById('cmd-notes').value=c.notes||'';
   document.getElementById('cmd-urgence').value=c.urgence||'normale';
@@ -1966,9 +1981,27 @@ async function deleteChantier(nom){
 function renderChantiers(){
   const tbody=document.getElementById('chantiers-table');
   if(!tbody) return;
+  const cards=document.getElementById('chantiers-cards');
   if(chantiers.length===0){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px;">Aucun chantier. Créez-en un avec le bouton ci-dessus.</td></tr>';
+    if(cards) cards.innerHTML='<div style="color:var(--text3);font-size:13px;padding:8px;">Aucun chantier. Créez-en un avec le bouton ci-dessus.</div>';
+    tbody.innerHTML='';
     return;
+  }
+  // Rendu des cartes en haut
+  if(cards){
+    cards.innerHTML=chantiers.map(c=>{
+      const mvts=historique.filter(h=>h.chantier===c.nom&&h.type==='out');
+      const cmds=commandes.filter(x=>x.chantier===c.nom&&x.statut==='approuvee');
+      const totalQty=mvts.reduce((s,h)=>s+h.qty,0)+cmds.reduce((s,x)=>(x.items||[]).reduce((a,i)=>a+i.qty,0)+s,0);
+      const pending=commandes.filter(x=>x.chantier===c.nom&&x.statut==='en_attente').length;
+      return`<div onclick="showChantierDetail('${c.nom}')" style="cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-width:160px;flex:1;max-width:220px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px;">🏗 ${c.nom}</div>
+        ${c.desc?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px;">${c.desc}</div>`:''}
+        <div style="font-size:12px;color:var(--text2);">${totalQty} unité(s) sortie(s)</div>
+        ${pending>0?`<div style="font-size:11px;color:var(--amber);margin-top:2px;">⏳ ${pending} commande(s) en attente</div>`:''}
+        <div style="font-size:11px;color:var(--blue);margin-top:4px;">📊 Voir le détail →</div>
+      </div>`;
+    }).join('');
   }
   tbody.innerHTML=chantiers.map(c=>{
     // Mouvements manuels liés à ce chantier
