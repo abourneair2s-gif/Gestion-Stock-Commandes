@@ -941,6 +941,8 @@ function showPage(page,el){
   document.querySelectorAll('.nav-btn,.mob-btn').forEach(b=>b.classList.remove('active'));
   if(el)el.classList.add('active');
   document.querySelectorAll('[data-page="'+page+'"]').forEach(b=>b.classList.add('active'));
+  // Remonter en haut à chaque changement de page
+  const ct=document.getElementById('content');if(ct)ct.scrollTop=0;
   const titles={dashboard:'Tableau de bord',stock:'Articles & Stock',pareto:'Analyse Pareto (80/20)',
     scan:'Scanner QR',commandes:'Commandes chantiers',alertes:'Alertes de stock',
     chantiers:'Suivi par chantier',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres'};
