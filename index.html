@@ -193,6 +193,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <button class="nav-btn active" onclick="showPage('dashboard',this)" data-page="dashboard"><span class="nav-icon">📊</span>Tableau de bord</button>
   <button class="nav-btn" onclick="showPage('stock',this)" data-page="stock"><span class="nav-icon">📦</span>Articles & Stock</button>
   <button class="nav-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="nav-icon">📈</span>Analyse Pareto</button>
+  <button class="nav-btn" onclick="showPage('etiquettes',this)" data-page="etiquettes"><span class="nav-icon">🏷</span>Étiquettes QR</button>
   <button class="nav-btn" onclick="showPage('scan',this)" data-page="scan"><span class="nav-icon">📷</span>Scanner QR</button>
   <div class="sb-section">Gestion</div>
   <button class="nav-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="nav-icon">📋</span>Commandes <span class="badge-sb" id="sb-cmd-count" style="display:none">0</span></button>
@@ -218,6 +219,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <button class="mob-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="mob-btn-icon">📋</span>Commandes</button>
     <button class="mob-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="mob-btn-icon">🏗</span>Chantiers</button>
     <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
+    <button class="mob-btn" onclick="showPage('etiquettes',this)" data-page="etiquettes"><span class="mob-btn-icon">🏷</span>Étiquettes</button>
   </div>
 </div>
 
@@ -456,6 +458,25 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       <tbody id="chantier-detail-table"></tbody></table>
     </div>
   </div>
+</div>
+
+<!-- ETIQUETTES PAGE -->
+<div class="page" id="page-etiquettes">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div class="section-title">🏷 Étiquettes QR</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="btn btn-sm" onclick="selectAllEtiquettes(true)">✅ Tout sélectionner</button>
+      <button class="btn btn-sm" onclick="selectAllEtiquettes(false)">☐ Tout désélectionner</button>
+      <button class="btn btn-primary btn-sm" onclick="printEtiquettes()">🖨 Imprimer la sélection</button>
+      <button class="btn btn-sm" style="color:var(--green);border-color:var(--green);" onclick="downloadEtiquettes()">📥 Télécharger PNG</button>
+    </div>
+  </div>
+  <!-- Filtre catégorie -->
+  <div class="cat-pills" id="etiq-cat-pills" style="margin-bottom:12px;"></div>
+  <!-- Compteur sélection -->
+  <div id="etiq-count" style="font-size:12px;color:var(--text3);margin-bottom:10px;">0 article(s) sélectionné(s)</div>
+  <!-- Grille articles -->
+  <div id="etiq-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;"></div>
 </div>
 
 <!-- ===== MODALS ===== -->
@@ -954,7 +975,7 @@ function showPage(page,el){
   },10);
   const titles={dashboard:'Tableau de bord',stock:'Articles & Stock',pareto:'Analyse Pareto (80/20)',
     scan:'Scanner QR',commandes:'Commandes chantiers',alertes:'Alertes de stock',
-    chantiers:'Suivi par chantier',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres'};
+    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres'};
   document.getElementById('topbar-title').textContent=titles[page]||page;
   const ab=document.getElementById('topbar-action');
   if(page==='stock'){ab.style.display='';ab.textContent='+ Article';ab.onclick=()=>openNewArticle();}
@@ -962,7 +983,7 @@ function showPage(page,el){
   else if(page==='categories'){ab.style.display='';ab.textContent='+ Catégorie';ab.onclick=()=>openModal('modal-newcat');}
   else ab.style.display='none';
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
-    commandes:renderCommandes,chantiers:renderChantiers,alertes:renderAlertes,historique:renderHistorique,
+    commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
     chantiers:renderChantiers,categories:renderCategories,parametres:renderParams};
   if(renders[page])renders[page]();
   if(page!=='scan'){stopQRScan();stopCmdQR();}
@@ -2164,6 +2185,170 @@ function showChantierDetail(nom){
   detail.style.display='';
   detail.scrollIntoView({behavior:'smooth',block:'start'});
 }
+
+// ==================== ETIQUETTES QR ====================
+let etiqSelectedCat = '';
+let etiqSelected = new Set();
+
+function renderEtiquettes(){
+  // Pills catégories
+  const pills = document.getElementById('etiq-cat-pills');
+  const allCats = ['Toutes', ...categories.filter(c=>!c.includes(' > ')).sort()];
+  categories.filter(c=>c.includes(' > ')).sort().forEach(sc=>allCats.push(sc));
+  pills.innerHTML = allCats.map((c,i)=>{
+    const label = c.includes(' > ') ? '↳ '+c.split(' > ')[1] : c;
+    const active = (i===0 && etiqSelectedCat==='') || c===etiqSelectedCat;
+    return `<div class="cat-pill ${active?'active':''}" onclick="filterEtiquettes('${c==='Toutes'?'':c}')">${label}</div>`;
+  }).join('');
+  renderEtiqGrid();
+}
+
+function filterEtiquettes(cat){
+  etiqSelectedCat = cat;
+  // Mettre à jour pills
+  document.querySelectorAll('#etiq-cat-pills .cat-pill').forEach(p=>{
+    const label = p.textContent.replace('↳ ','');
+    const isCat = cat==='' ? p.textContent==='Toutes' : (p.textContent===cat||p.textContent==='↳ '+cat.split(' > ')[1]);
+    p.classList.toggle('active', isCat);
+  });
+  renderEtiqGrid();
+}
+
+function renderEtiqGrid(){
+  const filtered = etiqSelectedCat==='' ? stock : stock.filter(a=>a.categorie===etiqSelectedCat);
+  const grid = document.getElementById('etiq-grid');
+  grid.innerHTML = filtered.map(a=>{
+    const checked = etiqSelected.has(a.id);
+    return `<div class="etiq-card ${checked?'etiq-selected':''}" onclick="toggleEtiq('${a.id}',this)" style="border:2px solid ${checked?'var(--green)':'var(--border)'};border-radius:10px;padding:10px;cursor:pointer;text-align:center;background:${checked?'#e6f5ef':'var(--surface)'};transition:all .15s;">
+      <div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:4px;">${a.categorie}</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;">${a.id}</div>
+      <div style="font-size:11px;color:var(--text3);">Ø ${a.diametre}</div>
+      <div style="margin-top:6px;font-size:18px;">${checked?'✅':'☐'}</div>
+    </div>`;
+  }).join('');
+  updateEtiqCount();
+}
+
+function toggleEtiq(id, el){
+  if(etiqSelected.has(id)){
+    etiqSelected.delete(id);
+    el.style.border='2px solid var(--border)';
+    el.style.background='var(--surface)';
+    el.querySelector('div:last-child').textContent='☐';
+  } else {
+    etiqSelected.add(id);
+    el.style.border='2px solid var(--green)';
+    el.style.background='#e6f5ef';
+    el.querySelector('div:last-child').textContent='✅';
+  }
+  updateEtiqCount();
+}
+
+function updateEtiqCount(){
+  document.getElementById('etiq-count').textContent = etiqSelected.size+' article(s) sélectionné(s)';
+}
+
+function selectAllEtiquettes(val){
+  const filtered = etiqSelectedCat==='' ? stock : stock.filter(a=>a.categorie===etiqSelectedCat);
+  filtered.forEach(a=>{ if(val) etiqSelected.add(a.id); else etiqSelected.delete(a.id); });
+  renderEtiqGrid();
+}
+
+function printEtiquettes(){
+  if(etiqSelected.size===0){showToast('⚠ Sélectionnez au moins un article.');return;}
+  const arts = stock.filter(a=>etiqSelected.has(a.id));
+  const win = window.open('','_blank');
+  
+  // Générer les QR codes en base64 pour chaque article
+  const container = document.createElement('div');
+  container.style.display='none';
+  document.body.appendChild(container);
+  
+  let promises = arts.map(a => new Promise(resolve=>{
+    const div = document.createElement('div');
+    container.appendChild(div);
+    const qr = new QRCode(div,{text:a.id,width:180,height:180,colorDark:'#1a1917',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+    setTimeout(()=>{
+      const img = div.querySelector('img')||div.querySelector('canvas');
+      const src = img ? (img.src||img.toDataURL()) : '';
+      resolve({art:a, src});
+    },300);
+  }));
+  
+  Promise.all(promises).then(results=>{
+    document.body.removeChild(container);
+    const items = results.map(r=>`
+      <div class="etiq">
+        <div class="etiq-cat">${r.art.categorie}</div>
+        <img src="${r.src}" width="150" height="150">
+        <div class="etiq-ref">${r.art.id}</div>
+        <div class="etiq-diam">Ø ${r.art.diametre}</div>
+      </div>`).join('');
+    win.document.write(`<!DOCTYPE html><html><head><title>Étiquettes QR</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:-apple-system,sans-serif;background:#fff;}
+      .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px;}
+      .etiq{border:1px solid #ddd;border-radius:8px;padding:12px;text-align:center;page-break-inside:avoid;}
+      .etiq-cat{font-size:10px;color:#999;margin-bottom:4px;text-transform:uppercase;}
+      .etiq-ref{font-size:18px;font-weight:800;margin-top:6px;color:#1a1917;}
+      .etiq-diam{font-size:12px;color:#666;margin-top:2px;}
+      @media print{@page{margin:10mm;}.grid{gap:8px;padding:0;}}
+    </style></head><body>
+    <div class="grid">${items}</div>
+    <div style="text-align:center;padding:12px;"><button onclick="window.print()" style="padding:8px 20px;background:#1a8c66;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🖨 Imprimer</button></div>
+    </body></html>`);
+    win.document.close();
+  });
+}
+
+async function downloadEtiquettes(){
+  if(etiqSelected.size===0){showToast('⚠ Sélectionnez au moins un article.');return;}
+  showToast('⏳ Génération en cours…');
+  const arts = stock.filter(a=>etiqSelected.has(a.id));
+  
+  for(const a of arts){
+    await new Promise(resolve=>{
+      const div = document.createElement('div');
+      div.style.cssText='position:fixed;left:-9999px;top:-9999px;background:#fff;padding:20px;text-align:center;width:300px;';
+      div.innerHTML=`<div style="font-size:14px;color:#999;margin-bottom:8px;text-transform:uppercase;">${a.categorie}</div>
+        <div id="qr-dl-${a.id.replace(/ /g,'_')}"></div>
+        <div style="font-size:28px;font-weight:800;margin-top:10px;color:#1a1917;">${a.id}</div>
+        <div style="font-size:14px;color:#666;margin-top:4px;">Ø ${a.diametre}</div>`;
+      document.body.appendChild(div);
+      new QRCode(document.getElementById('qr-dl-'+a.id.replace(/ /g,'_')),{text:a.id,width:200,height:200,colorDark:'#1a1917',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+      setTimeout(()=>{
+        const canvas=document.createElement('canvas');
+        canvas.width=300;canvas.height=340;
+        const ctx=canvas.getContext('2d');
+        ctx.fillStyle='#ffffff';ctx.fillRect(0,0,300,340);
+        ctx.font='12px sans-serif';ctx.fillStyle='#999';ctx.textAlign='center';
+        ctx.fillText(a.categorie.toUpperCase(),150,25);
+        const qrImg=div.querySelector('img')||div.querySelector('canvas');
+        if(qrImg){
+          const img=new Image();
+          img.onload=()=>{
+            ctx.drawImage(img,50,35,200,200);
+            ctx.font='bold 28px sans-serif';ctx.fillStyle='#1a1917';
+            ctx.fillText(a.id,150,265);
+            ctx.font='14px sans-serif';ctx.fillStyle='#666';
+            ctx.fillText('Ø '+a.diametre,150,290);
+            const link=document.createElement('a');
+            link.download='QR_'+a.id.replace(/ /g,'_')+'.png';
+            link.href=canvas.toDataURL('image/png');
+            link.click();
+            document.body.removeChild(div);
+            resolve();
+          };
+          img.src=qrImg.src||qrImg.toDataURL();
+        } else { document.body.removeChild(div); resolve(); }
+      },400);
+    });
+    await new Promise(r=>setTimeout(r,200)); // délai entre téléchargements
+  }
+  showToast('✅ '+arts.length+' étiquette(s) téléchargée(s)');
+}
+
 initApp();
 </script>
 
