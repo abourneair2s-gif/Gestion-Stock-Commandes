@@ -148,7 +148,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .mob-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border:none;background:none;color:var(--text3);font-size:10px;cursor:pointer;}
 .mob-btn.active{color:var(--green);}
 .mob-btn-icon{font-size:20px;}
-.page{display:none;}
+.page{display:none;scroll-margin-top:0;}
 .page.active{display:block;}
 @media(max-width:700px){
   #sidebar{display:none;}
@@ -424,7 +424,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   </div>
 </div>
 
-</div></div>
+</div>
 
 <!-- CHANTIERS PAGE -->
 <div class="page" id="page-chantiers">
@@ -678,7 +678,8 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     </div>
   </div>
 </div>
-
+  </div>
+</div>
 <script>
 // ==================== SUPABASE ====================
 const SUPABASE_URL = 'https://cjvlqicfjjhxjhtawbnq.supabase.co';
@@ -958,12 +959,21 @@ function showToast(msg, duration=3500) {
 // ==================== NAVIGATION ====================
 function showPage(page,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page-'+page).classList.add('active');
+  const activePage=document.getElementById('page-'+page);
+  activePage.classList.add('active');
   document.querySelectorAll('.nav-btn,.mob-btn').forEach(b=>b.classList.remove('active'));
   if(el)el.classList.add('active');
   document.querySelectorAll('[data-page="'+page+'"]').forEach(b=>b.classList.add('active'));
-  // Remonter en haut à chaque changement de page
-  const ct=document.getElementById('content');if(ct)ct.scrollTop=0;
+  // Remonter en haut
+  const ct=document.getElementById('content');
+  if(ct){
+    ct.scrollTop=0;
+    // Sur mobile, scrollIntoView sur la page active
+    setTimeout(()=>{
+      activePage.scrollIntoView({block:'start',behavior:'instant'});
+      ct.scrollTop=0;
+    },10);
+  }
   const mn=document.getElementById('main');if(mn)mn.scrollTop=0;
   window.scrollTo(0,0);
   // Scroller jusqu'à la page active
