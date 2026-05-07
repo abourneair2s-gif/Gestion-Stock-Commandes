@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -1192,18 +1191,17 @@ async function startQRScan(){
       {facingMode:'environment'},
       {fps:10, qrbox:{width:220,height:220}, aspectRatio:1.0},
       async (text)=>{
+        // Pause le scan pour éviter les doubles lectures
+        if(html5QrCode) try{await html5QrCode.pause(true);}catch(e){}
         const art=stock.find(a=>a.id===text||a.id===text.trim());
         if(art){
           const type=document.getElementById('scan-type-cam').value;
           const qty=parseInt(document.getElementById('scan-qty-cam').value)||1;
-          const equipe=document.getElementById('scan-equipe-cam').value||'Scan';
-          if(type==='out'&&qty>art.stock){showScanResult(false,'Stock insuffisant',art.categorie+' Ø'+art.diametre+' — '+art.stock+' disponibles','');return;}
-          const newStock=type==='out'?art.stock-qty:art.stock+qty;
-          await db.from('stock').update({stock:newStock}).eq('id',art.id);
-          await db.from('historique').insert({type,article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty,equipe,note:'Scan QR',new_stock:newStock});
-          showScanResult(true,(type==='out'?'📤 Sortie':'📥 Entrée')+' enregistrée !',art.categorie+' Ø'+art.diametre+' · '+qty+' u.',newStock);
+          // Afficher une confirmation avant de valider
+          showScanConfirm(art, type, qty);
         } else {
           showScanResult(false,'Article introuvable','QR : '+text,'');
+          if(html5QrCode) try{await html5QrCode.resume();}catch(e){}
         }
       },
       ()=>{}
@@ -1223,6 +1221,50 @@ function stopQRScan(){
   const b1=document.getElementById('btn-start-scan'),b2=document.getElementById('btn-stop-scan');
   if(b1)b1.style.display='';if(b2)b2.style.display='none';
 }
+function showScanConfirm(art, type, qty){
+  // Afficher la zone de confirmation
+  const r=document.getElementById('scan-result');
+  r.style.display='';
+  const typeLabel=type==='out'?'📤 SORTIE':'📥 ENTRÉE';
+  const typeColor=type==='out'?'var(--red)':'var(--green)';
+  r.style.background=type==='out'?'#fef3f2':'#e6f5ef';
+  r.style.border='2px solid '+(type==='out'?'var(--red)':'var(--green)');
+  r.innerHTML=`
+    <div style="font-size:13px;font-weight:700;color:${typeColor};margin-bottom:8px;">${typeLabel} — Confirmez avant validation</div>
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px;">${art.id}</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">${art.categorie} Ø${art.diametre}</div>
+    <div style="font-size:13px;margin-bottom:12px;">Quantité : <strong>${qty}</strong> · Stock actuel : <strong>${art.stock}</strong></div>
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button class="btn btn-danger" onclick="cancelScanConfirm()" style="flex:1;padding:10px;">✕ Annuler</button>
+      <button class="btn btn-primary" onclick="confirmScanMove('${art.id}','${type}',${qty})" style="flex:2;padding:10px;font-weight:700;">✅ Confirmer</button>
+    </div>`;
+}
+
+async function confirmScanMove(artId, type, qty){
+  const art=stock.find(a=>a.id===artId);if(!art)return;
+  const equipe=document.getElementById('scan-equipe-cam').value||'Scan';
+  if(type==='out'&&qty>art.stock){
+    showScanResult(false,'Stock insuffisant',art.categorie+' Ø'+art.diametre+' — '+art.stock+' disponibles','');
+    if(html5QrCode)try{await html5QrCode.resume();}catch(e){}
+    return;
+  }
+  const newStock=type==='out'?art.stock-qty:art.stock+qty;
+  await db.from('stock').update({stock:newStock}).eq('id',art.id);
+  await db.from('historique').insert({type,article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty,equipe,note:'Scan QR',new_stock:newStock});
+  showScanResult(true,(type==='out'?'📤 Sortie':'📥 Entrée')+' enregistrée !',art.categorie+' Ø'+art.diametre+' · '+qty+' u.',newStock);
+  // Reprendre le scan après 2 secondes
+  setTimeout(async()=>{if(html5QrCode)try{await html5QrCode.resume();}catch(e){}},2000);
+}
+
+function cancelScanConfirm(){
+  const r=document.getElementById('scan-result');
+  r.style.display='none';
+  r.style.border='';
+  r.innerHTML='';
+  // Reprendre le scan
+  if(html5QrCode)try{html5QrCode.resume();}catch(e){}
+}
+
 function showScanResult(ok,title,detail,qty){
   const r=document.getElementById('scan-result');
   r.style.display='';r.style.background=ok?'var(--green-bg)':'var(--red-bg)';r.style.border='1px solid '+(ok?'var(--green)':'var(--red)');
@@ -1543,8 +1585,8 @@ function renderCommandes(){
       ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
       <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
       <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✗</button>`:''}
-      ${c.statut!=='en_attente'?`<button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;" title="Imprimer">🖨</button>
-      <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')" title="Supprimer">🗑</button>`:`<button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;" title="Imprimer">🖨</button>`}
+      <button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;" title="Imprimer">🖨</button>
+      <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')" title="Supprimer">🗑</button>
     </td></tr>`).join('');
   updateBadges();
 }
