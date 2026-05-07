@@ -260,7 +260,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <button class="btn btn-primary btn-sm" onclick="openNewArticle()">+ Nouvel article</button>
       </div>
       <div class="table-wrap">
-        <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th><th>Prix unit.</th><th>Valeur</th><th>Statut</th><th></th></tr></thead>
+        <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th><th>Prix unit.</th><th>Valeur</th><th>Fournisseur</th><th>Statut</th><th></th></tr></thead>
         <tbody id="stock-table"></tbody></table>
       </div>
       <div id="stock-empty" class="empty-state" style="display:none;">Aucun article trouvé.</div>
@@ -421,12 +421,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       </div>
     </div>
 
-  </div>
-</div>
 
-</div></div>
-
-<!-- CHANTIERS PAGE -->
 <div class="page" id="page-chantiers">
   <!-- Bouton en haut -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
@@ -478,6 +473,12 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <!-- Grille articles -->
   <div id="etiq-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;"></div>
 </div>
+  </div>
+</div>
+
+
+</div></div>
+
 
 <!-- ===== MODALS ===== -->
 
@@ -486,11 +487,15 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <div class="modal">
     <div class="modal-header"><div class="modal-title" id="art-modal-title">Ajouter un article</div></div>
     <div class="modal-body">
-      <div class="form-row"><label class="form-label">Référence (ex: GAI 355)</label><input type="text" id="art-id" placeholder="CATEGORIE DIAMETRE"></div>
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Référence actuelle</label><input type="text" id="art-id" placeholder="ex: GAI 355"></div>
+        <div class="form-row" id="art-newid-row" style="display:none;"><label class="form-label">Nouvelle référence <small style="color:var(--text3);">(laisser vide = inchangée)</small></label><input type="text" id="art-newid" placeholder="ex: GAI 360"></div>
+      </div>
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Catégorie</label><select id="art-cat"></select></div>
         <div class="form-row"><label class="form-label">Diamètre</label><input type="text" id="art-diam" placeholder="ex: 315"></div>
       </div>
+      <div class="form-row"><label class="form-label">Fournisseur</label><input type="text" id="art-fournisseur" placeholder="ex: Aldes, Atlantic…"></div>
       <div class="form-grid col3">
         <div class="form-row"><label class="form-label">Stock actuel</label><input type="number" id="art-stock" value="0" min="0"></div>
         <div class="form-row"><label class="form-label">Stock minimum</label><input type="number" id="art-min" value="5" min="0"></div>
@@ -785,8 +790,9 @@ function adaptArticle(row) {
     categorie: row.categorie,
     diametre: row.diametre,
     stock: row.stock,
-    prixUnitaire: row.prix_unitaire,
+    prixUnitaire: row.prix_unitaire||0,
     stockMin: row.stock_min,
+    fournisseur: row.fournisseur||'',
   };
 }
 
@@ -987,8 +993,8 @@ function showPage(page,el){
     chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres'};
   document.getElementById('topbar-title').textContent=titles[page]||page;
   const ab=document.getElementById('topbar-action');
-  if(page==='stock'){ab.style.display='';ab.textContent='+ Article';ab.onclick=()=>openNewArticle();}
-  else if(page==='commandes'){ab.style.display='';ab.textContent='+ Demande';ab.onclick=()=>openCmdModal();}
+  if(page==='stock'){ab.style.display='none';}
+  else if(page==='commandes'){ab.style.display='none';}
   else if(page==='categories'){ab.style.display='';ab.textContent='+ Catégorie';ab.onclick=()=>openModal('modal-newcat');}
   else ab.style.display='none';
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
@@ -1069,6 +1075,7 @@ function renderStock(){
       <td>${a.stockMin}</td>
       <td>${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</td>
       <td>${val>0?val.toFixed(2).replace('.',',')+' €':'—'}</td>
+      <td style="font-size:12px;color:var(--text3);">${a.fournisseur||'—'}</td>
       <td>${statusLabel(s)}</td>
       <td><button class="btn btn-xs" onclick="openMouvement('${a.id}')">±</button>
           <button class="btn btn-xs" style="margin-left:3px;" onclick="showQR('${a.id}')">QR</button>
@@ -1718,17 +1725,31 @@ function renderHistorique(){
 // ==================== ARTICLES CRUD ====================
 function openNewArticle(){
   document.getElementById('art-modal-title').textContent='Ajouter un article';
-  document.getElementById('art-id').value='';document.getElementById('art-id').disabled=false;
-  document.getElementById('art-diam').value='';document.getElementById('art-stock').value=0;
-  document.getElementById('art-min').value=5;document.getElementById('art-prix').value=0;
+  document.getElementById('art-id').value='';
+  document.getElementById('art-id').readOnly=false;
+  document.getElementById('art-id').style.color='';
+  document.getElementById('art-newid-row').style.display='none';
+  document.getElementById('art-newid').value='';
+  document.getElementById('art-fournisseur').value='';
+  document.getElementById('art-diam').value='';
+  document.getElementById('art-stock').value=0;
+  document.getElementById('art-min').value=5;
+  document.getElementById('art-prix').value=0;
   populateArtCatSelect();openModal('modal-article');
 }
 function editArticle(id){
   const art=stock.find(a=>a.id===id);if(!art)return;
   document.getElementById('art-modal-title').textContent='Modifier '+art.id;
-  document.getElementById('art-id').value=art.id;document.getElementById('art-id').disabled=true;
-  document.getElementById('art-diam').value=art.diametre;document.getElementById('art-stock').value=art.stock;
-  document.getElementById('art-min').value=art.stockMin;document.getElementById('art-prix').value=art.prixUnitaire;
+  document.getElementById('art-id').value=art.id;
+  document.getElementById('art-id').readOnly=true;
+  document.getElementById('art-id').style.color='var(--text3)';
+  document.getElementById('art-newid-row').style.display='';
+  document.getElementById('art-newid').value='';
+  document.getElementById('art-fournisseur').value=art.fournisseur||'';
+  document.getElementById('art-diam').value=art.diametre;
+  document.getElementById('art-stock').value=art.stock;
+  document.getElementById('art-min').value=art.stockMin;
+  document.getElementById('art-prix').value=art.prixUnitaire;
   populateArtCatSelect(art.categorie);openModal('modal-article');
 }
 function populateArtCatSelect(selected){
@@ -1747,21 +1768,33 @@ function populateArtCatSelect(selected){
 }
 async function saveArticle(){
   const id=document.getElementById('art-id').value.trim().toUpperCase();
+  const newIdRaw=(document.getElementById('art-newid').value||'').trim().toUpperCase();
   const cat=document.getElementById('art-cat').value;
   const diam=document.getElementById('art-diam').value.trim();
   const s=parseInt(document.getElementById('art-stock').value)||0;
   const min=parseInt(document.getElementById('art-min').value)||0;
   const prix=parseFloat(document.getElementById('art-prix').value)||0;
+  const fournisseur=document.getElementById('art-fournisseur').value.trim();
   if(!id||!diam){alert('Référence et diamètre requis.');return;}
   const existing=stock.find(a=>a.id===id);
   let error;
   if(existing){
-    ({error}=await db.from('stock').update({categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix}).eq('id',id));
+    if(newIdRaw && newIdRaw!==id){
+      // Changement de référence
+      if(stock.find(a=>a.id===newIdRaw)){alert('Cette référence existe déjà : '+newIdRaw);return;}
+      ({error}=await db.from('stock').insert({id:newIdRaw,categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix}));
+      if(error){showToast('❌ Erreur : '+error.message);return;}
+      await db.from('historique').update({article_id:newIdRaw}).eq('article_id',id);
+      ({error}=await db.from('stock').delete().eq('id',id));
+    } else {
+      ({error}=await db.from('stock').update({categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix,fournisseur:fournisseur||null}).eq('id',id));
+    }
   } else {
-    ({error}=await db.from('stock').insert({id,categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix}));
+    ({error}=await db.from('stock').insert({id,categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix,fournisseur:fournisseur||null}));
   }
   if(error){showToast('❌ Erreur : '+error.message);return;}
-  document.getElementById('art-id').disabled=false;
+  document.getElementById('art-id').readOnly=false;
+  document.getElementById('art-id').style.color='';
   closeModal('modal-article');
   // Rechargement du stock puis affichage QR si nouvel article
   const {data:stockData}=await db.from('stock').select('*').order('categorie').order('id');
@@ -1987,7 +2020,7 @@ function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){
   document.getElementById(id).classList.remove('open');
   if(id==='modal-newcat')editingCat=null;
-  if(id==='modal-article')document.getElementById('art-id').disabled=false;
+  if(id==='modal-article'){document.getElementById('art-id').readOnly=false;document.getElementById('art-id').style.color='';}
 }
 document.querySelectorAll('.modal-backdrop').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id);}));
 
@@ -2523,3 +2556,4 @@ alter publication supabase_realtime add table config;
 -->
 </body>
 </html>
+<!-- CHANTIERS PAGE -->
