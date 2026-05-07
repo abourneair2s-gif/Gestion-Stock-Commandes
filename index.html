@@ -1357,28 +1357,59 @@ function filterCmdSearch(val){
 function buildCatPills(){
   const pills=document.getElementById('cmd-cat-pills');
   if(!pills) return;
-  console.log('buildCatPills: categories=', categories);
-  // Reconstruire à partir des catégories actuelles
   const parents=categories.filter(c=>!c.includes(' > ')).sort();
-  const all=[...parents];
-  parents.forEach(p=>categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>all.push(sc)));
-  if(all.length===0){
+  if(parents.length===0){
     pills.innerHTML='<div style="color:var(--text3);font-size:12px;">Aucune catégorie</div>';
     return;
   }
-  pills.innerHTML=all.map((c,i)=>{
-    const isSub=c.includes(' > ');
-    const label=isSub?'↳ '+c.split(' > ')[1]:c;
+  // Niveau 1 : grandes catégories uniquement
+  pills.innerHTML=parents.map((c,i)=>{
+    const hasSubs=categories.some(x=>x.startsWith(c+' > '));
     const escapedCat=c.replace(/'/g,'&#39;');
-    return`<div class="cmd-cat-pill cat-pill ${i===0?'active':''}" style="${isSub?'font-size:11px;margin-left:8px;':''}" onclick="selectCatPill(this,'${escapedCat}')">${label}</div>`;
+    return`<div class="cmd-cat-pill cat-pill ${i===0?'active':''}" onclick="selectParentPill(this,'${escapedCat}')">${c}${hasSubs?' ▸':''}</div>`;
   }).join('');
-  renderCatItems(all[0]);
+  // Ligne sous-catégories (vide au départ)
+  if(!document.getElementById('cmd-subcat-pills')){
+    const subRow=document.createElement('div');
+    subRow.id='cmd-subcat-pills';
+    subRow.className='cat-pills';
+    subRow.style.cssText='margin-top:6px;display:none;';
+    pills.parentNode.insertBefore(subRow, pills.nextSibling);
+  }
+  // Afficher la première catégorie
+  selectParentPill(pills.firstElementChild, parents[0]);
 }
-function selectCatPill(el,cat){
-  // Scoper uniquement aux pills du modal commande
+
+function selectParentPill(el, cat){
   document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active');
+  if(el) el.classList.add('active');
+  const subs=categories.filter(c=>c.startsWith(cat+' > ')).sort();
+  const subRow=document.getElementById('cmd-subcat-pills');
+  if(subs.length>0 && subRow){
+    // Afficher les sous-catégories
+    subRow.style.display='';
+    subRow.innerHTML=subs.map((sc,i)=>{
+      const label='↳ '+sc.split(' > ')[1];
+      const escapedSc=sc.replace(/'/g,'&#39;');
+      return`<div class="cat-pill sub-cat-pill ${i===0?'active':''}" onclick="selectSubCatPill(this,'${escapedSc}')">${label}</div>`;
+    }).join('');
+    renderCatItems(subs[0]);
+  } else {
+    // Pas de sous-cat : afficher directement les articles
+    if(subRow) subRow.style.display='none';
+    renderCatItems(cat);
+  }
+}
+
+function selectSubCatPill(el, cat){
+  document.querySelectorAll('#cmd-subcat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el) el.classList.add('active');
   renderCatItems(cat);
+}
+
+function selectCatPill(el,cat){
+  // Compatibilité ancienne fonction
+  selectParentPill(el,cat);
 }
 function renderCatItems(cat){
   const items=stock.filter(a=>a.categorie===cat);
@@ -2042,13 +2073,40 @@ function switchScanManualMode(mode,btn){
 }
 function buildScanCatPills(){
   const pills=document.getElementById('scan-cat-pills');
-  pills.innerHTML=categories.map((c,i)=>`<div class="cat-pill ${i===0?'active':''}" onclick="selectScanCatPill(this,'${c}')">${c}</div>`).join('');
-  if(categories.length>0)renderScanCatItems(categories[0]);
+  const parents=categories.filter(c=>!c.includes(' > ')).sort();
+  pills.innerHTML=parents.map((c,i)=>{
+    const hasSubs=categories.some(x=>x.startsWith(c+' > '));
+    return`<div class="cat-pill ${i===0?'active':''}" onclick="selectScanParentPill(this,'${c}')">${c}${hasSubs?' ▸':''}</div>`;
+  }).join('');
+  if(!document.getElementById('scan-subcat-pills')){
+    const subRow=document.createElement('div');
+    subRow.id='scan-subcat-pills';
+    subRow.className='cat-pills';
+    subRow.style.cssText='margin-top:6px;display:none;';
+    pills.parentNode.insertBefore(subRow,pills.nextSibling);
+  }
+  if(parents.length>0) selectScanParentPill(pills.firstElementChild,parents[0]);
 }
-function selectScanCatPill(el,cat){
+function selectScanParentPill(el,cat){
   document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active');renderScanCatItems(cat);
+  if(el) el.classList.add('active');
+  const subs=categories.filter(c=>c.startsWith(cat+' > ')).sort();
+  const subRow=document.getElementById('scan-subcat-pills');
+  if(subs.length>0 && subRow){
+    subRow.style.display='';
+    subRow.innerHTML=subs.map((sc,i)=>`<div class="cat-pill ${i===0?'active':''}" onclick="selectScanSubPill(this,'${sc}')">↳ ${sc.split(' > ')[1]}</div>`).join('');
+    renderScanCatItems(subs[0]);
+  } else {
+    if(subRow) subRow.style.display='none';
+    renderScanCatItems(cat);
+  }
 }
+function selectScanSubPill(el,cat){
+  document.querySelectorAll('#scan-subcat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderScanCatItems(cat);
+}
+function selectScanCatPill(el,cat){ selectScanParentPill(el,cat); }
 function renderScanCatItems(cat){
   const items=stock.filter(a=>a.categorie===cat||a.categorie.startsWith(cat+' > '));
   document.getElementById('scan-cat-items').innerHTML=items.map(a=>{const s=getStatus(a);
@@ -2243,17 +2301,48 @@ let etiqSelectedCat = '';
 let etiqSelected = new Set();
 
 function renderEtiquettes(){
-  // Pills catégories
   const pills = document.getElementById('etiq-cat-pills');
-  const allCats = ['Toutes', ...categories.filter(c=>!c.includes(' > ')).sort()];
-  categories.filter(c=>c.includes(' > ')).sort().forEach(sc=>allCats.push(sc));
-  pills.innerHTML = allCats.map((c,i)=>{
-    const label = c.includes(' > ') ? '↳ '+c.split(' > ')[1] : c;
-    const active = (i===0 && etiqSelectedCat==='') || c===etiqSelectedCat;
-    return `<div class="cat-pill ${active?'active':''}" onclick="filterEtiquettes('${c==='Toutes'?'':c}')">${label}</div>`;
+  const parents = ['Toutes',...categories.filter(c=>!c.includes(' > ')).sort()];
+  pills.innerHTML = parents.map((c,i)=>{
+    const hasSubs = c!=='Toutes' && categories.some(x=>x.startsWith(c+' > '));
+    const active = (c==='Toutes' && etiqSelectedCat==='') || c===etiqSelectedCat;
+    return `<div class="cat-pill ${active?'active':''}" onclick="selectEtiqParent(this,'${c==='Toutes'?'':c}')">${c}${hasSubs?' ▸':''}</div>`;
   }).join('');
+  if(!document.getElementById('etiq-subcat-pills')){
+    const subRow=document.createElement('div');
+    subRow.id='etiq-subcat-pills';
+    subRow.className='cat-pills';
+    subRow.style.cssText='margin-top:6px;display:none;';
+    pills.parentNode.insertBefore(subRow,pills.nextSibling);
+  }
   renderEtiqGrid();
 }
+function selectEtiqParent(el,cat){
+  document.querySelectorAll('#etiq-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const subs=cat===''?[]:categories.filter(c=>c.startsWith(cat+' > ')).sort();
+  const subRow=document.getElementById('etiq-subcat-pills');
+  if(subs.length>0 && subRow){
+    subRow.style.display='';
+    subRow.innerHTML=subs.map((sc,i)=>`<div class="cat-pill ${i===0?'active':''}" onclick="selectEtiqSub(this,'${sc}')">↳ ${sc.split(' > ')[1]}</div>`).join('');
+    etiqSelectedCat=subs[0];
+  } else {
+    if(subRow) subRow.style.display='none';
+    etiqSelectedCat=cat;
+  }
+  renderEtiqGrid();
+  const catLabel=etiqSelectedCat===''?'tout':etiqSelectedCat.includes(' > ')?etiqSelectedCat.split(' > ')[1]:etiqSelectedCat;
+  const btns=document.querySelectorAll('#page-etiquettes .btn-sm');
+  if(btns[0]) btns[0].textContent='✅ Tout sélectionner ('+catLabel+')';
+  if(btns[1]) btns[1].textContent='☐ Désélectionner ('+catLabel+')';
+}
+function selectEtiqSub(el,cat){
+  document.querySelectorAll('#etiq-subcat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el) el.classList.add('active');
+  etiqSelectedCat=cat;
+  renderEtiqGrid();
+}
+function filterEtiquettes(cat){ selectEtiqParent(null,cat); }
 
 function filterEtiquettes(cat){
   etiqSelectedCat = cat;
@@ -2263,6 +2352,12 @@ function filterEtiquettes(cat){
     const isCat = cat==='' ? p.textContent==='Toutes' : (p.textContent===cat||p.textContent==='↳ '+cat.split(' > ')[1]);
     p.classList.toggle('active', isCat);
   });
+  // Mettre à jour label des boutons sélection
+  const catLabel = cat==='' ? 'tout' : cat.includes(' > ')?cat.split(' > ')[1]:cat;
+  const btnAll = document.querySelector('#page-etiquettes .btn-sm');
+  if(btnAll) btnAll.textContent = '✅ Tout sélectionner ('+catLabel+')';
+  const btnNone = document.querySelectorAll('#page-etiquettes .btn-sm')[1];
+  if(btnNone) btnNone.textContent = '☐ Désélectionner ('+catLabel+')';
   renderEtiqGrid();
 }
 
@@ -2301,9 +2396,13 @@ function updateEtiqCount(){
 }
 
 function selectAllEtiquettes(val){
+  // Toujours utiliser la catégorie courante
   const filtered = etiqSelectedCat==='' ? stock : stock.filter(a=>a.categorie===etiqSelectedCat);
+  console.log('selectAll cat=', etiqSelectedCat, 'filtered=', filtered.length, 'val=', val);
   filtered.forEach(a=>{ if(val) etiqSelected.add(a.id); else etiqSelected.delete(a.id); });
   renderEtiqGrid();
+  const catLabel = etiqSelectedCat==='' ? 'tout le stock' : etiqSelectedCat;
+  showToast((val?'✅ Sélectionné':'☐ Désélectionné')+' : '+filtered.length+' article(s) de '+catLabel);
 }
 
 function printEtiquettes(){
