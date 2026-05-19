@@ -261,7 +261,9 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <button class="btn btn-primary btn-sm" onclick="openNewArticle()">+ Nouvel article</button>
       </div>
       <div class="table-wrap">
-        <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th><th>Prix unit.</th><th>Valeur</th><th>Fournisseur</th><th>Statut</th><th></th></tr></thead>
+        <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th>
+          <th id="stock-th-prix">Prix unit.</th><th id="stock-th-valeur">Valeur</th><th id="stock-th-fourn">Fournisseur</th>
+          <th>Statut</th><th></th></tr></thead>
         <tbody id="stock-table"></tbody></table>
       </div>
       <div id="stock-empty" class="empty-state" style="display:none;">Aucun article trouvé.</div>
@@ -500,7 +502,10 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       <div class="form-grid col3">
         <div class="form-row"><label class="form-label">Stock actuel</label><input type="number" id="art-stock" value="0" min="0"></div>
         <div class="form-row"><label class="form-label">Stock minimum</label><input type="number" id="art-min" value="5" min="0"></div>
-        <div class="form-row"><label class="form-label">Prix unit. (€)</label><input type="number" id="art-prix" value="0" step="0.01" min="0"></div>
+        <div class="form-row"><label class="form-label">Prix achat (€)</label><input type="number" id="art-prix" value="0" step="0.01" min="0"></div>
+      </div>
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Prix vente (€)</label><input type="number" id="art-prix-vente" value="0" step="0.01" min="0"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -774,6 +779,7 @@ let stock = [];
 let commandes = [];
 let historique = [];
 let chantiers = []; // [{nom, desc}]
+const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='client';
 let categories = [...DEFAULT_CATEGORIES];
 let cmdCounter = 1;
 let params = {email:'',company:''};
@@ -792,6 +798,7 @@ function adaptArticle(row) {
     diametre: row.diametre,
     stock: row.stock,
     prixUnitaire: row.prix_unitaire||0,
+    prixVente: row.prix_vente||0,
     stockMin: row.stock_min,
     fournisseur: row.fournisseur||'',
   };
@@ -826,6 +833,7 @@ async function initApp() {
     setConnected(true);
     renderDashboard(); attachKpiListener();
     updateBadges();
+    if(CLIENT_MODE) applyClientMode();
 
   } catch (err) {
     console.error('Erreur init:', err);
@@ -1056,6 +1064,13 @@ function populateCatFilter(){
   }
 }
 function renderStock(){
+  // Adapter les colonnes selon le mode
+  const thPrix=document.getElementById('stock-th-prix');
+  const thValeur=document.getElementById('stock-th-valeur');
+  const thFourn=document.getElementById('stock-th-fourn');
+  if(thPrix) thPrix.textContent=CLIENT_MODE?'Prix HT':'Prix achat';
+  if(thValeur) { thValeur.style.display=CLIENT_MODE?'none':''; }
+  if(thFourn) { thFourn.style.display=CLIENT_MODE?'none':''; }
   populateCatFilter();
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
   const cat=document.getElementById('filter-cat')?.value||'';
@@ -1074,13 +1089,19 @@ function renderStock(){
       <td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
       <td><span class="${sc}">${a.stock}</span><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${color};"></div></div></td>
       <td>${a.stockMin}</td>
-      <td>${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</td>
-      <td>${val>0?val.toFixed(2).replace('.',',')+' €':'—'}</td>
-      <td style="font-size:12px;color:var(--text3);">${a.fournisseur||'—'}</td>
+      ${CLIENT_MODE
+        ? `<td>${a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—'}</td>`
+        : `<td>${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</td>
+           <td>${val>0?val.toFixed(2).replace('.',',')+' €':'—'}</td>
+           <td style="font-size:12px;color:var(--text3);">${a.fournisseur||'—'}</td>`
+      }
       <td>${statusLabel(s)}</td>
-      <td><button class="btn btn-xs" onclick="openMouvement('${a.id}')">±</button>
-          <button class="btn btn-xs" style="margin-left:3px;" onclick="showQR('${a.id}')">QR</button>
-          <button class="btn btn-xs" style="margin-left:3px;" onclick="editArticle('${a.id}')">✏</button></td></tr>`;
+      <td>${CLIENT_MODE
+        ? `<button class="btn btn-xs btn-primary" onclick="openCmdModal()">+ Commander</button>`
+        : `<button class="btn btn-xs" onclick="openMouvement('${a.id}')">±</button>
+           <button class="btn btn-xs" style="margin-left:3px;" onclick="showQR('${a.id}')">QR</button>
+           <button class="btn btn-xs" style="margin-left:3px;" onclick="editArticle('${a.id}')">✏</button>`
+      }</td></tr>`;
   }).join('');
 }
 
@@ -1732,6 +1753,7 @@ function openNewArticle(){
   document.getElementById('art-newid-row').style.display='none';
   document.getElementById('art-newid').value='';
   document.getElementById('art-fournisseur').value='';
+  document.getElementById('art-prix-vente').value=0;
   document.getElementById('art-diam').value='';
   document.getElementById('art-stock').value=0;
   document.getElementById('art-min').value=5;
@@ -1747,6 +1769,7 @@ function editArticle(id){
   document.getElementById('art-newid-row').style.display='';
   document.getElementById('art-newid').value='';
   document.getElementById('art-fournisseur').value=art.fournisseur||'';
+  document.getElementById('art-prix-vente').value=art.prixVente||0;
   document.getElementById('art-diam').value=art.diametre;
   document.getElementById('art-stock').value=art.stock;
   document.getElementById('art-min').value=art.stockMin;
@@ -1776,6 +1799,7 @@ async function saveArticle(){
   const min=parseInt(document.getElementById('art-min').value)||0;
   const prix=parseFloat(document.getElementById('art-prix').value)||0;
   const fournisseur=document.getElementById('art-fournisseur').value.trim();
+  const prixVente=parseFloat(document.getElementById('art-prix-vente').value)||0;
   if(!id||!diam){alert('Référence et diamètre requis.');return;}
   const existing=stock.find(a=>a.id===id);
   let error;
@@ -1788,10 +1812,10 @@ async function saveArticle(){
       await db.from('historique').update({article_id:newIdRaw}).eq('article_id',id);
       ({error}=await db.from('stock').delete().eq('id',id));
     } else {
-      ({error}=await db.from('stock').update({categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix,fournisseur:fournisseur||null}).eq('id',id));
+      ({error}=await db.from('stock').update({categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix,prix_vente:prixVente||null,fournisseur:fournisseur||null}).eq('id',id));
     }
   } else {
-    ({error}=await db.from('stock').insert({id,categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix,fournisseur:fournisseur||null}));
+    ({error}=await db.from('stock').insert({id,categorie:cat,diametre:diam,stock:s,stock_min:min,prix_unitaire:prix,prix_vente:prixVente||null,fournisseur:fournisseur||null}));
   }
   if(error){showToast('❌ Erreur : '+error.message);return;}
   document.getElementById('art-id').readOnly=false;
@@ -2532,6 +2556,42 @@ async function downloadEtiquettes(){
     await new Promise(r=>setTimeout(r,200)); // délai entre téléchargements
   }
   showToast('✅ '+arts.length+' étiquette(s) téléchargée(s)');
+}
+
+
+// ==================== MODE CLIENT ====================
+function applyClientMode(){
+  // Masquer boutons d'admin dans le stock
+  setTimeout(()=>{
+    document.querySelectorAll('[onclick="openNewArticle()"]').forEach(el=>el.style.display='none');
+    document.querySelectorAll('[onclick*="editArticle"]').forEach(el=>el.style.display='none');
+    document.querySelectorAll('[onclick*="openMouvement"]').forEach(el=>el.style.display='none');
+    document.querySelectorAll('[onclick*="showQR"]').forEach(el=>el.style.display='none');
+    document.querySelectorAll('[onclick*="deleteArticle"]').forEach(el=>el.style.display='none');
+    // Masquer colonne valeur et fournisseur dans tableau
+    const thValeur=document.getElementById('stock-th-valeur');
+    const thFourn=document.getElementById('stock-th-fourn');
+    if(thValeur) thValeur.style.display='none';
+    if(thFourn) thFourn.style.display='none';
+  },500);
+  // Masquer les pages non autorisées dans la sidebar
+  const hiddenPages = ['pareto','historique','categories','parametres','chantiers','etiquettes','alertes'];
+  hiddenPages.forEach(p=>{
+    document.querySelectorAll(`[data-page="${p}"]`).forEach(el=>el.style.display='none');
+  });
+  // Masquer sections sidebar
+  document.querySelectorAll('.sb-section').forEach(el=>el.style.display='none');
+  // Masquer bouton export Excel
+  document.querySelectorAll('[onclick*="exportExcel"]').forEach(el=>el.style.display='none');
+  // Modifier le titre
+  document.querySelector('.sb-logo-sub').textContent='Espace client';
+  // Aller directement sur le stock
+  showPage('stock', document.querySelector('[data-page="stock"]'));
+  // Ajouter bandeau mode client
+  const banner=document.createElement('div');
+  banner.style.cssText='background:var(--blue);color:#fff;text-align:center;padding:6px;font-size:12px;font-weight:600;';
+  banner.textContent='🔒 Mode client — Catalogue & Commandes';
+  document.getElementById('topbar').prepend(banner);
 }
 
 initApp();
