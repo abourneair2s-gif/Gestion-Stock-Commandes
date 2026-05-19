@@ -1097,7 +1097,7 @@ function renderStock(){
       }
       <td>${statusLabel(s)}</td>
       <td>${CLIENT_MODE
-        ? `<button class="btn btn-xs btn-primary" onclick="openCmdModal()">+ Commander</button>`
+        ? ''
         : `<button class="btn btn-xs" onclick="openMouvement('${a.id}')">±</button>
            <button class="btn btn-xs" style="margin-left:3px;" onclick="showQR('${a.id}')">QR</button>
            <button class="btn btn-xs" style="margin-left:3px;" onclick="editArticle('${a.id}')">✏</button>`
@@ -1354,10 +1354,32 @@ function printQR(){
 function openCmdModal(){
   editingCmdId=null;
   cmdItems=[];
-  // Peupler le select chantier
+  // Adapter champ chantier selon mode
   const selC=document.getElementById('cmd-chantier');
-  selC.innerHTML='<option value="">— Sélectionner un chantier —</option>';
-  chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom+(c.desc?' ('+c.desc+')':'');selC.appendChild(o);});
+  const labelC=document.querySelector('label[for="cmd-chantier"]')||selC.previousElementSibling;
+  if(CLIENT_MODE){
+    // Remplacer le select par un champ texte libre "Nom de l'entreprise"
+    if(selC.tagName==='SELECT'){
+      const input=document.createElement('input');
+      input.type='text';input.id='cmd-chantier';input.placeholder="Nom de votre entreprise";
+      selC.parentNode.replaceChild(input,selC);
+    } else {
+      selC.placeholder="Nom de votre entreprise";
+    }
+    if(labelC) labelC.textContent="Nom de l'entreprise";
+    document.getElementById('cmd-chantier').value='';
+  } else {
+    // Mode normal : select avec chantiers
+    if(selC.tagName!=='SELECT'){
+      const sel=document.createElement('select');
+      sel.id='cmd-chantier';
+      selC.parentNode.replaceChild(sel,selC);
+    }
+    const sel2=document.getElementById('cmd-chantier');
+    sel2.innerHTML='<option value="">— Sélectionner un chantier —</option>';
+    chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom+(c.desc?' ('+c.desc+')':'');sel2.appendChild(o);});
+    if(labelC) labelC.textContent='Chantier';
+  }
   ['cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cmd-urgence').value='normale';
   const title=document.getElementById('cmd-modal-title');
@@ -2561,37 +2583,37 @@ async function downloadEtiquettes(){
 
 // ==================== MODE CLIENT ====================
 function applyClientMode(){
-  // Masquer boutons d'admin dans le stock
   setTimeout(()=>{
+    // Pages masquées : tout sauf stock et commandes
+    const hiddenPages=['dashboard','pareto','historique','categories','parametres','chantiers','etiquettes','alertes','scan'];
+    hiddenPages.forEach(p=>{
+      document.querySelectorAll(`[data-page="${p}"]`).forEach(el=>el.style.display='none');
+    });
+    // Masquer sections sidebar ADMIN
+    document.querySelectorAll('.sb-section').forEach(el=>el.style.display='none');
+    // Masquer boutons admin
     document.querySelectorAll('[onclick="openNewArticle()"]').forEach(el=>el.style.display='none');
     document.querySelectorAll('[onclick*="editArticle"]').forEach(el=>el.style.display='none');
     document.querySelectorAll('[onclick*="openMouvement"]').forEach(el=>el.style.display='none');
     document.querySelectorAll('[onclick*="showQR"]').forEach(el=>el.style.display='none');
     document.querySelectorAll('[onclick*="deleteArticle"]').forEach(el=>el.style.display='none');
-    // Masquer colonne valeur et fournisseur dans tableau
+    document.querySelectorAll('[onclick*="exportExcel"]').forEach(el=>el.style.display='none');
+    // Masquer colonnes valeur et fournisseur
     const thValeur=document.getElementById('stock-th-valeur');
     const thFourn=document.getElementById('stock-th-fourn');
     if(thValeur) thValeur.style.display='none';
     if(thFourn) thFourn.style.display='none';
-  },500);
-  // Masquer les pages non autorisées dans la sidebar
-  const hiddenPages = ['pareto','historique','categories','parametres','chantiers','etiquettes','alertes'];
-  hiddenPages.forEach(p=>{
-    document.querySelectorAll(`[data-page="${p}"]`).forEach(el=>el.style.display='none');
-  });
-  // Masquer sections sidebar
-  document.querySelectorAll('.sb-section').forEach(el=>el.style.display='none');
-  // Masquer bouton export Excel
-  document.querySelectorAll('[onclick*="exportExcel"]').forEach(el=>el.style.display='none');
-  // Modifier le titre
-  document.querySelector('.sb-logo-sub').textContent='Espace client';
-  // Aller directement sur le stock
-  showPage('stock', document.querySelector('[data-page="stock"]'));
-  // Ajouter bandeau mode client
-  const banner=document.createElement('div');
-  banner.style.cssText='background:var(--blue);color:#fff;text-align:center;padding:6px;font-size:12px;font-weight:600;';
-  banner.textContent='🔒 Mode client — Catalogue & Commandes';
-  document.getElementById('topbar').prepend(banner);
+    // Modifier titre sidebar
+    const sub=document.querySelector('.sb-logo-sub');
+    if(sub) sub.textContent='Espace client';
+    // Bandeau mode client
+    const banner=document.createElement('div');
+    banner.style.cssText='background:var(--blue);color:#fff;text-align:center;padding:6px;font-size:12px;font-weight:600;';
+    banner.textContent='🔒 Mode client — Catalogue & Commandes';
+    document.getElementById('topbar').prepend(banner);
+    // Aller sur le stock par défaut
+    showPage('stock', document.querySelector('[data-page="stock"]'));
+  },300);
 }
 
 initApp();
