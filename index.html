@@ -1812,36 +1812,19 @@ function renderEtiquettes() {
 }
 
 function printEtiquettes() {
-  if (etiqSelected.size === 0) { showToast('Sélectionnez au moins un article'); return; }
+  if (etiqSelected.size === 0) { showToast('Selectionnez au moins un article'); return; }
   const arts = stock.filter(a => etiqSelected.has(a.id));
-  let html = `<!DOCTYPE html><html><head><title>Étiquettes QR</title>
-  <style>
-    body { font-family: sans-serif; margin: 0; }
-    .grid { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px; }
-    .label { border: 2px solid #333; border-radius: 8px; padding: 12px; width: 160px; text-align: center; page-break-inside: avoid; }
-    .label h3 { font-size: 11px; margin: 0 0 2px; color: #555; }
-    .label .ref { font-size: 13px; font-weight: 800; margin: 2px 0; }
-    .label .diam { font-size: 10px; color: #777; }
-    .qr-placeholder { width: 130px; height: 130px; background: #eee; margin: 6px auto; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999; }
-    @media print { body { margin: 0; } }
-  </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
-  </head><body><div class="grid">`;
-  arts.forEach(a => {
-    html += `<div class="label">
-      <h3>${a.categorie}</h3>
-      <div class="ref">${a.id}</div>
-      <div class="diam">Ø ${a.diametre}</div>
-      <div id="qr-${a.id.replace(/[^a-z0-9]/gi,'_')}" style="margin:6px auto;width:130px;height:130px;"></div>
-    </div>`;
+  const style = '<style>body{font-family:sans-serif;margin:0;}.grid{display:flex;flex-wrap:wrap;gap:8px;padding:16px;}.label{border:2px solid #333;border-radius:8px;padding:12px;width:160px;text-align:center;page-break-inside:avoid;}.label h3{font-size:11px;margin:0 0 2px;color:#555;}.ref{font-size:13px;font-weight:800;margin:2px 0;}.diam{font-size:10px;color:#777;}@media print{body{margin:0;}}</style>';
+  const qrScript = '<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></scr'+'ipt>';
+  let labels = '';
+  let qrInits = '';
+  arts.forEach(function(a) {
+    const safeId = a.id.replace(/[^a-z0-9]/gi, '_');
+    labels += '<div class="label"><h3>' + a.categorie + '</h3><div class="ref">' + a.id + '</div><div class="diam">O ' + a.diametre + '</div><div id="qr_' + safeId + '" style="margin:6px auto;width:130px;height:130px;"></div></div>';
+    qrInits += 'new QRCode(document.getElementById("qr_' + safeId + '"),{text:"' + a.id + '",width:130,height:130,colorDark:"#000",colorLight:"#fff"});';
   });
-  html += `</div><script>
-    window.onload = function() {
-      ${arts.map(a => `new QRCode(document.getElementById('qr-${a.id.replace(/[^a-z0-9]/gi,'_')}'), {text:'${a.id}',width:130,height:130,colorDark:'#000',colorLight:'#fff'});`).join('
-')}
-      setTimeout(() => window.print(), 800);
-    };
-  <\/script></body></html>`;
+  const initScript = '<scr'+'ipt>window.onload=function(){' + qrInits + 'setTimeout(function(){window.print();},800);};</scr'+'ipt>';
+  const html = '<!DOCTYPE html><html><head><title>Etiquettes QR</title>' + style + qrScript + '</head><body><div class="grid">' + labels + '</div>' + initScript + '</body></html>';
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
