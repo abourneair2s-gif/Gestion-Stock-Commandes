@@ -832,7 +832,6 @@ async function initApp() {
 
     document.getElementById('loading-overlay').classList.add('hidden');
     setConnected(true);
-    renderDashboard(); attachKpiListener();
     updateBadges();
     if(CLIENT_MODE) applyClientMode();
 
