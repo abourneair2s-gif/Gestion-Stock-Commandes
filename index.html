@@ -1387,7 +1387,11 @@ function viewCmd(id){
   const statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
   document.getElementById('cmd-detail-title').textContent='Commande #'+String(c.num).padStart(3,'0')+' - '+c.chantier;
   document.getElementById('cmd-detail-body').innerHTML='<div style="font-size:13px;margin-bottom:12px;"><strong>Date:</strong> '+date+' | <strong>Demandeur:</strong> '+(c.nom||'')+'<br><strong>Urgence:</strong> '+(c.urgence||'')+' | <strong>Statut:</strong> '+statLabel+(c.notes?'<br><strong>Notes:</strong> '+c.notes:'')+'</div><table style="width:100%;font-size:13px;"><thead><tr><th>Ref</th><th>Article</th><th>Qte</th><th>Stock</th></tr></thead><tbody>'+(c.items||[]).map(i=>{const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:'?'};return'<tr><td><code>'+i.id+'</code></td><td>'+art.categorie+' '+art.diametre+'</td><td>'+i.qty+'</td><td>'+art.stock+'</td></tr>';}).join('')+'</tbody></table>';
-  document.getElementById('cmd-detail-footer').innerHTML='<button class="btn" onclick="closeModal('modal-cmd-detail')">Fermer</button>'+(c.statut==='en_attente'?'<button class="btn btn-sm" onclick="editCmd(''+c.id+'');closeModal('modal-cmd-detail');">Modifier</button><button class="btn btn-danger btn-sm" onclick="refuserCmd(''+c.id+'');closeModal('modal-cmd-detail');">Refuser</button><button class="btn btn-primary btn-sm" onclick="approuverCmd(''+c.id+'');closeModal('modal-cmd-detail');">Approuver</button>':'<button class="btn btn-danger btn-sm" onclick="deleteCmd(''+c.id+'');closeModal('modal-cmd-detail');">Supprimer</button>');
+  const cid=c.id,isP=c.statut==='en_attente';
+  document.getElementById('cmd-detail-footer').innerHTML=
+    `<button class="btn" onclick="closeModal('modal-cmd-detail')">Fermer</button>`+
+    (isP?`<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">Modifier</button><button class="btn btn-danger btn-sm" onclick="refuserCmd('${cid}');closeModal('modal-cmd-detail');">Refuser</button><button class="btn btn-primary btn-sm" onclick="approuverCmd('${cid}');closeModal('modal-cmd-detail');">Approuver</button>`:
+    `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">Supprimer</button>`);
   openModal('modal-cmd-detail');
 }
 async function approuverCmd(id){
@@ -1414,7 +1418,8 @@ function renderAlertes(){
   const alerts=getAlerts();
   const el=document.getElementById('alertes-list');if(!el)return;
   if(alerts.length===0){el.innerHTML='<div style="text-align:center;color:var(--green);padding:20px;">Tous les stocks OK</div>';return;}
-  el.innerHTML=alerts.map(a=>{const s=getStatus(a);return'<div class="alert-card"><div><strong>'+a.id+'</strong> - '+a.categorie+' '+a.diametre+'<br><small>Stock: <strong class="'+(s==='warn'?'stock-warn':'stock-danger')+'">'+a.stock+'</strong> / Min: '+a.stockMin+'</small></div><button class="btn btn-xs btn-primary" onclick="openMouvement(''+a.id+'')">Mouvement</button></div>';}).join('');
+  el.innerHTML=alerts.map(a=>{const s=getStatus(a);
+    return`<div class="alert-card"><div><strong>${a.id}</strong> - ${a.categorie} ${a.diametre}<br><small>Stock: <strong class="${s==='warn'?'stock-warn':'stock-danger'}">${a.stock}</strong> / Min: ${a.stockMin}</small></div><button class="btn btn-xs btn-primary" onclick="openMouvement('${a.id}')">Mouvement</button></div>`;}).join('');
 }
 function renderHistorique(){
   const tbody=document.getElementById('hist-table');if(!tbody)return;
@@ -1427,10 +1432,11 @@ function renderCategories(){
   const rows=[];
   parents.forEach(p=>{
     const pCount=stock.filter(a=>a.categorie===p).length;
-    rows.push('<tr style="background:#fafaf8;"><td class="cat-list-name"><strong>'+p+'</strong></td><td><span class="badge badge-blue">Categorie</span></td><td>'+pCount+' article(s)</td><td style="text-align:right;"><button class="btn btn-xs" onclick="editCat(''+p+'')">edit</button>'+(pCount===0&&!categories.some(c=>c.startsWith(p+' > '))?'<button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCat(''+p+'')">del</button>':'')+'</td></tr>');
+    const hasSubs2=categories.some(c=>c.startsWith(p+' > '));
+    rows.push(`<tr style="background:#fafaf8;"><td class="cat-list-name"><strong>${p}</strong></td><td><span class="badge badge-blue">Categorie</span></td><td>${pCount} article(s)</td><td style="text-align:right;"><button class="btn btn-xs" onclick="editCat('${p}')">✏</button>${pCount===0&&!hasSubs2?`<button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCat('${p}')">🗑</button>`:''}</td></tr>`);
     categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>{
       const scName=sc.split(' > ')[1];const scCount=stock.filter(a=>a.categorie===sc).length;
-      rows.push('<tr><td class="cat-list-name" style="padding-left:28px;color:var(--text2);">- '+scName+'</td><td><span class="badge badge-gray">Sous-cat</span></td><td>'+scCount+' article(s)</td><td style="text-align:right;"><button class="btn btn-xs" onclick="editCat(''+sc+'')">edit</button>'+(scCount===0?'<button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCat(''+sc+'')">del</button>':'')+'</td></tr>');
+      rows.push(`<tr><td class="cat-list-name" style="padding-left:28px;color:var(--text2);">↳ ${scName}</td><td><span class="badge badge-gray">Sous-cat</span></td><td>${scCount} article(s)</td><td style="text-align:right;"><button class="btn btn-xs" onclick="editCat('${sc}')">✏</button>${scCount===0?`<button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCat('${sc}')">🗑</button>`:''}</td></tr>`);
     });
   });
   document.getElementById('cat-table').innerHTML=rows.join('');
@@ -1439,6 +1445,8 @@ function renderParams(){
   const e=document.getElementById('param-email');if(e)e.value=params.email||'';
   const c=document.getElementById('param-company');if(c)c.value=params.company||'';
 }
+
+initApp();
 
 </script>
 </body>
