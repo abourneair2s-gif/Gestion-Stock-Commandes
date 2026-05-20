@@ -832,7 +832,7 @@ async function initApp() {
 
     document.getElementById('loading-overlay').classList.add('hidden');
     setConnected(true);
-    renderDashboard(); attachKpiListener();
+    renderDashboard();
     updateBadges();
     if(CLIENT_MODE) applyClientMode();
 
@@ -1050,7 +1050,7 @@ function renderDashboard(){
 
 // ==================== STOCK ====================
 // attach after each dashboard render
-setTimeout(attachKpiListener, 50);
+
 
 function populateCatFilter(){
   const sel=document.getElementById('filter-cat');
@@ -1451,3 +1451,4 @@ initApp();
 </script>
 </body>
 </html>
+
