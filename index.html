@@ -1348,4 +1348,9 @@ function printQR(){
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>Étiquette ${art.id}</title>
   <style>body{font-family:sans-serif;text-align:center;padding:20px;}.label{border:2px solid #333;border-radius:8px;padding:16px;display:inline-block;}h2{font-size:13px;margin:0 0 2px;}p{font-size:10px;color:#555;margin:2px 0;}img{width:150px;height:150px;}</style>
-  </head><body><div class="label"><h2>${art.categorie}</h2><p>Ø ${art.diametre}</p><p><strong>${art.id}</strong></p><img src="${src}"><p style="margin-top:6px;font-size:9px;">StockPro Alu · ${art.id}</p></div><script>window.print();<\/script></body></html>
+  </head><body><div class="label"><h2>${art.categorie}</h2><p>Ø ${art.diametre}</p><p><strong>${art.id}</strong></p><img src="${src}"><p style="margin-top:6px;font-size:9px;">StockPro Alu · ${art.id}</p></div><script>window.print();<\/script></body></html>`);
+  w.document.close();
+}
+</script>
+</body>
+</html>
