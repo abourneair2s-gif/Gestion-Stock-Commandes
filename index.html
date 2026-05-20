@@ -1414,7 +1414,7 @@ async function deleteCmd(id){
   commandes=commandes.filter(c=>c.id!==id);
   renderCommandes();updateBadges();showToast('Commande supprimee');
 }
-function renderAlertes(){
+function renderChantiers(){const t=document.getElementById('chantiers-table');if(t)t.innerHTML=chantiers.map(c=>'<tr><td>'+c.nom+'</td><td>'+c.desc+'</td><td><button class=btn onclick=showChantierDetail("'+c.nom+'")>Detail</button></td></tr>').join('');}function renderEtiquettes(){renderEtiqGrid();}function renderAlertes(){
   const alerts=getAlerts();
   const el=document.getElementById('alertes-list');if(!el)return;
   if(alerts.length===0){el.innerHTML='<div style="text-align:center;color:var(--green);padding:20px;">Tous les stocks OK</div>';return;}
@@ -1451,4 +1451,5 @@ initApp();
 </script>
 </body>
 </html>
+
 
