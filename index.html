@@ -1414,7 +1414,53 @@ async function deleteCmd(id){
   commandes=commandes.filter(c=>c.id!==id);
   renderCommandes();updateBadges();showToast('Commande supprimee');
 }
-function renderChantiers(){const t=document.getElementById('chantiers-table');if(t)t.innerHTML=chantiers.map(c=>'<tr><td>'+c.nom+'</td><td>'+c.desc+'</td><td><button class=btn onclick=showChantierDetail("'+c.nom+'")>Detail</button></td></tr>').join('');}function renderEtiquettes(){renderEtiqGrid();}function renderAlertes(){
+function renderChantiers(){
+  const cards=document.getElementById('chantiers-cards');
+  const tbody=document.getElementById('chantiers-table');
+  if(cards){cards.innerHTML=chantiers.map(c=>{
+    const mvts=historique.filter(h=>h.chantier===c.nom&&h.type==='out');
+    const cmds=commandes.filter(x=>x.chantier===c.nom&&x.statut==='approuvee');
+    const q=mvts.reduce((s,h)=>s+h.qty,0)+cmds.reduce((s,x)=>(x.items||[]).reduce((a,i)=>a+i.qty,0)+s,0);
+    return '<div onclick="showChantierDetail(\''+c.nom+'\')" style="cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-width:160px;flex:1;max-width:220px;"><div style="font-weight:700;">'+c.nom+'</div><div style="font-size:12px;color:var(--text2);">'+q+' unites</div><div style="font-size:11px;color:var(--blue);">Voir detail</div></div>';
+  }).join('');}
+  if(tbody){tbody.innerHTML=chantiers.map(c=>'<tr><td>'+c.nom+'</td><td>0</td><td>0</td><td>0</td><td><button class="btn btn-xs" onclick="editChantier(\''+c.nom+'\')">edit</button><button class="btn btn-xs btn-danger" onclick="deleteChantier(\''+c.nom+'\')">del</button></td></tr>').join('');}
+}
+function showChantierDetail(nom){
+  const d=document.getElementById('chantier-detail');
+  if(!d)return;
+  document.getElementById('chantier-detail-title').textContent='Detail - '+nom;
+  d.style.display='';
+}
+function renderEtiquettes(){
+  const pills=document.getElementById('etiq-cat-pills');
+  if(!pills)return;
+  const parents=['Toutes',...categories.filter(c=>!c.includes(' > ')).sort()];
+  pills.innerHTML=parents.map((c,i)=>`<div class="cat-pill ${(c==='Toutes'&&etiqSelectedCat==='')||c===etiqSelectedCat?'active':''}" onclick="selectEtiqParent(this,'${c==='Toutes'?'':c}')">${c}</div>`).join('');
+  renderEtiqGrid();
+}
+function selectEtiqParent(el,cat){
+  document.querySelectorAll('#etiq-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  etiqSelectedCat=cat;
+  renderEtiqGrid();
+}
+function renderEtiqGrid(){
+  const grid=document.getElementById('etiq-grid');if(!grid)return;
+  const filtered=etiqSelectedCat===''?stock:stock.filter(a=>a.categorie===etiqSelectedCat);
+  grid.innerHTML=filtered.map(a=>{const checked=etiqSelected.has(a.id);return `<div onclick="toggleEtiq('${a.id}',this)" style="border:2px solid ${checked?'var(--green)':'var(--border)'};border-radius:10px;padding:10px;cursor:pointer;text-align:center;background:${checked?'#e6f5ef':'var(--surface)'}"><div style="font-size:10px;font-weight:600;">${a.categorie}</div><div style="font-weight:700;font-size:13px;">${a.id}</div><div style="font-size:11px;">O ${a.diametre}</div><div>${checked?'OK':' '}</div></div>`;}).join('');
+  const el=document.getElementById('etiq-count');if(el)el.textContent=etiqSelected.size+' selectionne(s)';
+}
+function toggleEtiq(id,el){if(etiqSelected.has(id)){etiqSelected.delete(id);}else{etiqSelected.add(id);}renderEtiqGrid();}
+function selectAllEtiquettes(val){const f=etiqSelectedCat===''?stock:stock.filter(a=>a.categorie===etiqSelectedCat);f.forEach(a=>{if(val)etiqSelected.add(a.id);else etiqSelected.delete(a.id);});renderEtiqGrid();}
+function updateEtiqCount(){const el=document.getElementById('etiq-count');if(el)el.textContent=etiqSelected.size+' selectionne(s)';}
+function printEtiquettes(){showToast('Impression non disponible - utilisez le bouton QR individuel');}
+function downloadEtiquettes(){showToast('Telechargement non disponible');}
+function exportChantiers(){showToast('Export non disponible');}
+function openNewChantier(){openModal('modal-chantier');}
+function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';openModal('modal-chantier');}
+async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1)l[i]={nom,desc};else l.push({nom,desc});await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistre');}
+async function deleteChantier(nom){if(!confirm('Supprimer?'))return;const l=chantiers.filter(c=>c.nom!==nom);await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;renderChantiers();showToast('Supprime');}
+let etiqSelectedCat='';let etiqSelected=new Set();function renderAlertes(){
   const alerts=getAlerts();
   const el=document.getElementById('alertes-list');if(!el)return;
   if(alerts.length===0){el.innerHTML='<div style="text-align:center;color:var(--green);padding:20px;">Tous les stocks OK</div>';return;}
@@ -1451,5 +1497,7 @@ initApp();
 </script>
 </body>
 </html>
+
+
 
 
