@@ -255,7 +255,7 @@ input::placeholder { color: var(--text3); }
 <body>
 
 <!-- SETUP OVERLAY -->
-<div class="setup-overlay" id="setupOverlay">
+<div class="setup-overlay" id="setupOverlay" style="display:none">
   <div class="setup-card">
     <h2>⚡ StockPro</h2>
     <p>Identifiants préconfigurés — cliquez sur Connexion ou modifiez si besoin.</p>
@@ -268,7 +268,8 @@ input::placeholder { color: var(--text3); }
       <input type="text" id="cfgKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdmxxaWNmampoeGpodGF3Ym5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNDc2MTAsImV4cCI6MjA5MjgyMzYxMH0.G-j8H3PDCt2OI2qPiHUeWYJ9zmSwnGNJQyGp4tib8UE">
     </div>
     <button class="btn btn-primary" style="width:100%" onclick="saveConfig()">Connexion</button>
-    <p style="margin-top:1rem;font-size:0.75rem;color:var(--text3)">Vos identifiants sont stockés localement dans le navigateur.</p>
+    <div id="cfgError" style="margin-top:0.75rem;color:var(--red);font-size:0.8rem;min-height:1.2em"></div>
+    <p style="margin-top:0.25rem;font-size:0.75rem;color:var(--text3)">Vos identifiants sont stockés localement dans le navigateur.</p>
   </div>
 </div>
 
@@ -363,6 +364,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('client-mode');
     showClientBanner();
   }
+  // Masquer l'overlay et afficher l'app directement (credentials préconfigurés)
+  document.getElementById('setupOverlay').style.display = 'none';
+  document.getElementById('appRoot').style.display = 'flex';
   await initSupabase(url, key);
 });
 
@@ -375,6 +379,8 @@ async function saveConfig() {
 }
 
 async function initSupabase(url, key) {
+  const errDiv = document.getElementById('cfgError');
+  if (errDiv) errDiv.textContent = '';
   try {
     supabase = window.supabase.createClient(url, key);
     await loadAll();
@@ -383,25 +389,29 @@ async function initSupabase(url, key) {
     document.getElementById('connDot').className = 'conn-dot connected';
     setupRealtime();
     navigate('dashboard');
-    toast('Connecté à Supabase ✓', 'success');
   } catch(e) {
-    toast('Connexion échouée : ' + e.message, 'error');
+    console.error('Supabase init error:', e);
+    document.getElementById('setupOverlay').style.display = 'flex';
     document.getElementById('connDot').className = 'conn-dot error';
+    if (errDiv) errDiv.textContent = 'Erreur : ' + (e.message || String(e));
+    else toast('Connexion échouée : ' + (e.message || e), 'error');
   }
 }
 
 // ─── DATA LOADING ──────────────────────────────────────────────────
 async function loadAll() {
+  const safe = async (p) => { try { return await p; } catch(e) { return {data:null,error:e}; } };
   const [s, c, h, cfg] = await Promise.all([
-    supabase.from('stock').select('*').order('reference'),
-    supabase.from('commandes').select('*').order('created_at', {ascending: false}),
-    supabase.from('historique').select('*').order('created_at', {ascending: false}).limit(500),
-    supabase.from('config').select('*')
+    safe(supabase.from('stock').select('*').order('reference')),
+    safe(supabase.from('commandes').select('*').order('created_at', {ascending: false})),
+    safe(supabase.from('historique').select('*').order('created_at', {ascending: false}).limit(500)),
+    safe(supabase.from('config').select('*'))
   ]);
-  if (s.data) appState.stock = s.data;
+  if (s.error && !s.data) { console.warn('stock:', s.error?.message); }
+  else if (s.data) appState.stock = s.data;
   if (c.data) appState.commandes = c.data;
   if (h.data) appState.historique = h.data;
-  if (cfg.data) {
+  if (cfg.data && cfg.data.length > 0) {
     cfg.data.forEach(r => { appState.config[r.cle] = r.valeur; });
     appState.alertSeuil = parseInt(appState.config.seuil_alerte || '5');
     appState.chantiers = appState.config.chantiers
