@@ -339,7 +339,7 @@ input::placeholder { color: var(--text3); }
 
 <script>
 // ─── CONFIG & STATE ────────────────────────────────────────────────
-let supabase = null;
+let db = null;
 let appState = {
   stock: [], commandes: [], historique: [], config: {},
   chantiers: [], alertSeuil: 5,
@@ -382,7 +382,7 @@ async function initSupabase(url, key) {
   const errDiv = document.getElementById('cfgError');
   if (errDiv) errDiv.textContent = '';
   try {
-    supabase = window.supabase.createClient(url, key);
+    db = window.supabase.createClient(url, key);
     await loadAll();
     document.getElementById('setupOverlay').style.display = 'none';
     document.getElementById('appRoot').style.display = 'flex';
@@ -402,10 +402,10 @@ async function initSupabase(url, key) {
 async function loadAll() {
   const safe = async (p) => { try { return await p; } catch(e) { return {data:null,error:e}; } };
   const [s, c, h, cfg] = await Promise.all([
-    safe(supabase.from('stock').select('*').order('reference')),
-    safe(supabase.from('commandes').select('*').order('created_at', {ascending: false})),
-    safe(supabase.from('historique').select('*').order('created_at', {ascending: false}).limit(500)),
-    safe(supabase.from('config').select('*'))
+    safe(db.from('stock').select('*').order('reference')),
+    safe(db.from('commandes').select('*').order('created_at', {ascending: false})),
+    safe(db.from('historique').select('*').order('created_at', {ascending: false}).limit(500)),
+    safe(db.from('config').select('*'))
   ]);
   if (s.error && !s.data) { console.warn('stock:', s.error?.message); }
   else if (s.data) appState.stock = s.data;
@@ -422,17 +422,17 @@ async function loadAll() {
 
 // ─── REALTIME ──────────────────────────────────────────────────────
 function setupRealtime() {
-  supabase.channel('stockpro-changes')
+  db.channel('stockpro-changes')
     .on('postgres_changes', {event:'*', schema:'public', table:'stock'}, async () => {
-      const {data} = await supabase.from('stock').select('*').order('reference');
+      const {data} = await db.from('stock').select('*').order('reference');
       if (data) { appState.stock = data; refreshPage(); }
     })
     .on('postgres_changes', {event:'*', schema:'public', table:'commandes'}, async () => {
-      const {data} = await supabase.from('commandes').select('*').order('created_at', {ascending:false});
+      const {data} = await db.from('commandes').select('*').order('created_at', {ascending:false});
       if (data) { appState.commandes = data; refreshPage(); }
     })
     .on('postgres_changes', {event:'*', schema:'public', table:'historique'}, async () => {
-      const {data} = await supabase.from('historique').select('*').order('created_at', {ascending:false}).limit(500);
+      const {data} = await db.from('historique').select('*').order('created_at', {ascending:false}).limit(500);
       if (data) { appState.historique = data; refreshPage(); }
     })
     .subscribe();
@@ -1028,10 +1028,10 @@ async function enregistrerMouvement(art, designation, qteActuelle) {
   else if (type === 'sortie') nouvelleQte = Math.max(0, qteActuelle - qte);
   else nouvelleQte = qte;
 
-  const { error: e1 } = await supabase.from('stock').update({ quantite: nouvelleQte }).eq('id', art.id);
+  const { error: e1 } = await db.from('stock').update({ quantite: nouvelleQte }).eq('id', art.id);
   if (e1) { toast('Erreur mise à jour stock : ' + e1.message, 'error'); return; }
 
-  await supabase.from('historique').insert({
+  await db.from('historique').insert({
     reference: art.reference, designation,
     type, quantite: qte, chantier, note,
     qte_avant: qteActuelle, qte_apres: nouvelleQte
@@ -1077,7 +1077,7 @@ function openArticleModal(refDefault='') {
 async function saveArticle() {
   const ref = document.getElementById('artRef').value.trim();
   if (!ref) { toast('La référence est obligatoire', 'error'); return; }
-  const { error } = await supabase.from('stock').insert({
+  const { error } = await db.from('stock').insert({
     reference: ref,
     designation: document.getElementById('artDesig').value,
     categorie: document.getElementById('artCat').value,
@@ -1121,7 +1121,7 @@ function editArticle(art) {
 }
 
 async function updateArticle(id) {
-  const { error } = await supabase.from('stock').update({
+  const { error } = await db.from('stock').update({
     designation: document.getElementById('eDesig').value,
     categorie: document.getElementById('eCat').value,
     diametre: parseInt(document.getElementById('eDiam').value)||null,
@@ -1138,7 +1138,7 @@ async function updateArticle(id) {
 
 async function deleteArticle(id) {
   if (!confirm('Supprimer cet article ? L\'historique associé sera conservé.')) return;
-  const { error } = await supabase.from('stock').delete().eq('id', id);
+  const { error } = await db.from('stock').delete().eq('id', id);
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
   await loadAll(); navigate('stock', true);
   toast('Article supprimé', 'success');
@@ -1183,7 +1183,7 @@ async function saveCommande() {
   const qte = parseInt(document.getElementById('cmdQte').value)||1;
   const note = document.getElementById('cmdNote').value;
   if (!chantier) { toast('Sélectionnez un chantier', 'error'); return; }
-  const { error } = await supabase.from('commandes').insert({
+  const { error } = await db.from('commandes').insert({
     chantier, reference: ref||null, designation: desig||null,
     quantite: qte, note, statut: 'en_attente'
   });
@@ -1193,7 +1193,7 @@ async function saveCommande() {
 }
 
 async function changerStatutCmd(id, statut) {
-  const { error } = await supabase.from('commandes').update({ statut }).eq('id', id);
+  const { error } = await db.from('commandes').update({ statut }).eq('id', id);
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
   await loadAll(); navigate('commandes', true);
   toast('Statut mis à jour ✓', 'success');
@@ -1201,7 +1201,7 @@ async function changerStatutCmd(id, statut) {
 
 async function deleteCommande(id) {
   if (!confirm('Supprimer cette commande ?')) return;
-  await supabase.from('commandes').delete().eq('id', id);
+  await db.from('commandes').delete().eq('id', id);
   await loadAll(); navigate('commandes', true);
   toast('Commande supprimée', 'success');
 }
@@ -1244,7 +1244,7 @@ function downloadQr() {
 // ─── CONFIG ────────────────────────────────────────────────────────
 async function sauvegarderConfig() {
   const seuil = parseInt(document.getElementById('cfgSeuil').value)||5;
-  await supabase.from('config').upsert({ cle: 'seuil_alerte', valeur: seuil.toString() }, { onConflict: 'cle' });
+  await db.from('config').upsert({ cle: 'seuil_alerte', valeur: seuil.toString() }, { onConflict: 'cle' });
   appState.alertSeuil = seuil;
   toast('Seuil sauvegardé ✓', 'success');
 }
@@ -1252,7 +1252,7 @@ async function sauvegarderConfig() {
 async function sauvegarderChantiers() {
   const raw = document.getElementById('cfgChantiers').value;
   const list = raw.split(',').map(s=>s.trim()).filter(Boolean);
-  await supabase.from('config').upsert({ cle: 'chantiers', valeur: JSON.stringify(list) }, { onConflict: 'cle' });
+  await db.from('config').upsert({ cle: 'chantiers', valeur: JSON.stringify(list) }, { onConflict: 'cle' });
   appState.chantiers = list;
   toast('Chantiers sauvegardés ✓', 'success');
 }
