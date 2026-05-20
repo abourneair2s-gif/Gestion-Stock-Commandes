@@ -1073,6 +1073,7 @@ function populateCatFilter(){
   }
 }
 function renderStock(){
+  if (CLIENT_MODE) { renderStockClient(); return; }
   // Adapter les colonnes selon le mode
   const thPrix=document.getElementById('stock-th-prix');
   const thValeur=document.getElementById('stock-th-valeur');
@@ -1380,12 +1381,12 @@ function renderCommandes(){
       <td>${nbArt} article(s)</td>
       <td><span style="color:${statColor};font-weight:600;">${statLabel}</span></td>
       <td style="text-align:right;white-space:nowrap;">
-        <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Detail</button>
-        ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">pencil</button>
-        <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">v</button>
-        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">x</button>`:''}
-        <button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;">print</button>
-        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">del</button>
+        <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
+        ${CLIENT_MODE ? '' : (c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
+        <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✗</button>`:'')}
+        ${CLIENT_MODE ? '' : `<button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;">🖨</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">🗑</button>`}
       </td></tr>`;
   }).join('');
 }
@@ -1832,23 +1833,76 @@ function printEtiquettes() {
 
 // ══ MODE CLIENT ══
 function applyClientMode() {
-  // Masquer les boutons d'écriture
-  document.querySelectorAll('.btn-primary, .btn-danger').forEach(btn => {
-    const txt = btn.textContent || '';
-    if (txt.includes('Mouvement') || txt.includes('Nouvel') || txt.includes('Soumettre') ||
-        txt.includes('Réinitialiser') || txt.includes('Enregistrer') || txt.includes('Approuver') ||
-        txt.includes('Refuser') || txt.includes('Supprimer')) {
-      btn.style.display = 'none';
-    }
+  // 1. Masquer les menus interdits dans la sidebar
+  const hidePages = ['pareto','etiquettes','scan','chantiers','alertes','historique','categories','parametres'];
+  hidePages.forEach(function(p) {
+    document.querySelectorAll('[data-page="' + p + '"]').forEach(function(b) { b.style.display = 'none'; });
   });
-  // Masquer sidebar admin
-  document.querySelectorAll('[data-page="categories"],[data-page="parametres"]').forEach(b => b.style.display = 'none');
-  // Banner
+  // Masquer les séparateurs de section Admin/Principal qui deviennent inutiles
+  document.querySelectorAll('.sb-section').forEach(function(s) {
+    if (s.textContent.trim() === 'Admin') s.style.display = 'none';
+  });
+  // Masquer export Excel sidebar
+  document.querySelectorAll('.nav-btn').forEach(function(b) {
+    if (b.textContent.includes('Exporter')) b.style.display = 'none';
+  });
+
+  // 2. Masquer le bouton topbar "+ Article" et "+ Catégorie"
+  const tb = document.getElementById('topbar-action');
+  if (tb) tb.style.display = 'none';
+
+  // 3. Dans la page commandes : masquer Approuver/Refuser/Supprimer, garder "Nouvelle demande"
+  // (géré dans renderCommandes via CLIENT_MODE)
+
+  // 4. Bannière client
   const banner = document.createElement('div');
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#e8f0fb;border-bottom:2px solid #1a5fa8;padding:6px 16px;font-size:12px;color:#1a5fa8;text-align:center;font-weight:600;';
-  banner.textContent = '👁 Mode consultation — Accès lecture seule';
-  document.body.prepend(banner);
-  document.getElementById('app').style.marginTop = '30px';
+  banner.id = 'client-banner';
+  banner.style.cssText = 'background:#e8f0fb;border-bottom:2px solid #1a5fa8;padding:7px 16px;font-size:12px;color:#1a5fa8;text-align:center;font-weight:600;flex-shrink:0;';
+  banner.textContent = '🔒 Accès client AIR2S — Consultation stock & demandes de matériel';
+  // Insérer en haut du #main (avant topbar)
+  const mainDiv = document.getElementById('main');
+  if (mainDiv) mainDiv.insertBefore(banner, mainDiv.firstChild);
+
+  // 5. Rediriger la page de démarrage vers stock
+  showPage('stock', document.querySelector('[data-page="stock"]'));
+}
+
+// Surcharge renderStock pour mode client : masquer prix achat, valeur, fournisseur ; montrer prix vente + qté
+function renderStockClient() {
+  populateCatFilter();
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+  const cat = document.getElementById('filter-cat')?.value || '';
+  const status = document.getElementById('filter-status')?.value || '';
+  const filtered = stock.filter(a => {
+    const mq = !q || a.id.toLowerCase().includes(q) || a.categorie.toLowerCase().includes(q) || String(a.diametre).toLowerCase().includes(q);
+    return mq && (!cat || a.categorie === cat) && (!status || getStatus(a) === status);
+  });
+
+  // Adapter les en-têtes de colonnes
+  const thPrix = document.getElementById('stock-th-prix');
+  const thValeur = document.getElementById('stock-th-valeur');
+  const thFourn = document.getElementById('stock-th-fourn');
+  if (thPrix) thPrix.textContent = 'Prix vente HT';
+  if (thValeur) thValeur.style.display = 'none';
+  if (thFourn) thFourn.style.display = 'none';
+
+  document.getElementById('stock-empty').style.display = filtered.length === 0 ? '' : 'none';
+  document.getElementById('stock-table').innerHTML = filtered.map(function(a) {
+    const s = getStatus(a);
+    const pct = Math.min(100, Math.round(a.stock / Math.max(a.stockMin * 1.5, 1) * 100));
+    const color = s === 'ok' ? 'var(--green)' : s === 'warn' ? 'var(--amber)' : 'var(--red)';
+    const sc = s === 'ok' ? 'stock-ok' : s === 'warn' ? 'stock-warn' : 'stock-danger';
+    return '<tr>' +
+      '<td><code>' + a.id + '</code></td>' +
+      '<td>' + a.categorie + '</td>' +
+      '<td>' + a.diametre + '</td>' +
+      '<td><span class="' + sc + '">' + a.stock + '</span><div class="prog-bar"><div class="prog-fill" style="width:' + pct + '%;background:' + color + ';"></div></div></td>' +
+      '<td>' + a.stockMin + '</td>' +
+      '<td>' + (a.prixVente > 0 ? a.prixVente.toFixed(2).replace('.', ',') + ' €' : '—') + '</td>' +
+      '<td>' + statusLabel(s) + '</td>' +
+      '<td></td>' +
+      '</tr>';
+  }).join('');
 }
 
 async function editArticle(id) {
