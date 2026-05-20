@@ -832,7 +832,7 @@ async function initApp() {
 
     document.getElementById('loading-overlay').classList.add('hidden');
     setConnected(true);
-    renderDashboard();
+    renderDashboard(); attachKpiListener();
     updateBadges();
     if(CLIENT_MODE) applyClientMode();
 
@@ -1049,6 +1049,9 @@ function renderDashboard(){
 }
 
 // ==================== STOCK ====================
+// attach after each dashboard render
+setTimeout(attachKpiListener, 50);
+
 function populateCatFilter(){
   const sel=document.getElementById('filter-cat');
   if(sel&&sel.options.length<=1){
@@ -1347,8 +1350,96 @@ function printQR(){
   </head><body><div class="label"><h2>${art.categorie}</h2><p>Ø ${art.diametre}</p><p><strong>${art.id}</strong></p><img src="${src}"><p style="margin-top:6px;font-size:9px;">StockPro Alu · ${art.id}</p></div><script>window.print();<\/script></body></html>`);
   w.document.close();
 }
-initApp();
+// ==================== RENDER COMMANDES ====================
+function renderCommandes(){
+  const tbody=document.getElementById('cmd-table');if(!tbody)return;
+  const filtered=commandes.filter(c=>{
+    const s=document.getElementById('cmd-filter-statut')?.value||'';
+    return !s||c.statut===s;
+  });
+  if(filtered.length===0){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;">Aucune commande.</td></tr>';return;}
+  tbody.innerHTML=filtered.sort((a,b)=>b.num-a.num).map(c=>{
+    const urgColor=c.urgence==='critique'?'var(--red)':c.urgence==='urgent'?'var(--amber)':'var(--green)';
+    const statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
+    const statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
+    const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
+    const nbArt=(c.items||[]).length;
+    return`<tr>
+      <td><strong>#${String(c.num).padStart(3,'0')}</strong></td>
+      <td>${date}</td><td><strong>${c.chantier||''}</strong></td>
+      <td>${c.nom||''}</td>
+      <td><span style="color:${urgColor};font-weight:600;">${c.urgence||''}</span></td>
+      <td>${nbArt} article(s)</td>
+      <td><span style="color:${statColor};font-weight:600;">${statLabel}</span></td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Detail</button>
+        ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">pencil</button>
+        <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">v</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">x</button>`:''}
+        <button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;">print</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">del</button>
+      </td></tr>`;
+  }).join('');
+}
+function viewCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  const date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
+  const statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
+  document.getElementById('cmd-detail-title').textContent='Commande #'+String(c.num).padStart(3,'0')+' - '+c.chantier;
+  document.getElementById('cmd-detail-body').innerHTML='<div style="font-size:13px;margin-bottom:12px;"><strong>Date:</strong> '+date+' | <strong>Demandeur:</strong> '+(c.nom||'')+'<br><strong>Urgence:</strong> '+(c.urgence||'')+' | <strong>Statut:</strong> '+statLabel+(c.notes?'<br><strong>Notes:</strong> '+c.notes:'')+'</div><table style="width:100%;font-size:13px;"><thead><tr><th>Ref</th><th>Article</th><th>Qte</th><th>Stock</th></tr></thead><tbody>'+(c.items||[]).map(i=>{const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:'?'};return'<tr><td><code>'+i.id+'</code></td><td>'+art.categorie+' '+art.diametre+'</td><td>'+i.qty+'</td><td>'+art.stock+'</td></tr>';}).join('')+'</tbody></table>';
+  document.getElementById('cmd-detail-footer').innerHTML='<button class="btn" onclick="closeModal('modal-cmd-detail')">Fermer</button>'+(c.statut==='en_attente'?'<button class="btn btn-sm" onclick="editCmd(''+c.id+'');closeModal('modal-cmd-detail');">Modifier</button><button class="btn btn-danger btn-sm" onclick="refuserCmd(''+c.id+'');closeModal('modal-cmd-detail');">Refuser</button><button class="btn btn-primary btn-sm" onclick="approuverCmd(''+c.id+'');closeModal('modal-cmd-detail');">Approuver</button>':'<button class="btn btn-danger btn-sm" onclick="deleteCmd(''+c.id+'');closeModal('modal-cmd-detail');">Supprimer</button>');
+  openModal('modal-cmd-detail');
+}
+async function approuverCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  for(const item of c.items||[]){const art=stock.find(a=>a.id===item.id);if(art){const ns=Math.max(0,art.stock-item.qty);await db.from('stock').update({stock:ns}).eq('id',item.id);}}
+  await db.from('commandes').update({statut:'approuvee'}).eq('id',id);
+  const idx=commandes.findIndex(x=>x.id===id);if(idx>-1)commandes[idx].statut='approuvee';
+  const {data:sd}=await db.from('stock').select('*').order('categorie').order('id');if(sd)stock=sd.map(adaptArticle);
+  renderCommandes();renderStock();renderDashboard();updateBadges();
+  showToast('Commande approuvee');
+}
+async function refuserCmd(id){
+  await db.from('commandes').update({statut:'refusee'}).eq('id',id);
+  const idx=commandes.findIndex(x=>x.id===id);if(idx>-1)commandes[idx].statut='refusee';
+  renderCommandes();updateBadges();showToast('Commande refusee');
+}
+async function deleteCmd(id){
+  if(!confirm('Supprimer cette commande ?'))return;
+  await db.from('commandes').delete().eq('id',id);
+  commandes=commandes.filter(c=>c.id!==id);
+  renderCommandes();updateBadges();showToast('Commande supprimee');
+}
+function renderAlertes(){
+  const alerts=getAlerts();
+  const el=document.getElementById('alertes-list');if(!el)return;
+  if(alerts.length===0){el.innerHTML='<div style="text-align:center;color:var(--green);padding:20px;">Tous les stocks OK</div>';return;}
+  el.innerHTML=alerts.map(a=>{const s=getStatus(a);return'<div class="alert-card"><div><strong>'+a.id+'</strong> - '+a.categorie+' '+a.diametre+'<br><small>Stock: <strong class="'+(s==='warn'?'stock-warn':'stock-danger')+'">'+a.stock+'</strong> / Min: '+a.stockMin+'</small></div><button class="btn btn-xs btn-primary" onclick="openMouvement(''+a.id+'')">Mouvement</button></div>';}).join('');
+}
+function renderHistorique(){
+  const tbody=document.getElementById('hist-table');if(!tbody)return;
+  const sorted=[...historique].sort((a,b)=>new Date(b.created_at||b.ts)-new Date(a.created_at||a.ts));
+  tbody.innerHTML=sorted.slice(0,200).map(h=>{const date=new Date(h.created_at||h.ts).toLocaleString('fr-FR');return'<tr><td style="font-size:11px;">'+date+'</td><td><span class="badge '+(h.type==='out'?'badge-danger':'badge-ok')+'">'+(h.type==='out'?'Sortie':'Entree')+'</span></td><td><code>'+(h.article_id||h.id)+'</code></td><td>'+(h.categorie||'')+'</td><td>'+(h.diametre||'')+'</td><td><strong>'+h.qty+'</strong></td><td>'+(h.new_stock??'')+'</td><td style="font-size:11px;">'+(h.equipe||'')+'</td><td style="font-size:11px;">'+(h.note||'')+'</td></tr>';}).join('');
+}
+function renderCategories(){
+  const tbody=document.getElementById('cat-table');if(!tbody)return;
+  const parents=categories.filter(c=>!c.includes(' > ')).sort();
+  const rows=[];
+  parents.forEach(p=>{
+    const pCount=stock.filter(a=>a.categorie===p).length;
+    rows.push('<tr style="background:#fafaf8;"><td class="cat-list-name"><strong>'+p+'</strong></td><td><span class="badge badge-blue">Categorie</span></td><td>'+pCount+' article(s)</td><td style="text-align:right;"><button class="btn btn-xs" onclick="editCat(''+p+'')">edit</button>'+(pCount===0&&!categories.some(c=>c.startsWith(p+' > '))?'<button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCat(''+p+'')">del</button>':'')+'</td></tr>');
+    categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>{
+      const scName=sc.split(' > ')[1];const scCount=stock.filter(a=>a.categorie===sc).length;
+      rows.push('<tr><td class="cat-list-name" style="padding-left:28px;color:var(--text2);">- '+scName+'</td><td><span class="badge badge-gray">Sous-cat</span></td><td>'+scCount+' article(s)</td><td style="text-align:right;"><button class="btn btn-xs" onclick="editCat(''+sc+'')">edit</button>'+(scCount===0?'<button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCat(''+sc+'')">del</button>':'')+'</td></tr>');
+    });
+  });
+  document.getElementById('cat-table').innerHTML=rows.join('');
+}
+function renderParams(){
+  const e=document.getElementById('param-email');if(e)e.value=params.email||'';
+  const c=document.getElementById('param-company');if(c)c.value=params.company||'';
+}
+
 </script>
 </body>
 </html>
-
