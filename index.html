@@ -792,8 +792,8 @@ let cmdHtml5QrCode = null;
 let editingCat = null;
 
 // Adapte les colonnes Supabase → format interne JS
-function openModal(id){const m=document.getElementById(id);if(m)m.classList.add('active');}
-function closeModal(id){const m=document.getElementById(id);if(m)m.classList.remove('active');}
+function openModal(id){const m=document.getElementById(id);if(m){m.classList.add('open');m.style.display='flex';}}
+function closeModal(id){const m=document.getElementById(id);if(m){m.classList.remove('open');m.style.display='';}}
 function openCmdModal(){editingCmdId=null;cmdItems=[];const selC=document.getElementById('cmd-chantier');if(selC){if(CLIENT_MODE){selC.placeholder='Nom de votre entreprise';selC.value='';}else{selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});}}['cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){document.getElementById('art-modal-title').textContent='Ajouter un article';document.getElementById('art-id').value='';document.getElementById('art-id').readOnly=false;document.getElementById('art-id').style.color='';const row=document.getElementById('art-newid-row');if(row)row.style.display='none';document.getElementById('art-fournisseur').value='';document.getElementById('art-diam').value='';document.getElementById('art-stock').value=0;document.getElementById('art-min').value=5;document.getElementById('art-prix').value=0;document.getElementById('art-prix-vente').value=0;populateArtCatSelect();openModal('modal-article');}function adaptArticle(row) {
   return {
@@ -1500,6 +1500,7 @@ initApp();
 </script>
 </body>
 </html>
+
 
 
 
