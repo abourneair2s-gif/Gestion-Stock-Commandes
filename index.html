@@ -525,11 +525,9 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <div class="modal-body">
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Chantier</label>
-          <select id="cmd-chantier-select" style="display:none;">
+          <select id="cmd-chantier">
             <option value="">— Sélectionner un chantier —</option>
           </select>
-          <input type="text" id="cmd-chantier-libre" placeholder="Votre entreprise / société…" style="display:none;">
-          <div id="cmd-chantier-wrap"></div>
         </div>
         <div class="form-row"><label class="form-label">Urgence</label>
           <select id="cmd-urgence"><option value="normale">Normale</option><option value="urgent">Urgent</option><option value="critique">Critique</option></select>
@@ -549,8 +547,8 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       </div>
       <div id="add-mode-search">
         <div style="position:relative;">
-          <input type="text" id="cmd-art-search" placeholder="Taper référence ou diamètre…" oninput="searchCmdArt(this.value)" autocomplete="off">
-          <div id="cmd-search-results" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:6px;"></div>
+          <input type="text" id="cmd-art-search" placeholder="Taper référence ou diamètre…" oninput="filterCmdSearch(this.value)" autocomplete="off">
+          <div id="cmd-search-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);max-height:180px;overflow-y:auto;box-shadow:var(--shadow);"></div>
         </div>
       </div>
       <div id="add-mode-cat" style="display:none;">
@@ -696,11 +694,11 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 // ==================== SUPABASE ====================
 const SUPABASE_URL = 'https://cjvlqicfjjhxjhtawbnq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdmxxaWNmampoeGpodGF3Ym5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNDc2MTAsImV4cCI6MjA5MjgyMzYxMH0.G-j8H3PDCt2OI2qPiHUeWYJ9zmSwnGNJQyGp4tib8UE';
-// db sera initialisé dans initApp() pour garantir que le CDN est chargé
-let db = null;
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ==================== DONNEES PAR DEFAUT ====================
-const DEFAULT_CATEGORIES = ["Gaines","Coudes 90°","Coudes 45°","RM","Piquage droit","Raccord sur plat","Réduction","Bouchons","Té souche","Té égal","Sifflet","Colliers","Flexible"];
+const DEFAULT_CATEGORIES = ["Gaines","Coudes 90°","Coudes 45°","RM","Piquage droit","Raccord sur plat","Réduction","Bouchons","Té souche","Té égal","Sifflet","Colliers"];
 
 const INVENTORY_DATA = [
   {id:"GAI 500",categorie:"Gaines",diametre:"500",stock:4,prix_unitaire:0,stock_min:5},
@@ -796,30 +794,7 @@ let editingCat = null;
 // Adapte les colonnes Supabase → format interne JS
 function openModal(id){const m=document.getElementById(id);if(m){m.classList.add('open');m.style.display='flex';}}
 function closeModal(id){const m=document.getElementById(id);if(m){m.classList.remove('open');m.style.display='';}}
-function openCmdModal(){
-  editingCmdId=null; cmdItems=[];
-  const wrap = document.getElementById('cmd-chantier-wrap');
-  const selC = document.getElementById('cmd-chantier-select');
-  const libre = document.getElementById('cmd-chantier-libre');
-  if (CLIENT_MODE) {
-    // Champ libre pour le client
-    if (selC) selC.style.display = 'none';
-    if (libre) { libre.style.display = ''; libre.value = ''; }
-    if (wrap) wrap.innerHTML = '';
-  } else {
-    // Select chantiers pour l'admin
-    if (libre) libre.style.display = 'none';
-    if (selC) {
-      selC.style.display = '';
-      selC.innerHTML = '<option value="">Selectionner</option>';
-      chantiers.forEach(function(c){ const o=document.createElement('option'); o.value=c.nom; o.textContent=c.nom; selC.appendChild(o); });
-    }
-    if (wrap) wrap.innerHTML = '';
-  }
-  ['cmd-nom','cmd-notes','cmd-art-search'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('cmd-urgence').value='normale';
-  renderCmdItems(); switchAddMode('search'); buildCatPills(); openModal('modal-commande');
-}
+function openCmdModal(){editingCmdId=null;cmdItems=[];const selC=document.getElementById('cmd-chantier');if(selC){if(CLIENT_MODE){selC.placeholder='Nom de votre entreprise';selC.value='';}else{selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});}}['cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){document.getElementById('art-modal-title').textContent='Ajouter un article';document.getElementById('art-id').value='';document.getElementById('art-id').readOnly=false;document.getElementById('art-id').style.color='';const row=document.getElementById('art-newid-row');if(row)row.style.display='none';document.getElementById('art-fournisseur').value='';document.getElementById('art-diam').value='';document.getElementById('art-stock').value=0;document.getElementById('art-min').value=5;document.getElementById('art-prix').value=0;document.getElementById('art-prix-vente').value=0;populateArtCatSelect();openModal('modal-article');}function adaptArticle(row) {
   return {
     id: row.id,
@@ -836,11 +811,6 @@ function openNewArticle(){document.getElementById('art-modal-title').textContent
 // ==================== INIT SUPABASE ====================
 async function initApp() {
   try {
-    // Init Supabase client (garanti que le CDN est chargé)
-    const sbLib = window.supabase || window.Supabase;
-    if (!sbLib || !sbLib.createClient) throw new Error('Librairie Supabase non chargée. Rechargez la page.');
-    db = sbLib.createClient(SUPABASE_URL, SUPABASE_KEY);
-
     // Vérifier si la table stock existe, sinon la créer et la peupler
     const { data: existingStock, error: stockErr } = await db.from('stock').select('id').limit(1);
 
@@ -1098,7 +1068,6 @@ function populateCatFilter(){
   }
 }
 function renderStock(){
-  if (CLIENT_MODE) { renderStockClient(); return; }
   // Adapter les colonnes selon le mode
   const thPrix=document.getElementById('stock-th-prix');
   const thValeur=document.getElementById('stock-th-valeur');
@@ -1406,12 +1375,12 @@ function renderCommandes(){
       <td>${nbArt} article(s)</td>
       <td><span style="color:${statColor};font-weight:600;">${statLabel}</span></td>
       <td style="text-align:right;white-space:nowrap;">
-        <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
-        ${CLIENT_MODE ? '' : (c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
-        <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
-        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✗</button>`:'')}
-        ${CLIENT_MODE ? '' : `<button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;">🖨</button>
-        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">🗑</button>`}
+        <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Detail</button>
+        ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">pencil</button>
+        <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">v</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">x</button>`:''}
+        <button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;">print</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">del</button>
       </td></tr>`;
   }).join('');
 }
@@ -1526,546 +1495,7 @@ function renderParams(){
   const c=document.getElementById('param-company');if(c)c.value=params.company||'';
 }
 
-
-// ══ SCAN : saisie manuelle par catégorie ══
-let scanSelectedArt = null;
-let scanManualMode = 'ref';
-
-function switchScanManualMode(mode, btn) {
-  scanManualMode = mode;
-  document.querySelectorAll('#scan-tab-manual .tab-sw-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  document.getElementById('scan-manual-ref').style.display = mode === 'ref' ? '' : 'none';
-  document.getElementById('scan-manual-cat').style.display = mode === 'cat' ? '' : 'none';
-  if (mode === 'cat') buildScanCatPills();
-}
-
-function buildScanCatPills() {
-  const pills = document.getElementById('scan-cat-pills');
-  if (!pills) return;
-  const parents = [...new Set(stock.map(a => a.categorie))].sort();
-  pills.innerHTML = parents.map(c =>
-    `<div class="cat-pill" onclick="selectScanCat('${c}',this)">${c}</div>`
-  ).join('');
-}
-
-function selectScanCat(cat, el) {
-  document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(p => p.classList.remove('active'));
-  if (el) el.classList.add('active');
-  const items = document.getElementById('scan-cat-items');
-  if (!items) return;
-  const filtered = stock.filter(a => a.categorie === cat);
-  items.innerHTML = filtered.map(a =>
-    `<div onclick="selectScanArt('${a.id}',this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">
-      <strong>${a.id}</strong> · Ø${a.diametre} · Stock : <strong>${a.stock}</strong>
-    </div>`
-  ).join('');
-}
-
-function selectScanArt(id, el) {
-  scanSelectedArt = stock.find(a => a.id === id);
-  document.querySelectorAll('#scan-cat-items div').forEach(d => d.style.background = '');
-  if (el) el.style.background = 'var(--green-bg)';
-  const el2 = document.getElementById('scan-selected-art');
-  if (el2 && scanSelectedArt) el2.textContent = '✅ Sélectionné : ' + scanSelectedArt.id + ' · ' + scanSelectedArt.categorie + ' Ø' + scanSelectedArt.diametre;
-  document.getElementById('manual-ref').value = scanSelectedArt ? scanSelectedArt.id : '';
-}
-
-// ══ COMMANDE : fonctions manquantes ══
-let editingCmdId = null;
-let cmdQrCode = null;
-
-function renderCmdItems() {
-  const list = document.getElementById('cmd-items-list');
-  const empty = document.getElementById('cmd-items-empty');
-  if (!list) return;
-  if (cmdItems.length === 0) {
-    list.innerHTML = '';
-    if (empty) empty.style.display = '';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-  list.innerHTML = cmdItems.map((item, i) => {
-    const art = stock.find(a => a.id === item.id);
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--green-bg);border-radius:8px;margin-bottom:6px;">
-      <div><strong>${item.id}</strong> · ${art ? art.categorie + ' Ø' + art.diametre : ''}</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-weight:700;">× ${item.qty}</span>
-        <button class="btn btn-xs btn-danger" onclick="removeCmdItem(${i})">✕</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function removeCmdItem(i) {
-  cmdItems.splice(i, 1);
-  renderCmdItems();
-}
-
-let pendingCmdArt = null;
-
-function switchAddMode(mode) {
-  const searchPanel = document.getElementById('add-mode-search');
-  const catPanel = document.getElementById('add-mode-cat');
-  const qrPanel = document.getElementById('add-mode-qr');
-  if (searchPanel) searchPanel.style.display = mode === 'search' ? '' : 'none';
-  if (catPanel) catPanel.style.display = mode === 'cat' ? '' : 'none';
-  if (qrPanel) qrPanel.style.display = mode === 'qr' ? '' : 'none';
-}
-
-function buildCatPills() {
-  const pills = document.getElementById('cmd-cat-pills');
-  if (!pills) return;
-  const parents = [...new Set(stock.map(a => a.categorie))].sort();
-  pills.innerHTML = parents.map(c =>
-    `<div class="cat-pill" onclick="selectCmdCat('${c}',this)">${c}</div>`
-  ).join('');
-}
-
-function selectCmdCat(cat, el) {
-  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(p => p.classList.remove('active'));
-  if (el) el.classList.add('active');
-  const items = document.getElementById('cmd-cat-items');
-  if (!items) return;
-  const filtered = stock.filter(a => a.categorie === cat);
-  items.innerHTML = filtered.map(a =>
-    `<div onclick="selectCmdArt('${a.id}',this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">
-      <strong>${a.id}</strong> · Ø${a.diametre} · Stock actuel : <strong>${a.stock}</strong>
-    </div>`
-  ).join('');
-}
-
-function selectCmdArt(id, el) {
-  pendingCmdArt = stock.find(a => a.id === id);
-  if (!pendingCmdArt) return;
-  document.querySelectorAll('#cmd-cat-items div').forEach(d => d.style.background = '');
-  if (el) el.style.background = 'var(--green-bg)';
-  showCmdQtyPicker(pendingCmdArt);
-}
-
-function showCmdQtyPicker(art) {
-  const picker = document.getElementById('cmd-qty-picker');
-  if (!picker) return;
-  document.getElementById('cmd-qty-picker-id').textContent = art.id;
-  document.getElementById('cmd-qty-picker-desc').textContent = art.categorie + ' Ø' + art.diametre + ' · Stock : ' + art.stock;
-  document.getElementById('cmd-qty-picker-input').value = 1;
-  picker.style.display = 'flex';
-}
-
-function cancelCmdItem() {
-  const picker = document.getElementById('cmd-qty-picker');
-  if (picker) picker.style.display = 'none';
-  pendingCmdArt = null;
-}
-
-function confirmCmdItem() {
-  if (!pendingCmdArt) return;
-  const qty = parseInt(document.getElementById('cmd-qty-picker-input').value) || 1;
-  const existing = cmdItems.findIndex(i => i.id === pendingCmdArt.id);
-  if (existing > -1) cmdItems[existing].qty += qty;
-  else cmdItems.push({ id: pendingCmdArt.id, qty });
-  const picker = document.getElementById('cmd-qty-picker');
-  if (picker) picker.style.display = 'none';
-  pendingCmdArt = null;
-  renderCmdItems();
-  showToast('Article ajouté à la commande');
-}
-
-// Recherche article dans commande
-function searchCmdArt(val) {
-  const res = document.getElementById('cmd-search-results');
-  if (!res) return;
-  if (!val || val.length < 2) { res.innerHTML = ''; return; }
-  const filtered = stock.filter(a =>
-    a.id.toLowerCase().includes(val.toLowerCase()) ||
-    a.categorie.toLowerCase().includes(val.toLowerCase())
-  ).slice(0, 10);
-  res.innerHTML = filtered.map(a =>
-    `<div onclick="selectCmdSearchArt('${a.id}',this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">
-      <strong>${a.id}</strong> · ${a.categorie} Ø${a.diametre} · Stock : ${a.stock}
-    </div>`
-  ).join('');
-}
-
-function selectCmdSearchArt(id, el) {
-  pendingCmdArt = stock.find(a => a.id === id);
-  if (!pendingCmdArt) return;
-  document.querySelectorAll('#cmd-search-results div').forEach(d => d.style.background = '');
-  if (el) el.style.background = 'var(--green-bg)';
-  document.getElementById('cmd-art-search').value = pendingCmdArt.id;
-  showCmdQtyPicker(pendingCmdArt);
-}
-
-// ══ ARTICLE : saveArticle et populateArtCatSelect ══
-function populateArtCatSelect() {
-  const sel = document.getElementById('art-cat');
-  if (!sel) return;
-  sel.innerHTML = categories.filter(c => !c.includes(' > ')).sort().map(c =>
-    `<option value="${c}">${c}</option>`
-  ).join('');
-  // Ajouter "Flexible" si absent
-  if (!sel.querySelector('option[value="Flexible"]') && !sel.querySelector('option[value="Flexibles"]')) {
-    sel.innerHTML += '<option value="Flexible">Flexible</option>';
-  }
-}
-
-async function saveArticle() {
-  const id = document.getElementById('art-id').value.trim();
-  const cat = document.getElementById('art-cat').value;
-  const diam = document.getElementById('art-diam').value.trim();
-  const fournisseur = document.getElementById('art-fournisseur').value.trim();
-  const stockVal = parseInt(document.getElementById('art-stock').value) || 0;
-  const stockMin = parseInt(document.getElementById('art-min').value) || 5;
-  const prix = parseFloat(document.getElementById('art-prix').value) || 0;
-  const prixVente = parseFloat(document.getElementById('art-prix-vente').value) || 0;
-
-  if (!id || !cat || !diam) { showToast('❌ Référence, catégorie et diamètre requis'); return; }
-
-  const isEdit = document.getElementById('art-id').readOnly;
-  if (isEdit) {
-    // Modification
-    const newId = document.getElementById('art-newid')?.value.trim() || id;
-    const { error } = await db.from('stock').update({
-      categorie: cat, diametre: diam, fournisseur, stock: stockVal,
-      stock_min: stockMin, prix_unitaire: prix, prix_vente: prixVente,
-      ...(newId && newId !== id ? { id: newId } : {})
-    }).eq('id', id);
-    if (error) { showToast('❌ Erreur : ' + error.message); return; }
-  } else {
-    // Création
-    const { error } = await db.from('stock').insert({
-      id, categorie: cat, diametre: diam, fournisseur,
-      stock: stockVal, stock_min: stockMin,
-      prix_unitaire: prix, prix_vente: prixVente
-    });
-    if (error) { showToast('❌ Erreur : ' + error.message); return; }
-  }
-  closeModal('modal-article');
-  const { data } = await db.from('stock').select('*').order('categorie').order('id');
-  if (data) stock = data.map(adaptArticle);
-  renderStock(); renderDashboard(); updateBadges();
-  showToast('✅ Article enregistré');
-}
-
-async function saveCommande() {
-  const chantier = CLIENT_MODE
-    ? (document.getElementById('cmd-chantier-libre').value.trim() || 'Client')
-    : document.getElementById('cmd-chantier-select').value;
-  const nom = document.getElementById('cmd-nom').value.trim();
-  const urgence = document.getElementById('cmd-urgence').value;
-  const notes = document.getElementById('cmd-notes').value.trim();
-  if (!CLIENT_MODE && !chantier) { showToast('❌ Sélectionnez un chantier'); return; }
-  if (cmdItems.length === 0) { showToast('❌ Ajoutez au moins un article'); return; }
-  const num = cmdCounter || (commandes.length + 1);
-  const { error } = await db.from('commandes').insert({
-    num, chantier, nom, urgence, notes, items: cmdItems, statut: 'en_attente'
-  });
-  if (error) { showToast('❌ Erreur : ' + error.message); return; }
-  cmdCounter = num + 1;
-  await db.from('config').upsert({ key: 'cmd_counter', value: cmdCounter }, { onConflict: 'key' });
-  closeModal('modal-commande');
-  const { data } = await db.from('commandes').select('*').order('created_at', { ascending: false });
-  if (data) commandes = data;
-  renderCommandes(); updateBadges();
-  showToast('✅ Commande #' + String(num).padStart(3, '0') + ' soumise');
-}
-
-async function editCmd(id) {
-  const c = commandes.find(x => x.id === id); if (!c) return;
-  editingCmdId = id;
-  cmdItems = [...(c.items || [])];
-  document.getElementById('cmd-modal-title').textContent = 'Modifier commande #' + String(c.num).padStart(3, '0');
-  const selC = document.getElementById('cmd-chantier-select');
-  const libre = document.getElementById('cmd-chantier-libre');
-  if (CLIENT_MODE) {
-    if (selC) selC.style.display = 'none';
-    if (libre) { libre.style.display = ''; libre.value = c.chantier || ''; }
-  } else {
-    if (libre) libre.style.display = 'none';
-    if (selC) {
-      selC.style.display = '';
-      selC.innerHTML = '<option value="">Sélectionner</option>';
-      chantiers.forEach(function(ch){ const o=document.createElement('option'); o.value=ch.nom; o.textContent=ch.nom; if(ch.nom===c.chantier)o.selected=true; selC.appendChild(o); });
-    }
-  }
-  document.getElementById('cmd-nom').value = c.nom || '';
-  document.getElementById('cmd-notes').value = c.notes || '';
-  document.getElementById('cmd-urgence').value = c.urgence || 'normale';
-  renderCmdItems(); switchAddMode('search'); buildCatPills();
-  openModal('modal-commande');
-}
-
-// ══ ALERTE : fix element id ══
-function renderAlertes() {
-  const alerts = getAlerts();
-  // Support les deux IDs possibles
-  const tbody = document.getElementById('alertes-table');
-  const listEl = document.getElementById('alertes-list');
-  const emptyEl = document.getElementById('alertes-empty');
-  if (tbody) {
-    tbody.innerHTML = alerts.length === 0
-      ? '<tr><td colspan="7" style="text-align:center;color:var(--green);padding:20px;">✅ Tous les stocks sont au-dessus du seuil minimum.</td></tr>'
-      : alerts.map(a => {
-          const s = getStatus(a);
-          return `<tr>
-            <td><code>${a.id}</code></td>
-            <td>${a.categorie}</td>
-            <td>${a.diametre}</td>
-            <td class="${s === 'danger' ? 'stock-danger' : 'stock-warn'}">${a.stock}</td>
-            <td>${a.stockMin}</td>
-            <td>${statusLabel(s)}</td>
-            <td><button class="btn btn-xs btn-primary" onclick="openMouvement('${a.id}')">± Mouvement</button></td>
-          </tr>`;
-        }).join('');
-    if (emptyEl) emptyEl.style.display = 'none';
-  } else if (listEl) {
-    listEl.innerHTML = alerts.length === 0
-      ? '<div style="text-align:center;color:var(--green);padding:20px;">Tous les stocks OK</div>'
-      : alerts.map(a => {
-          const s = getStatus(a);
-          return `<div class="alert-card"><div><strong>${a.id}</strong> - ${a.categorie} ${a.diametre}<br>
-            <small>Stock: <strong class="${s === 'warn' ? 'stock-warn' : 'stock-danger'}">${a.stock}</strong> / Min: ${a.stockMin}</small></div>
-            <button class="btn btn-xs btn-primary" onclick="openMouvement('${a.id}')">Mouvement</button></div>`;
-        }).join('');
-  }
-}
-
-// ══ ETIQUETTES : ajout Flexibles + QR générés ══
-function renderEtiquettes() {
-  const pills = document.getElementById('etiq-cat-pills');
-  if (!pills) return;
-  // Inclure toutes les catégories du stock réel + Flexible si présent
-  const allCats = [...new Set(stock.map(a => a.categorie))].sort();
-  const parents = ['Toutes', ...allCats];
-  pills.innerHTML = parents.map((c, i) =>
-    `<div class="cat-pill ${(c === 'Toutes' && etiqSelectedCat === '') || c === etiqSelectedCat ? 'active' : ''}"
-      onclick="selectEtiqParent(this,'${c === 'Toutes' ? '' : c}')">${c}</div>`
-  ).join('');
-  renderEtiqGrid();
-}
-
-function printEtiquettes() {
-  if (etiqSelected.size === 0) { showToast('Selectionnez au moins un article'); return; }
-  const arts = stock.filter(a => etiqSelected.has(a.id));
-  const style = '<style>body{font-family:sans-serif;margin:0;}.grid{display:flex;flex-wrap:wrap;gap:8px;padding:16px;}.label{border:2px solid #333;border-radius:8px;padding:12px;width:160px;text-align:center;page-break-inside:avoid;}.label h3{font-size:11px;margin:0 0 2px;color:#555;}.ref{font-size:13px;font-weight:800;margin:2px 0;}.diam{font-size:10px;color:#777;}@media print{body{margin:0;}}</style>';
-  const qrScript = '<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></scr'+'ipt>';
-  let labels = '';
-  let qrInits = '';
-  arts.forEach(function(a) {
-    const safeId = a.id.replace(/[^a-z0-9]/gi, '_');
-    labels += '<div class="label"><h3>' + a.categorie + '</h3><div class="ref">' + a.id + '</div><div class="diam">O ' + a.diametre + '</div><div id="qr_' + safeId + '" style="margin:6px auto;width:130px;height:130px;"></div></div>';
-    qrInits += 'new QRCode(document.getElementById("qr_' + safeId + '"),{text:"' + a.id + '",width:130,height:130,colorDark:"#000",colorLight:"#fff"});';
-  });
-  const initScript = '<scr'+'ipt>window.onload=function(){' + qrInits + 'setTimeout(function(){window.print();},800);};</scr'+'ipt>';
-  const html = '<!DOCTYPE html><html><head><title>Etiquettes QR</title>' + style + qrScript + '</head><body><div class="grid">' + labels + '</div>' + initScript + '</body></html>';
-  const w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
-}
-
-// ══ MODE CLIENT ══
-function applyClientMode() {
-  // 1. Masquer les menus interdits dans la sidebar
-  const hidePages = ['pareto','etiquettes','scan','chantiers','alertes','historique','categories','parametres'];
-  hidePages.forEach(function(p) {
-    document.querySelectorAll('[data-page="' + p + '"]').forEach(function(b) { b.style.display = 'none'; });
-  });
-  // Masquer les séparateurs de section Admin/Principal qui deviennent inutiles
-  document.querySelectorAll('.sb-section').forEach(function(s) {
-    if (s.textContent.trim() === 'Admin') s.style.display = 'none';
-  });
-  // Masquer export Excel sidebar
-  document.querySelectorAll('.nav-btn').forEach(function(b) {
-    if (b.textContent.includes('Exporter')) b.style.display = 'none';
-  });
-
-  // 2. Masquer le bouton topbar "+ Article" et "+ Catégorie"
-  const tb = document.getElementById('topbar-action');
-  if (tb) tb.style.display = 'none';
-
-  // 3. Dans la page commandes : masquer Approuver/Refuser/Supprimer, garder "Nouvelle demande"
-  // (géré dans renderCommandes via CLIENT_MODE)
-
-  // 4. Bannière client
-  const banner = document.createElement('div');
-  banner.id = 'client-banner';
-  banner.style.cssText = 'background:#e8f0fb;border-bottom:2px solid #1a5fa8;padding:7px 16px;font-size:12px;color:#1a5fa8;text-align:center;font-weight:600;flex-shrink:0;';
-  banner.textContent = '🔒 Accès client AIR2S — Consultation stock & demandes de matériel';
-  // Insérer en haut du #main (avant topbar)
-  const mainDiv = document.getElementById('main');
-  if (mainDiv) mainDiv.insertBefore(banner, mainDiv.firstChild);
-
-  // 5. Rediriger la page de démarrage vers stock
-  showPage('stock', document.querySelector('[data-page="stock"]'));
-}
-
-// Surcharge renderStock pour mode client : masquer prix achat, valeur, fournisseur ; montrer prix vente + qté
-function renderStockClient() {
-  populateCatFilter();
-  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-  const cat = document.getElementById('filter-cat')?.value || '';
-  const status = document.getElementById('filter-status')?.value || '';
-  const filtered = stock.filter(a => {
-    const mq = !q || a.id.toLowerCase().includes(q) || a.categorie.toLowerCase().includes(q) || String(a.diametre).toLowerCase().includes(q);
-    return mq && (!cat || a.categorie === cat) && (!status || getStatus(a) === status);
-  });
-
-  // Adapter les en-têtes de colonnes
-  const thPrix = document.getElementById('stock-th-prix');
-  const thValeur = document.getElementById('stock-th-valeur');
-  const thFourn = document.getElementById('stock-th-fourn');
-  if (thPrix) thPrix.textContent = 'Prix vente HT';
-  if (thValeur) thValeur.style.display = 'none';
-  if (thFourn) thFourn.style.display = 'none';
-
-  document.getElementById('stock-empty').style.display = filtered.length === 0 ? '' : 'none';
-  document.getElementById('stock-table').innerHTML = filtered.map(function(a) {
-    const s = getStatus(a);
-    const pct = Math.min(100, Math.round(a.stock / Math.max(a.stockMin * 1.5, 1) * 100));
-    const color = s === 'ok' ? 'var(--green)' : s === 'warn' ? 'var(--amber)' : 'var(--red)';
-    const sc = s === 'ok' ? 'stock-ok' : s === 'warn' ? 'stock-warn' : 'stock-danger';
-    return '<tr>' +
-      '<td><code>' + a.id + '</code></td>' +
-      '<td>' + a.categorie + '</td>' +
-      '<td>' + a.diametre + '</td>' +
-      '<td><span class="' + sc + '">' + a.stock + '</span><div class="prog-bar"><div class="prog-fill" style="width:' + pct + '%;background:' + color + ';"></div></div></td>' +
-      '<td>' + a.stockMin + '</td>' +
-      '<td>' + (a.prixVente > 0 ? a.prixVente.toFixed(2).replace('.', ',') + ' €' : '—') + '</td>' +
-      '<td>' + statusLabel(s) + '</td>' +
-      '<td></td>' +
-      '</tr>';
-  }).join('');
-}
-
-async function editArticle(id) {
-  const art = stock.find(a => a.id === id); if (!art) return;
-  document.getElementById('art-modal-title').textContent = 'Modifier — ' + id;
-  document.getElementById('art-id').value = id;
-  document.getElementById('art-id').readOnly = true;
-  document.getElementById('art-id').style.color = 'var(--text3)';
-  const row = document.getElementById('art-newid-row');
-  if (row) row.style.display = '';
-  document.getElementById('art-newid').value = '';
-  document.getElementById('art-fournisseur').value = art.fournisseur || '';
-  document.getElementById('art-diam').value = art.diametre || '';
-  document.getElementById('art-stock').value = art.stock || 0;
-  document.getElementById('art-min').value = art.stockMin || 5;
-  document.getElementById('art-prix').value = art.prixUnitaire || 0;
-  document.getElementById('art-prix-vente').value = art.prixVente || 0;
-  populateArtCatSelect();
-  document.getElementById('art-cat').value = art.categorie;
-  openModal('modal-article');
-}
-
-async function saveParams() {
-  const email = document.getElementById('param-email').value.trim();
-  const company = document.getElementById('param-company').value.trim();
-  await db.from('config').upsert({ key: 'email', value: email }, { onConflict: 'key' });
-  await db.from('config').upsert({ key: 'company', value: company }, { onConflict: 'key' });
-  params = { email, company };
-  showToast('✅ Paramètres enregistrés');
-}
-
-async function saveCat() {
-  const name = document.getElementById('newcat-name').value.trim();
-  if (!name) return;
-  if (editingCat) {
-    const idx = categories.indexOf(editingCat);
-    if (idx > -1) categories[idx] = name;
-    editingCat = null;
-  } else {
-    if (!categories.includes(name)) categories.push(name);
-  }
-  await db.from('config').upsert({ key: 'categories', value: categories }, { onConflict: 'key' });
-  closeModal('modal-newcat');
-  renderCategories();
-  showToast('✅ Catégorie enregistrée');
-}
-
-function editCat(name) {
-  editingCat = name;
-  document.getElementById('cat-modal-title').textContent = 'Modifier catégorie';
-  document.getElementById('newcat-name').value = name;
-  openModal('modal-newcat');
-}
-
-async function deleteCat(name) {
-  if (!confirm('Supprimer "' + name + '" ?')) return;
-  categories = categories.filter(c => c !== name && !c.startsWith(name + ' > '));
-  await db.from('config').upsert({ key: 'categories', value: categories }, { onConflict: 'key' });
-  renderCategories();
-  showToast('Catégorie supprimée');
-}
-
-async function openNewSubCat() {
-  const sel = document.getElementById('subcat-parent');
-  if (sel) {
-    sel.innerHTML = categories.filter(c => !c.includes(' > ')).sort().map(c =>
-      `<option value="${c}">${c}</option>`
-    ).join('');
-  }
-  document.getElementById('subcat-name').value = '';
-  openModal('modal-newsubcat');
-}
-
-async function saveSubCat() {
-  const parent = document.getElementById('subcat-parent').value;
-  const name = document.getElementById('subcat-name').value.trim();
-  if (!parent || !name) return;
-  const full = parent + ' > ' + name;
-  if (!categories.includes(full)) categories.push(full);
-  await db.from('config').upsert({ key: 'categories', value: categories }, { onConflict: 'key' });
-  closeModal('modal-newsubcat');
-  renderCategories();
-  showToast('✅ Sous-catégorie enregistrée');
-}
-
-function resetData() {
-  if (!confirm('⚠ Réinitialiser TOUTES les données ? Cette action est irréversible.')) return;
-  showToast('Réinitialisation non disponible depuis le client pour sécurité.');
-}
-
-function exportExcel() {
-  if (!window.XLSX) { showToast('⌛ Export en cours de chargement...'); return; }
-  const wb = window.XLSX.utils.book_new();
-  const stockData = [['Référence','Catégorie','Diamètre','Stock','Stock min','Prix achat','Prix vente','Fournisseur','Valeur']];
-  stock.forEach(a => stockData.push([a.id, a.categorie, a.diametre, a.stock, a.stockMin, a.prixUnitaire, a.prixVente, a.fournisseur, (a.stock * a.prixUnitaire).toFixed(2)]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(stockData), 'Stock');
-  const histData = [['Date','Type','Référence','Catégorie','Diamètre','Qté','Nouveau stock','Équipe','Note']];
-  historique.forEach(h => histData.push([new Date(h.ts).toLocaleString('fr-FR'), h.type, h.id, h.categorie, h.diametre, h.qty, h.newStock, h.equipe, h.note]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(histData), 'Historique');
-  const cmdData = [['N°','Date','Chantier','Demandeur','Urgence','Statut','Articles']];
-  commandes.forEach(c => cmdData.push([c.num, c.created_at ? new Date(c.created_at).toLocaleString('fr-FR') : '', c.chantier, c.nom, c.urgence, c.statut, (c.items||[]).map(i=>i.id+'×'+i.qty).join(', ')]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cmdData), 'Commandes');
-  XLSX.writeFile(wb, 'StockPro_' + new Date().toISOString().slice(0,10) + '.xlsx');
-  showToast('✅ Export Excel téléchargé');
-}
-
-function stopCmdQR() { /* placeholder */ }
-
-function printCmd(id) {
-  const c = commandes.find(x => x.id === id); if (!c) return;
-  const w = window.open('', '_blank');
-  const date = c.created_at ? new Date(c.created_at).toLocaleString('fr-FR') : '';
-  w.document.write(`<!DOCTYPE html><html><head><title>Commande #${String(c.num).padStart(3,'0')}</title>
-  <style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #ccc;padding:8px;font-size:13px;}</style>
-  </head><body>
-  <h2>Commande #${String(c.num).padStart(3,'0')} — ${c.chantier}</h2>
-  <p>Date : ${date} | Demandeur : ${c.nom||''} | Urgence : ${c.urgence||''}</p>
-  <p>Notes : ${c.notes||'—'}</p>
-  <table><thead><tr><th>Référence</th><th>Quantité</th></tr></thead><tbody>
-  ${(c.items||[]).map(i=>`<tr><td>${i.id}</td><td>${i.qty}</td></tr>`).join('')}
-  </tbody></table>
-  <script>window.print();<\/script></body></html>`);
-  w.document.close();
-}
-
-// Lancer l'app une fois le DOM prêt
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApp);
-} else {
-  initApp();
-}
+initApp();
 
 </script>
 </body>
