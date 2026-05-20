@@ -525,9 +525,11 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <div class="modal-body">
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Chantier</label>
-          <select id="cmd-chantier">
+          <select id="cmd-chantier-select" style="display:none;">
             <option value="">— Sélectionner un chantier —</option>
           </select>
+          <input type="text" id="cmd-chantier-libre" placeholder="Votre entreprise / société…" style="display:none;">
+          <div id="cmd-chantier-wrap"></div>
         </div>
         <div class="form-row"><label class="form-label">Urgence</label>
           <select id="cmd-urgence"><option value="normale">Normale</option><option value="urgent">Urgent</option><option value="critique">Critique</option></select>
@@ -794,7 +796,30 @@ let editingCat = null;
 // Adapte les colonnes Supabase → format interne JS
 function openModal(id){const m=document.getElementById(id);if(m){m.classList.add('open');m.style.display='flex';}}
 function closeModal(id){const m=document.getElementById(id);if(m){m.classList.remove('open');m.style.display='';}}
-function openCmdModal(){editingCmdId=null;cmdItems=[];const selC=document.getElementById('cmd-chantier');if(selC){if(CLIENT_MODE){selC.placeholder='Nom de votre entreprise';selC.value='';}else{selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});}}['cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
+function openCmdModal(){
+  editingCmdId=null; cmdItems=[];
+  const wrap = document.getElementById('cmd-chantier-wrap');
+  const selC = document.getElementById('cmd-chantier-select');
+  const libre = document.getElementById('cmd-chantier-libre');
+  if (CLIENT_MODE) {
+    // Champ libre pour le client
+    if (selC) selC.style.display = 'none';
+    if (libre) { libre.style.display = ''; libre.value = ''; }
+    if (wrap) wrap.innerHTML = '';
+  } else {
+    // Select chantiers pour l'admin
+    if (libre) libre.style.display = 'none';
+    if (selC) {
+      selC.style.display = '';
+      selC.innerHTML = '<option value="">Selectionner</option>';
+      chantiers.forEach(function(c){ const o=document.createElement('option'); o.value=c.nom; o.textContent=c.nom; selC.appendChild(o); });
+    }
+    if (wrap) wrap.innerHTML = '';
+  }
+  ['cmd-nom','cmd-notes','cmd-art-search'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('cmd-urgence').value='normale';
+  renderCmdItems(); switchAddMode('search'); buildCatPills(); openModal('modal-commande');
+}
 function openNewArticle(){document.getElementById('art-modal-title').textContent='Ajouter un article';document.getElementById('art-id').value='';document.getElementById('art-id').readOnly=false;document.getElementById('art-id').style.color='';const row=document.getElementById('art-newid-row');if(row)row.style.display='none';document.getElementById('art-fournisseur').value='';document.getElementById('art-diam').value='';document.getElementById('art-stock').value=0;document.getElementById('art-min').value=5;document.getElementById('art-prix').value=0;document.getElementById('art-prix-vente').value=0;populateArtCatSelect();openModal('modal-article');}function adaptArticle(row) {
   return {
     id: row.id,
@@ -1723,11 +1748,13 @@ async function saveArticle() {
 }
 
 async function saveCommande() {
-  const chantier = document.getElementById('cmd-chantier').value;
+  const chantier = CLIENT_MODE
+    ? (document.getElementById('cmd-chantier-libre').value.trim() || 'Client')
+    : document.getElementById('cmd-chantier-select').value;
   const nom = document.getElementById('cmd-nom').value.trim();
   const urgence = document.getElementById('cmd-urgence').value;
   const notes = document.getElementById('cmd-notes').value.trim();
-  if (!chantier) { showToast('❌ Sélectionnez un chantier'); return; }
+  if (!CLIENT_MODE && !chantier) { showToast('❌ Sélectionnez un chantier'); return; }
   if (cmdItems.length === 0) { showToast('❌ Ajoutez au moins un article'); return; }
   const num = cmdCounter || (commandes.length + 1);
   const { error } = await db.from('commandes').insert({
@@ -1748,14 +1775,19 @@ async function editCmd(id) {
   editingCmdId = id;
   cmdItems = [...(c.items || [])];
   document.getElementById('cmd-modal-title').textContent = 'Modifier commande #' + String(c.num).padStart(3, '0');
-  const selC = document.getElementById('cmd-chantier');
-  selC.innerHTML = '<option value="">Sélectionner</option>';
-  chantiers.forEach(ch => {
-    const o = document.createElement('option');
-    o.value = ch.nom; o.textContent = ch.nom;
-    if (ch.nom === c.chantier) o.selected = true;
-    selC.appendChild(o);
-  });
+  const selC = document.getElementById('cmd-chantier-select');
+  const libre = document.getElementById('cmd-chantier-libre');
+  if (CLIENT_MODE) {
+    if (selC) selC.style.display = 'none';
+    if (libre) { libre.style.display = ''; libre.value = c.chantier || ''; }
+  } else {
+    if (libre) libre.style.display = 'none';
+    if (selC) {
+      selC.style.display = '';
+      selC.innerHTML = '<option value="">Sélectionner</option>';
+      chantiers.forEach(function(ch){ const o=document.createElement('option'); o.value=ch.nom; o.textContent=ch.nom; if(ch.nom===c.chantier)o.selected=true; selC.appendChild(o); });
+    }
+  }
   document.getElementById('cmd-nom').value = c.nom || '';
   document.getElementById('cmd-notes').value = c.notes || '';
   document.getElementById('cmd-urgence').value = c.urgence || 'normale';
