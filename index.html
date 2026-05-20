@@ -780,8 +780,7 @@ let commandes = [];
 let historique = [];
 let chantiers = []; // [{nom, desc}]
 const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='client';
-// EmailJS init
-(function(){try{emailjs.init('KY7sWQPoWJPP2GvD2');}catch(e){console.warn('EmailJS non chargé',e);}})();
+
 let categories = [...DEFAULT_CATEGORIES];
 let cmdCounter = 1;
 let params = {email:'',company:''};
