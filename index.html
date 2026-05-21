@@ -1701,9 +1701,11 @@ function renderCommandes(){
     var q="'";
     var btns='<button class="btn btn-xs" onclick="viewCmd('+q+c.id+q+')">Detail</button>';
     btns+=' <button class="btn btn-xs" style="margin-left:3px;" onclick="printCmd('+q+c.id+q+')">&#128438;</button>';
+    if(c.statut==='en_attente'){
+      btns+=' <button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('+q+c.id+q+')">&#9998; Modifier</button>';
+    }
     if(!CLIENT_MODE){
       if(c.statut==='en_attente'){
-        btns+=' <button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('+q+c.id+q+')">&#9998;</button>';
         btns+=' <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('+q+c.id+q+')">&#10003;</button>';
         btns+=' <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('+q+c.id+q+')">&#10005;</button>';
       }
@@ -1749,9 +1751,11 @@ function viewCmd(id){
   var mq='"';
   var footer='<button class="btn" onclick="closeModal('+mq+'modal-cmd-detail'+mq+')">Fermer</button>';
   footer+=' <button class="btn" onclick="printCmd('+mq+cid+mq+')">&#128438; Imprimer</button>';
+  if(isP){
+    footer+=' <button class="btn btn-sm" onclick="editCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">&#9998; Modifier</button>';
+  }
   if(!CLIENT_MODE){
     if(isP){
-      footer+=' <button class="btn btn-sm" onclick="editCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Modifier</button>';
       footer+=' <button class="btn btn-danger btn-sm" onclick="refuserCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Refuser</button>';
       footer+=' <button class="btn btn-primary btn-sm" onclick="approuverCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Approuver</button>';
     }else{
