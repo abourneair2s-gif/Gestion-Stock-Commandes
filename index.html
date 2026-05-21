@@ -5,331 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>StockPro — Gestion inventaire et commandes</title>
 <!-- Supabase: chargé en priorité (requis pour la connexion) -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
-// ══ FONCTIONS MANQUANTES ════════════════════════════════════
-
-// populateArtCatSelect
-function populateArtCatSelect(){
-  var sel=document.getElementById('art-cat');if(!sel)return;
-  var cats=categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort();
-  if(cats.indexOf('Flexible')===-1)cats.push('Flexible');
-  sel.innerHTML=cats.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
-}
-
-// saveArticle
-async function saveArticle(){
-  var id=document.getElementById('art-id').value.trim();
-  var cat=document.getElementById('art-cat').value;
-  var diam=document.getElementById('art-diam').value.trim();
-  var fourn=document.getElementById('art-fournisseur').value.trim();
-  var sv=parseInt(document.getElementById('art-stock').value)||0;
-  var sm=parseInt(document.getElementById('art-min').value)||5;
-  var prix=parseFloat(document.getElementById('art-prix').value)||0;
-  var prixV=parseFloat(document.getElementById('art-prix-vente').value)||0;
-  if(!id||!cat||!diam){showToast('Reference, categorie et diametre requis');return;}
-  var isEdit=document.getElementById('art-id').readOnly;
-  if(isEdit){
-    var r=await db.from('stock').update({categorie:cat,diametre:diam,fournisseur:fourn,stock:sv,stock_min:sm,prix_unitaire:prix,prix_vente:prixV}).eq('id',id);
-    if(r.error){showToast('Erreur: '+r.error.message);return;}
-  }else{
-    var r2=await db.from('stock').insert({id:id,categorie:cat,diametre:diam,fournisseur:fourn,stock:sv,stock_min:sm,prix_unitaire:prix,prix_vente:prixV});
-    if(r2.error){showToast('Erreur: '+r2.error.message);return;}
-  }
-  closeModal('modal-article');
-  var rd=await db.from('stock').select('*').order('categorie').order('id');
-  if(rd.data)stock=rd.data.map(adaptArticle);
-  renderStock();renderDashboard();updateBadges();showToast('Article enregistre');
-}
-
-// editArticle
-async function editArticle(id){
-  var art=stock.find(function(a){return a.id===id;});if(!art)return;
-  document.getElementById('art-modal-title').textContent='Modifier - '+id;
-  document.getElementById('art-id').value=id;
-  document.getElementById('art-id').readOnly=true;
-  document.getElementById('art-id').style.color='var(--text3)';
-  var row=document.getElementById('art-newid-row');if(row)row.style.display='';
-  var ni=document.getElementById('art-newid');if(ni)ni.value='';
-  document.getElementById('art-fournisseur').value=art.fournisseur||'';
-  document.getElementById('art-diam').value=art.diametre||'';
-  document.getElementById('art-stock').value=art.stock||0;
-  document.getElementById('art-min').value=art.stockMin||5;
-  document.getElementById('art-prix').value=art.prixUnitaire||0;
-  document.getElementById('art-prix-vente').value=art.prixVente||0;
-  populateArtCatSelect();
-  document.getElementById('art-cat').value=art.categorie;
-  openModal('modal-article');
-}
-
-// Scanner par categorie
-var scanSelectedArt=null;
-function switchScanManualMode(mode,btn){
-  document.querySelectorAll('#scan-tab-manual .tab-sw-btn').forEach(function(b){b.classList.remove('active');});
-  if(btn)btn.classList.add('active');
-  var r=document.getElementById('scan-manual-ref');
-  var cc=document.getElementById('scan-manual-cat');
-  if(r)r.style.display=mode==='ref'?'':'none';
-  if(cc)cc.style.display=mode==='cat'?'':'none';
-  if(mode==='cat')buildScanCatPills();
-}
-function buildScanCatPills(){
-  var pills=document.getElementById('scan-cat-pills');if(!pills)return;
-  var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
-  pills.innerHTML=cats.map(function(c){
-    return '<div class="cat-pill" onclick="selectScanCat(&quot;'+c+'&quot;,this)">'+c+'</div>';
-  }).join('');
-}
-function selectScanCat(cat,el){
-  document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
-  if(el)el.classList.add('active');
-  var items=document.getElementById('scan-cat-items');if(!items)return;
-  items.innerHTML=stock.filter(function(a){return a.categorie===cat;}).map(function(a){
-    return '<div onclick="selectScanArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong></div>';
-  }).join('');
-}
-function selectScanArt(id,el){
-  scanSelectedArt=stock.find(function(a){return a.id===id;});
-  document.querySelectorAll('#scan-cat-items div').forEach(function(d){d.style.background='';});
-  if(el)el.style.background='var(--green-bg)';
-  var e2=document.getElementById('scan-selected-art');if(e2&&scanSelectedArt)e2.textContent='Selectionne: '+scanSelectedArt.id;
-  var ref=document.getElementById('manual-ref');if(ref&&scanSelectedArt)ref.value=scanSelectedArt.id;
-}
-
-// Commandes : picker et saveCommande
-var editingCmdId=null;var pendingCmdArt=null;
-function renderCmdItems(){
-  var list=document.getElementById('cmd-items-list');
-  var empty=document.getElementById('cmd-items-empty');
-  if(!list)return;
-  if(cmdItems.length===0){list.innerHTML='';if(empty)empty.style.display='';return;}
-  if(empty)empty.style.display='none';
-  list.innerHTML=cmdItems.map(function(item,i){
-    var art=stock.find(function(a){return a.id===item.id;});
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--green-bg);border-radius:8px;margin-bottom:6px;">'+
-      '<div><strong>'+item.id+'</strong>'+(art?' &middot; '+art.categorie+' O'+art.diametre:'')+'</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:700;">x '+item.qty+'</span>'+
-      '<button class="btn btn-xs btn-danger" onclick="removeCmdItem('+i+')">x</button></div></div>';
-  }).join('');
-}
-function removeCmdItem(i){cmdItems.splice(i,1);renderCmdItems();}
-function switchAddMode(mode){
-  var s=document.getElementById('add-mode-search');
-  var cc=document.getElementById('add-mode-cat');
-  var q=document.getElementById('add-mode-qr');
-  if(s)s.style.display=mode==='search'?'':'none';
-  if(cc)cc.style.display=mode==='cat'?'':'none';
-  if(q)q.style.display=mode==='qr'?'':'none';
-}
-function buildCatPills(){
-  var pills=document.getElementById('cmd-cat-pills');if(!pills)return;
-  var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
-  pills.innerHTML=cats.map(function(c){
-    return '<div class="cat-pill" onclick="selectCmdCat(&quot;'+c+'&quot;,this)">'+c+'</div>';
-  }).join('');
-}
-function selectCmdCat(cat,el){
-  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
-  if(el)el.classList.add('active');
-  var items=document.getElementById('cmd-cat-items');if(!items)return;
-  items.innerHTML=stock.filter(function(a){return a.categorie===cat;}).map(function(a){
-    return '<div onclick="selectCmdArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong></div>';
-  }).join('');
-}
-function selectCmdArt(id,el){
-  pendingCmdArt=stock.find(function(a){return a.id===id;});if(!pendingCmdArt)return;
-  document.querySelectorAll('#cmd-cat-items div').forEach(function(d){d.style.background='';});
-  if(el)el.style.background='var(--green-bg)';
-  showCmdQtyPicker(pendingCmdArt);
-}
-function showCmdQtyPicker(art){
-  var picker=document.getElementById('cmd-qty-picker');if(!picker)return;
-  document.getElementById('cmd-qty-picker-id').textContent=art.id;
-  document.getElementById('cmd-qty-picker-desc').textContent=art.categorie+' O'+art.diametre+' Stock: '+art.stock;
-  document.getElementById('cmd-qty-picker-input').value=1;
-  picker.style.display='flex';
-}
-function cancelCmdItem(){
-  var picker=document.getElementById('cmd-qty-picker');if(picker)picker.style.display='none';
-  pendingCmdArt=null;
-}
-function confirmCmdItem(){
-  if(!pendingCmdArt)return;
-  var qty=parseInt(document.getElementById('cmd-qty-picker-input').value)||1;
-  var ex=cmdItems.findIndex(function(i){return i.id===pendingCmdArt.id;});
-  if(ex>-1)cmdItems[ex].qty+=qty;else cmdItems.push({id:pendingCmdArt.id,qty:qty});
-  var picker=document.getElementById('cmd-qty-picker');if(picker)picker.style.display='none';
-  pendingCmdArt=null;renderCmdItems();showToast('Article ajoute');
-}
-function searchCmdArt(val){
-  var res=document.getElementById('cmd-search-results');if(!res)return;
-  if(!val||val.length<2){res.innerHTML='';return;}
-  res.innerHTML=stock.filter(function(a){
-    return a.id.toLowerCase().indexOf(val.toLowerCase())!==-1||a.categorie.toLowerCase().indexOf(val.toLowerCase())!==-1;
-  }).slice(0,10).map(function(a){
-    return '<div onclick="selectCmdSearchArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; '+a.categorie+' O'+a.diametre+' &middot; Stock: '+a.stock+'</div>';
-  }).join('');
-}
-function selectCmdSearchArt(id,el){
-  pendingCmdArt=stock.find(function(a){return a.id===id;});if(!pendingCmdArt)return;
-  document.querySelectorAll('#cmd-search-results div').forEach(function(d){d.style.background='';});
-  if(el)el.style.background='var(--green-bg)';
-  var inp=document.getElementById('cmd-art-search');if(inp)inp.value=pendingCmdArt.id;
-  showCmdQtyPicker(pendingCmdArt);
-}
-function stopCmdQR(){}
-
-async function saveCommande(){
-  var libre=document.getElementById('cmd-chantier-libre');
-  var selC=document.getElementById('cmd-chantier');
-  var chantier=CLIENT_MODE?(libre?libre.value.trim()||'Client':'Client'):(selC?selC.value:'');
-  if(!CLIENT_MODE&&!chantier){showToast('Selectionnez un chantier');return;}
-  if(cmdItems.length===0){showToast('Ajoutez au moins un article');return;}
-  var nom=document.getElementById('cmd-nom').value.trim();
-  var urgence=document.getElementById('cmd-urgence').value;
-  var notes=document.getElementById('cmd-notes').value.trim();
-  var num=cmdCounter||(commandes.length+1);
-  var r=await db.from('commandes').insert({num:num,chantier:chantier,nom:nom,urgence:urgence,notes:notes,items:cmdItems,statut:'en_attente'});
-  if(r.error){showToast('Erreur: '+r.error.message);return;}
-  cmdCounter=num+1;
-  await db.from('config').upsert({key:'cmd_counter',value:cmdCounter},{onConflict:'key'});
-  closeModal('modal-commande');
-  var r2=await db.from('commandes').select('*').order('created_at',{ascending:false});
-  if(r2.data)commandes=r2.data;
-  renderCommandes();updateBadges();showToast('Commande #'+String(num).padStart(3,'0')+' soumise');
-  if(CLIENT_MODE)showPage('commandes',document.querySelector('[data-page="commandes"]'));
-}
-
-async function editCmd(id){
-  var c=commandes.find(function(x){return x.id===id;});if(!c)return;
-  editingCmdId=id;cmdItems=JSON.parse(JSON.stringify(c.items||[]));
-  document.getElementById('cmd-modal-title').textContent='Modifier commande #'+String(c.num).padStart(3,'0');
-  var selC=document.getElementById('cmd-chantier');
-  if(selC){selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(function(ch){var o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom;if(ch.nom===c.chantier)o.selected=true;selC.appendChild(o);});}
-  var libre=document.getElementById('cmd-chantier-libre');if(libre)libre.value=c.chantier||'';
-  document.getElementById('cmd-nom').value=c.nom||'';
-  document.getElementById('cmd-notes').value=c.notes||'';
-  document.getElementById('cmd-urgence').value=c.urgence||'normale';
-  renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');
-}
-
-function printCmd(id){
-  var c=commandes.find(function(x){return x.id===id;});if(!c)return;
-  var w=window.open('','_blank');
-  var date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
-  var statLabel={en_attente:'En attente',approuvee:'Approuvee',refusee:'Refusee'}[c.statut]||c.statut;
-  var total=0;
-  var prixTh=CLIENT_MODE?'<th>Prix unit. HT</th><th>Total HT</th>':'';
-  var rows=(c.items||[]).map(function(i){
-    var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',prixVente:0};
-    if(CLIENT_MODE){var pv=art.prixVente||0;var tt=pv*i.qty;total+=tt;
-      return '<tr><td>'+i.id+'</td><td>'+art.categorie+' O'+art.diametre+'</td><td style="text-align:center;">'+i.qty+'</td><td>'+(pv>0?pv.toFixed(2)+' EUR':'-')+'</td><td>'+(tt>0?tt.toFixed(2)+' EUR':'-')+'</td></tr>';}
-    return '<tr><td>'+i.id+'</td><td>'+art.categorie+' O'+art.diametre+'</td><td style="text-align:center;">'+i.qty+'</td></tr>';
-  }).join('');
-  var totalRow=(CLIENT_MODE&&total>0)?'<tr style="font-weight:700;"><td colspan="4" style="text-align:right;padding:8px;">Total HT</td><td style="padding:8px;">'+total.toFixed(2)+' EUR</td></tr>':'';
-  var html='<!DOCTYPE html><html><head><title>Commande #'+String(c.num).padStart(3,'0')+'</title>'+
-    '<style>body{font-family:sans-serif;padding:24px;}table{width:100%;border-collapse:collapse;font-size:13px;}'+
-    'th{background:#f5f4f0;border:1px solid #ccc;padding:8px;text-align:left;}td{border:1px solid #ddd;padding:8px;}'+
-    '.footer{margin-top:20px;font-size:11px;color:#999;text-align:center;}</style></head><body>'+
-    '<h2>Bon de commande - AIR2S</h2><h3 style="color:#1a8c66;">Commande #'+String(c.num).padStart(3,'0')+'</h3>'+
-    '<p style="font-size:13px;color:#555;margin-bottom:16px;line-height:1.8;">Chantier/Societe: <strong>'+c.chantier+'</strong><br>'+
-    'Demandeur: '+(c.nom||'-')+'<br>Date: '+date+'<br>Urgence: '+(c.urgence||'-')+' | Statut: '+statLabel+(c.notes?'<br>Notes: '+c.notes:'')+'</p>'+
-    '<table><thead><tr><th>Reference</th><th>Article</th><th>Quantite</th>'+prixTh+'</tr></thead>'+
-    '<tbody>'+rows+totalRow+'</tbody></table>'+
-    '<div class="footer">StockPro AIR2S - '+new Date().toLocaleString('fr-FR')+'</div>'+
-    '<scr'+'ipt>window.print();<'+'/script></body></html>';
-  w.document.write(html);w.document.close();
-}
-
-// renderStockClient
-function renderStockClient(){
-  populateCatFilter();
-  var q=(document.getElementById('search-input')?document.getElementById('search-input').value:'').toLowerCase();
-  var cat=document.getElementById('filter-cat')?document.getElementById('filter-cat').value:'';
-  var status=document.getElementById('filter-status')?document.getElementById('filter-status').value:'';
-  var filtered=stock.filter(function(a){
-    var mq=!q||a.id.toLowerCase().indexOf(q)!==-1||a.categorie.toLowerCase().indexOf(q)!==-1||String(a.diametre).toLowerCase().indexOf(q)!==-1;
-    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
-  });
-  var thPrix=document.getElementById('stock-th-prix');var thV=document.getElementById('stock-th-valeur');var thF=document.getElementById('stock-th-fourn');
-  if(thPrix)thPrix.textContent='Prix vente HT';if(thV)thV.style.display='none';if(thF)thF.style.display='none';
-  document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
-  document.getElementById('stock-table').innerHTML=filtered.map(function(a){
-    var s=getStatus(a);var pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
-    var color=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
-    var sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
-    return '<tr><td><code>'+a.id+'</code></td><td>'+a.categorie+'</td><td>'+a.diametre+'</td>'+
-      '<td><span class="'+sc+'">'+a.stock+'</span><div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:'+color+';"></div></div></td>'+
-      '<td>'+a.stockMin+'</td><td>'+(a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—')+'</td>'+
-      '<td>'+statusLabel(s)+'</td><td></td></tr>';
-  }).join('');
-}
-
-// applyClientMode
-function applyClientMode(){
-  ['pareto','etiquettes','scan','chantiers','alertes','historique','categories','parametres','dashboard'].forEach(function(p){
-    document.querySelectorAll('[data-page="'+p+'"]').forEach(function(b){b.style.display='none';});
-  });
-  document.querySelectorAll('.sb-section').forEach(function(s){if(s.textContent.trim()==='Admin')s.style.display='none';});
-  document.querySelectorAll('.nav-btn').forEach(function(b){if(b.textContent.indexOf('Exporter')!==-1)b.style.display='none';});
-  var tb=document.getElementById('topbar-action');if(tb)tb.style.display='none';
-  var banner=document.createElement('div');
-  banner.style.cssText='background:#e8f0fb;border-bottom:2px solid #1a5fa8;padding:7px 16px;font-size:12px;color:#1a5fa8;text-align:center;font-weight:600;flex-shrink:0;';
-  banner.textContent='Acces client AIR2S - Consultation stock & demandes de materiel';
-  var mainDiv=document.getElementById('main');if(mainDiv)mainDiv.insertBefore(banner,mainDiv.firstChild);
-  showPage('commandes',document.querySelector('[data-page="commandes"]'));
-}
-
-// saveParams, saveCat, etc.
-function saveParams(){
-  var email=document.getElementById('param-email').value.trim();
-  var company=document.getElementById('param-company').value.trim();
-  db.from('config').upsert({key:'email',value:email},{onConflict:'key'});
-  db.from('config').upsert({key:'company',value:company},{onConflict:'key'});
-  params={email:email,company:company};showToast('Parametres enregistres');
-}
-async function saveCat(){
-  var name=document.getElementById('newcat-name').value.trim();if(!name)return;
-  if(editingCat){var idx=categories.indexOf(editingCat);if(idx>-1)categories[idx]=name;editingCat=null;}
-  else{if(categories.indexOf(name)===-1)categories.push(name);}
-  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
-  closeModal('modal-newcat');renderCategories();showToast('Categorie enregistree');
-}
-function editCat(name){editingCat=name;document.getElementById('cat-modal-title').textContent='Modifier';document.getElementById('newcat-name').value=name;openModal('modal-newcat');}
-async function deleteCat(name){
-  if(!confirm('Supprimer "'+name+'" ?'))return;
-  categories=categories.filter(function(c){return c!==name&&c.indexOf(name+' > ')!==0;});
-  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});renderCategories();showToast('Supprimee');
-}
-async function openNewSubCat(){
-  var sel=document.getElementById('subcat-parent');
-  if(sel)sel.innerHTML=categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
-  document.getElementById('subcat-name').value='';openModal('modal-newsubcat');
-}
-async function saveSubCat(){
-  var parent=document.getElementById('subcat-parent').value;
-  var name=document.getElementById('subcat-name').value.trim();if(!parent||!name)return;
-  var full=parent+' > '+name;if(categories.indexOf(full)===-1)categories.push(full);
-  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
-  closeModal('modal-newsubcat');renderCategories();showToast('Sous-categorie enregistree');
-}
-function exportChantiers(){showToast('Export non disponible');}
-function resetData(){if(!confirm('Reinitialiser TOUTES les donnees ?'))return;showToast('Non disponible.');}
-function exportExcel(){
-  if(!window.XLSX){showToast('Chargement...');return;}
-  var wb=window.XLSX.utils.book_new();
-  var sd=[['Reference','Categorie','Diametre','Stock','Stock min','Prix achat','Prix vente','Fournisseur','Valeur']];
-  stock.forEach(function(a){sd.push([a.id,a.categorie,a.diametre,a.stock,a.stockMin,a.prixUnitaire,a.prixVente,a.fournisseur,(a.stock*a.prixUnitaire).toFixed(2)]);});
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sd),'Stock');
-  var hd=[['Date','Type','Reference','Categorie','Diametre','Qte','Nouveau stock','Equipe','Note']];
-  historique.forEach(function(h){hd.push([new Date(h.ts).toLocaleString('fr-FR'),h.type,h.id,h.categorie,h.diametre,h.qty,h.newStock,h.equipe,h.note]);});
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(hd),'Historique');
-  var cd=[['N','Date','Chantier','Demandeur','Urgence','Statut','Articles']];
-  commandes.forEach(function(c){cd.push([c.num,c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'',c.chantier,c.nom,c.urgence,c.statut,(c.items||[]).map(function(i){return i.id+'x'+i.qty;}).join(', ')]);});
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cd),'Commandes');
-  XLSX.writeFile(wb,'StockPro_'+new Date().toISOString().slice(0,10)+'.xlsx');showToast('Export telecharge');
-}
-
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Librairies secondaires: chargées après sans bloquer -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
@@ -849,7 +525,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <div class="modal-body">
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Chantier</label>
-          <select id="cmd-chantier" id2="cmd-chantier-select">
+          <select id="cmd-chantier">
             <option value="">— Sélectionner un chantier —</option>
           </select>
           <input type="text" id="cmd-chantier-libre" placeholder="Votre entreprise / société..." style="display:none;">
@@ -1122,13 +798,8 @@ function openCmdModal(){
   editingCmdId=null;cmdItems=[];
   var selC=document.getElementById('cmd-chantier');
   var libre=document.getElementById('cmd-chantier-libre');
-  if(CLIENT_MODE){
-    if(selC)selC.style.display='none';
-    if(libre){libre.style.display='';libre.value='';}
-  }else{
-    if(libre)libre.style.display='none';
-    if(selC){selC.style.display='';selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(function(c){var o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});}
-  }
+  if(CLIENT_MODE){if(selC)selC.style.display='none';if(libre){libre.style.display='';libre.value='';}}
+  else{if(libre)libre.style.display='none';if(selC){selC.style.display='';selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(function(c){var o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});}}
   ['cmd-nom','cmd-notes','cmd-art-search'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cmd-urgence').value='normale';
   renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');
@@ -1147,6 +818,313 @@ function openNewArticle(){document.getElementById('art-modal-title').textContent
 }
 
 // ==================== INIT SUPABASE ====================
+
+// ══════ FONCTIONS MANQUANTES — injectees avant initApp ══════
+
+function populateArtCatSelect(){
+  var sel=document.getElementById('art-cat');if(!sel)return;
+  var cats=categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort();
+  if(cats.indexOf('Flexible')===-1)cats.push('Flexible');
+  sel.innerHTML=cats.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
+}
+
+async function saveArticle(){
+  var id=document.getElementById('art-id').value.trim();
+  var cat=document.getElementById('art-cat').value;
+  var diam=document.getElementById('art-diam').value.trim();
+  var fourn=document.getElementById('art-fournisseur').value.trim();
+  var sv=parseInt(document.getElementById('art-stock').value)||0;
+  var sm=parseInt(document.getElementById('art-min').value)||5;
+  var prix=parseFloat(document.getElementById('art-prix').value)||0;
+  var prixV=parseFloat(document.getElementById('art-prix-vente').value)||0;
+  if(!id||!cat||!diam){showToast('Reference, categorie et diametre requis');return;}
+  var isEdit=document.getElementById('art-id').readOnly;
+  if(isEdit){
+    var r=await db.from('stock').update({categorie:cat,diametre:diam,fournisseur:fourn,stock:sv,stock_min:sm,prix_unitaire:prix,prix_vente:prixV}).eq('id',id);
+    if(r.error){showToast('Erreur: '+r.error.message);return;}
+  }else{
+    var r2=await db.from('stock').insert({id:id,categorie:cat,diametre:diam,fournisseur:fourn,stock:sv,stock_min:sm,prix_unitaire:prix,prix_vente:prixV});
+    if(r2.error){showToast('Erreur: '+r2.error.message);return;}
+  }
+  closeModal('modal-article');
+  var rd=await db.from('stock').select('*').order('categorie').order('id');
+  if(rd.data)stock=rd.data.map(adaptArticle);
+  renderStock();renderDashboard();updateBadges();showToast('Article enregistre');
+}
+
+async function editArticle(id){
+  var art=stock.find(function(a){return a.id===id;});if(!art)return;
+  document.getElementById('art-modal-title').textContent='Modifier - '+id;
+  document.getElementById('art-id').value=id;
+  document.getElementById('art-id').readOnly=true;
+  document.getElementById('art-id').style.color='var(--text3)';
+  var row=document.getElementById('art-newid-row');if(row)row.style.display='';
+  var ni=document.getElementById('art-newid');if(ni)ni.value='';
+  document.getElementById('art-fournisseur').value=art.fournisseur||'';
+  document.getElementById('art-diam').value=art.diametre||'';
+  document.getElementById('art-stock').value=art.stock||0;
+  document.getElementById('art-min').value=art.stockMin||5;
+  document.getElementById('art-prix').value=art.prixUnitaire||0;
+  document.getElementById('art-prix-vente').value=art.prixVente||0;
+  populateArtCatSelect();
+  document.getElementById('art-cat').value=art.categorie;
+  openModal('modal-article');
+}
+
+var scanSelectedArt=null;
+function switchScanManualMode(mode,btn){
+  document.querySelectorAll('#scan-tab-manual .tab-sw-btn').forEach(function(b){b.classList.remove('active');});
+  if(btn)btn.classList.add('active');
+  var r=document.getElementById('scan-manual-ref');
+  var cc=document.getElementById('scan-manual-cat');
+  if(r)r.style.display=mode==='ref'?'':'none';
+  if(cc)cc.style.display=mode==='cat'?'':'none';
+  if(mode==='cat')buildScanCatPills();
+}
+function buildScanCatPills(){
+  var pills=document.getElementById('scan-cat-pills');if(!pills)return;
+  var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
+  pills.innerHTML=cats.map(function(c){return '<div class="cat-pill" onclick="selectScanCat(&quot;'+c+'&quot;,this)">'+c+'</div>';}).join('');
+}
+function selectScanCat(cat,el){
+  document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
+  if(el)el.classList.add('active');
+  var items=document.getElementById('scan-cat-items');if(!items)return;
+  items.innerHTML=stock.filter(function(a){return a.categorie===cat;}).map(function(a){
+    return '<div onclick="selectScanArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong></div>';
+  }).join('');
+}
+function selectScanArt(id,el){
+  scanSelectedArt=stock.find(function(a){return a.id===id;});
+  document.querySelectorAll('#scan-cat-items div').forEach(function(d){d.style.background='';});
+  if(el)el.style.background='var(--green-bg)';
+  var e2=document.getElementById('scan-selected-art');if(e2&&scanSelectedArt)e2.textContent='Selectionne: '+scanSelectedArt.id;
+  var ref=document.getElementById('manual-ref');if(ref&&scanSelectedArt)ref.value=scanSelectedArt.id;
+}
+
+var editingCmdId=null;var pendingCmdArt=null;
+function renderCmdItems(){
+  var list=document.getElementById('cmd-items-list');
+  var empty=document.getElementById('cmd-items-empty');
+  if(!list)return;
+  if(cmdItems.length===0){list.innerHTML='';if(empty)empty.style.display='';return;}
+  if(empty)empty.style.display='none';
+  list.innerHTML=cmdItems.map(function(item,i){
+    var art=stock.find(function(a){return a.id===item.id;});
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--green-bg);border-radius:8px;margin-bottom:6px;">'+
+      '<div><strong>'+item.id+'</strong>'+(art?' &middot; '+art.categorie+' O'+art.diametre:'')+'</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:700;">x '+item.qty+'</span>'+
+      '<button class="btn btn-xs btn-danger" onclick="removeCmdItem('+i+')">x</button></div></div>';
+  }).join('');
+}
+function removeCmdItem(i){cmdItems.splice(i,1);renderCmdItems();}
+function switchAddMode(mode){
+  ['search','cat','qr'].forEach(function(m){
+    var el=document.getElementById('add-mode-'+m);if(el)el.style.display=m===mode?'':'none';
+  });
+}
+function buildCatPills(){
+  var pills=document.getElementById('cmd-cat-pills');if(!pills)return;
+  var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
+  pills.innerHTML=cats.map(function(c){return '<div class="cat-pill" onclick="selectCmdCat(&quot;'+c+'&quot;,this)">'+c+'</div>';}).join('');
+}
+function selectCmdCat(cat,el){
+  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
+  if(el)el.classList.add('active');
+  var items=document.getElementById('cmd-cat-items');if(!items)return;
+  items.innerHTML=stock.filter(function(a){return a.categorie===cat;}).map(function(a){
+    return '<div onclick="selectCmdArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong></div>';
+  }).join('');
+}
+function selectCmdArt(id,el){
+  pendingCmdArt=stock.find(function(a){return a.id===id;});if(!pendingCmdArt)return;
+  document.querySelectorAll('#cmd-cat-items div').forEach(function(d){d.style.background='';});
+  if(el)el.style.background='var(--green-bg)';
+  showCmdQtyPicker(pendingCmdArt);
+}
+function showCmdQtyPicker(art){
+  var picker=document.getElementById('cmd-qty-picker');if(!picker)return;
+  document.getElementById('cmd-qty-picker-id').textContent=art.id;
+  document.getElementById('cmd-qty-picker-desc').textContent=art.categorie+' O'+art.diametre+' Stock: '+art.stock;
+  document.getElementById('cmd-qty-picker-input').value=1;
+  picker.style.display='flex';
+}
+function cancelCmdItem(){var picker=document.getElementById('cmd-qty-picker');if(picker)picker.style.display='none';pendingCmdArt=null;}
+function confirmCmdItem(){
+  if(!pendingCmdArt)return;
+  var qty=parseInt(document.getElementById('cmd-qty-picker-input').value)||1;
+  var ex=cmdItems.findIndex(function(i){return i.id===pendingCmdArt.id;});
+  if(ex>-1)cmdItems[ex].qty+=qty;else cmdItems.push({id:pendingCmdArt.id,qty:qty});
+  var picker=document.getElementById('cmd-qty-picker');if(picker)picker.style.display='none';
+  pendingCmdArt=null;renderCmdItems();showToast('Article ajoute');
+}
+function searchCmdArt(val){
+  var res=document.getElementById('cmd-search-results');if(!res)return;
+  if(!val||val.length<2){res.innerHTML='';return;}
+  res.innerHTML=stock.filter(function(a){
+    return a.id.toLowerCase().indexOf(val.toLowerCase())!==-1||a.categorie.toLowerCase().indexOf(val.toLowerCase())!==-1;
+  }).slice(0,10).map(function(a){
+    return '<div onclick="selectCmdSearchArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; '+a.categorie+' O'+a.diametre+' &middot; Stock: '+a.stock+'</div>';
+  }).join('');
+}
+function selectCmdSearchArt(id,el){
+  pendingCmdArt=stock.find(function(a){return a.id===id;});if(!pendingCmdArt)return;
+  document.querySelectorAll('#cmd-search-results div').forEach(function(d){d.style.background='';});
+  if(el)el.style.background='var(--green-bg)';
+  var inp=document.getElementById('cmd-art-search');if(inp)inp.value=pendingCmdArt.id;
+  showCmdQtyPicker(pendingCmdArt);
+}
+function stopCmdQR(){}
+
+async function saveCommande(){
+  var libre=document.getElementById('cmd-chantier-libre');
+  var selC=document.getElementById('cmd-chantier');
+  var chantier=CLIENT_MODE?(libre?libre.value.trim()||'Client':'Client'):(selC?selC.value:'');
+  if(!CLIENT_MODE&&!chantier){showToast('Selectionnez un chantier');return;}
+  if(cmdItems.length===0){showToast('Ajoutez au moins un article');return;}
+  var nom=document.getElementById('cmd-nom').value.trim();
+  var urgence=document.getElementById('cmd-urgence').value;
+  var notes=document.getElementById('cmd-notes').value.trim();
+  var num=cmdCounter||(commandes.length+1);
+  var r=await db.from('commandes').insert({num:num,chantier:chantier,nom:nom,urgence:urgence,notes:notes,items:cmdItems,statut:'en_attente'});
+  if(r.error){showToast('Erreur: '+r.error.message);return;}
+  cmdCounter=num+1;
+  await db.from('config').upsert({key:'cmd_counter',value:cmdCounter},{onConflict:'key'});
+  closeModal('modal-commande');
+  var r2=await db.from('commandes').select('*').order('created_at',{ascending:false});
+  if(r2.data)commandes=r2.data;
+  renderCommandes();updateBadges();showToast('Commande #'+String(num).padStart(3,'0')+' soumise');
+  if(CLIENT_MODE)showPage('commandes',document.querySelector('[data-page="commandes"]'));
+}
+
+async function editCmd(id){
+  var c=commandes.find(function(x){return x.id===id;});if(!c)return;
+  editingCmdId=id;cmdItems=JSON.parse(JSON.stringify(c.items||[]));
+  document.getElementById('cmd-modal-title').textContent='Modifier commande #'+String(c.num).padStart(3,'0');
+  var selC=document.getElementById('cmd-chantier');
+  if(selC){selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(function(ch){var o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom;if(ch.nom===c.chantier)o.selected=true;selC.appendChild(o);});}
+  var libre=document.getElementById('cmd-chantier-libre');if(libre)libre.value=c.chantier||'';
+  document.getElementById('cmd-nom').value=c.nom||'';
+  document.getElementById('cmd-notes').value=c.notes||'';
+  document.getElementById('cmd-urgence').value=c.urgence||'normale';
+  renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');
+}
+
+function printCmd(id){
+  var c=commandes.find(function(x){return x.id===id;});if(!c)return;
+  var w=window.open('','_blank');
+  var date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
+  var statLabel={en_attente:'En attente',approuvee:'Approuvee',refusee:'Refusee'}[c.statut]||c.statut;
+  var total=0;
+  var prixTh=CLIENT_MODE?'<th>Prix unit. HT</th><th>Total HT</th>':'';
+  var rows=(c.items||[]).map(function(i){
+    var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',prixVente:0};
+    if(CLIENT_MODE){var pv=art.prixVente||0;var tt=pv*i.qty;total+=tt;
+      return '<tr><td>'+i.id+'</td><td>'+art.categorie+' O'+art.diametre+'</td><td style="text-align:center;">'+i.qty+'</td><td>'+(pv>0?pv.toFixed(2)+' EUR':'-')+'</td><td>'+(tt>0?tt.toFixed(2)+' EUR':'-')+'</td></tr>';}
+    return '<tr><td>'+i.id+'</td><td>'+art.categorie+' O'+art.diametre+'</td><td style="text-align:center;">'+i.qty+'</td></tr>';
+  }).join('');
+  var totalRow=(CLIENT_MODE&&total>0)?'<tr style="font-weight:700;"><td colspan="4" style="text-align:right;padding:8px;">Total HT</td><td style="padding:8px;">'+total.toFixed(2)+' EUR</td></tr>':'';
+  var html='<!DOCTYPE html><html><head><title>Commande #'+String(c.num).padStart(3,'0')+'</title>'+
+    '<style>body{font-family:sans-serif;padding:24px;}table{width:100%;border-collapse:collapse;font-size:13px;}'+
+    'th{background:#f5f4f0;border:1px solid #ccc;padding:8px;text-align:left;}td{border:1px solid #ddd;padding:8px;}'+
+    '.footer{margin-top:20px;font-size:11px;color:#999;text-align:center;}</style></head><body>'+
+    '<h2>Bon de commande - AIR2S</h2><h3 style="color:#1a8c66;">Commande #'+String(c.num).padStart(3,'0')+'</h3>'+
+    '<p style="font-size:13px;color:#555;margin-bottom:16px;line-height:1.8;">Chantier/Societe: <strong>'+c.chantier+'</strong><br>'+
+    'Demandeur: '+(c.nom||'-')+'<br>Date: '+date+'<br>Urgence: '+(c.urgence||'-')+' | Statut: '+statLabel+(c.notes?'<br>Notes: '+c.notes:'')+'</p>'+
+    '<table><thead><tr><th>Reference</th><th>Article</th><th>Quantite</th>'+prixTh+'</tr></thead>'+
+    '<tbody>'+rows+totalRow+'</tbody></table>'+
+    '<div class="footer">StockPro AIR2S - '+new Date().toLocaleString('fr-FR')+'</div>'+
+    '<scr'+'ipt>window.print();<'+'/script></body></html>';
+  w.document.write(html);w.document.close();
+}
+
+function renderStockClient(){
+  populateCatFilter();
+  var q=(document.getElementById('search-input')?document.getElementById('search-input').value:'').toLowerCase();
+  var cat=document.getElementById('filter-cat')?document.getElementById('filter-cat').value:'';
+  var status=document.getElementById('filter-status')?document.getElementById('filter-status').value:'';
+  var filtered=stock.filter(function(a){
+    var mq=!q||a.id.toLowerCase().indexOf(q)!==-1||a.categorie.toLowerCase().indexOf(q)!==-1||String(a.diametre).toLowerCase().indexOf(q)!==-1;
+    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
+  });
+  var thPrix=document.getElementById('stock-th-prix');var thV=document.getElementById('stock-th-valeur');var thF=document.getElementById('stock-th-fourn');
+  if(thPrix)thPrix.textContent='Prix vente HT';if(thV)thV.style.display='none';if(thF)thF.style.display='none';
+  document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
+  document.getElementById('stock-table').innerHTML=filtered.map(function(a){
+    var s=getStatus(a);var pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
+    var color=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
+    var sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
+    return '<tr><td><code>'+a.id+'</code></td><td>'+a.categorie+'</td><td>'+a.diametre+'</td>'+
+      '<td><span class="'+sc+'">'+a.stock+'</span><div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:'+color+';"></div></div></td>'+
+      '<td>'+a.stockMin+'</td><td>'+(a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—')+'</td>'+
+      '<td>'+statusLabel(s)+'</td><td></td></tr>';
+  }).join('');
+}
+
+function applyClientMode(){
+  ['pareto','etiquettes','scan','chantiers','alertes','historique','categories','parametres','dashboard'].forEach(function(p){
+    document.querySelectorAll('[data-page="'+p+'"]').forEach(function(b){b.style.display='none';});
+  });
+  document.querySelectorAll('.sb-section').forEach(function(s){if(s.textContent.trim()==='Admin')s.style.display='none';});
+  document.querySelectorAll('.nav-btn').forEach(function(b){if(b.textContent.indexOf('Exporter')!==-1)b.style.display='none';});
+  var tb=document.getElementById('topbar-action');if(tb)tb.style.display='none';
+  var banner=document.createElement('div');
+  banner.style.cssText='background:#e8f0fb;border-bottom:2px solid #1a5fa8;padding:7px 16px;font-size:12px;color:#1a5fa8;text-align:center;font-weight:600;flex-shrink:0;';
+  banner.textContent='Acces client AIR2S - Consultation stock & demandes de materiel';
+  var mainDiv=document.getElementById('main');if(mainDiv)mainDiv.insertBefore(banner,mainDiv.firstChild);
+  showPage('commandes',document.querySelector('[data-page="commandes"]'));
+}
+
+function saveParams(){
+  var email=document.getElementById('param-email').value.trim();
+  var company=document.getElementById('param-company').value.trim();
+  db.from('config').upsert({key:'email',value:email},{onConflict:'key'});
+  db.from('config').upsert({key:'company',value:company},{onConflict:'key'});
+  params={email:email,company:company};showToast('Parametres enregistres');
+}
+async function saveCat(){
+  var name=document.getElementById('newcat-name').value.trim();if(!name)return;
+  if(editingCat){var idx=categories.indexOf(editingCat);if(idx>-1)categories[idx]=name;editingCat=null;}
+  else{if(categories.indexOf(name)===-1)categories.push(name);}
+  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
+  closeModal('modal-newcat');renderCategories();showToast('Categorie enregistree');
+}
+function editCat(name){editingCat=name;document.getElementById('cat-modal-title').textContent='Modifier';document.getElementById('newcat-name').value=name;openModal('modal-newcat');}
+async function deleteCat(name){
+  if(!confirm('Supprimer "'+name+'" ?'))return;
+  categories=categories.filter(function(c){return c!==name&&c.indexOf(name+' > ')!==0;});
+  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});renderCategories();showToast('Supprimee');
+}
+async function openNewSubCat(){
+  var sel=document.getElementById('subcat-parent');
+  if(sel)sel.innerHTML=categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
+  document.getElementById('subcat-name').value='';openModal('modal-newsubcat');
+}
+async function saveSubCat(){
+  var parent=document.getElementById('subcat-parent').value;
+  var name=document.getElementById('subcat-name').value.trim();if(!parent||!name)return;
+  var full=parent+' > '+name;if(categories.indexOf(full)===-1)categories.push(full);
+  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
+  closeModal('modal-newsubcat');renderCategories();showToast('Sous-categorie enregistree');
+}
+function exportChantiers(){showToast('Export non disponible');}
+function resetData(){if(!confirm('Reinitialiser TOUTES les donnees ?'))return;showToast('Non disponible.');}
+function exportExcel(){
+  if(!window.XLSX){showToast('Chargement...');return;}
+  var wb=window.XLSX.utils.book_new();
+  var sd=[['Reference','Categorie','Diametre','Stock','Stock min','Prix achat','Prix vente','Fournisseur','Valeur']];
+  stock.forEach(function(a){sd.push([a.id,a.categorie,a.diametre,a.stock,a.stockMin,a.prixUnitaire,a.prixVente,a.fournisseur,(a.stock*a.prixUnitaire).toFixed(2)]);});
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sd),'Stock');
+  var hd=[['Date','Type','Reference','Categorie','Diametre','Qte','Nouveau stock','Equipe','Note']];
+  historique.forEach(function(h){hd.push([new Date(h.ts).toLocaleString('fr-FR'),h.type,h.id,h.categorie,h.diametre,h.qty,h.newStock,h.equipe,h.note]);});
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(hd),'Historique');
+  var cd=[['N','Date','Chantier','Demandeur','Urgence','Statut','Articles']];
+  commandes.forEach(function(c){cd.push([c.num,c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'',c.chantier,c.nom,c.urgence,c.statut,(c.items||[]).map(function(i){return i.id+'x'+i.qty;}).join(', ')]);});
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cd),'Commandes');
+  XLSX.writeFile(wb,'StockPro_'+new Date().toISOString().slice(0,10)+'.xlsx');showToast('Export telecharge');
+}
+
+// ════════════════════════════════════════════════════════════
 async function initApp() {
   try {
     db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1707,17 +1685,16 @@ function renderCommandes(){
     var statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
     var date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
     var nbArt=(c.items||[]).length;
-    var cid=c.id;
     var q="'";
-    var btns='<button class="btn btn-xs" onclick="viewCmd('+q+cid+q+')">Detail</button>';
-    btns+=' <button class="btn btn-xs" style="margin-left:3px;" onclick="printCmd('+q+cid+q+')">&#128438;</button>';
+    var btns='<button class="btn btn-xs" onclick="viewCmd('+q+c.id+q+')">Detail</button>';
+    btns+=' <button class="btn btn-xs" style="margin-left:3px;" onclick="printCmd('+q+c.id+q+')">&#128438;</button>';
     if(!CLIENT_MODE){
       if(c.statut==='en_attente'){
-        btns+=' <button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('+q+cid+q+')">&#9998;</button>';
-        btns+=' <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('+q+cid+q+')">&#10003;</button>';
-        btns+=' <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('+q+cid+q+')">&#10005;</button>';
+        btns+=' <button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('+q+c.id+q+')">&#9998;</button>';
+        btns+=' <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('+q+c.id+q+')">&#10003;</button>';
+        btns+=' <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('+q+c.id+q+')">&#10005;</button>';
       }
-      btns+=' <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('+q+cid+q+')">&#128465;</button>';
+      btns+=' <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('+q+c.id+q+')">&#128465;</button>';
     }
     return '<tr>'+
       '<td><strong>#'+String(c.num).padStart(3,'0')+'</strong></td>'+
@@ -1753,16 +1730,16 @@ function viewCmd(id){
     '<th style="padding:7px 10px;">Ref</th><th style="padding:7px 10px;">Article</th><th style="padding:7px 10px;text-align:center;">Qte</th>'+prixTh+
     '</tr></thead><tbody>'+rows+totalRow+'</tbody></table>';
   var cid=c.id;var isP=c.statut==='en_attente';
-  var mclose='closeModal(&quot;modal-cmd-detail&quot;)';
-  var footer='<button class="btn" onclick="closeModal(&quot;modal-cmd-detail&quot;)">Fermer</button>';
-  footer+=' <button class="btn" onclick="printCmd(&quot;'+cid+'&quot;)">&#128438; Imprimer</button>';
+  var mq='"';
+  var footer='<button class="btn" onclick="closeModal('+mq+'modal-cmd-detail'+mq+')">Fermer</button>';
+  footer+=' <button class="btn" onclick="printCmd('+mq+cid+mq+')">&#128438; Imprimer</button>';
   if(!CLIENT_MODE){
     if(isP){
-      footer+=' <button class="btn btn-sm" onclick="editCmd(&quot;'+cid+'&quot;);closeModal(&quot;modal-cmd-detail&quot;);">Modifier</button>';
-      footer+=' <button class="btn btn-danger btn-sm" onclick="refuserCmd(&quot;'+cid+'&quot;);closeModal(&quot;modal-cmd-detail&quot;);">Refuser</button>';
-      footer+=' <button class="btn btn-primary btn-sm" onclick="approuverCmd(&quot;'+cid+'&quot;);closeModal(&quot;modal-cmd-detail&quot;);">Approuver</button>';
+      footer+=' <button class="btn btn-sm" onclick="editCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Modifier</button>';
+      footer+=' <button class="btn btn-danger btn-sm" onclick="refuserCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Refuser</button>';
+      footer+=' <button class="btn btn-primary btn-sm" onclick="approuverCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Approuver</button>';
     }else{
-      footer+=' <button class="btn btn-danger btn-sm" onclick="deleteCmd(&quot;'+cid+'&quot;);closeModal(&quot;modal-cmd-detail&quot;);">Supprimer</button>';
+      footer+=' <button class="btn btn-danger btn-sm" onclick="deleteCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Supprimer</button>';
     }
   }
   document.getElementById('cmd-detail-footer').innerHTML=footer;
@@ -1811,8 +1788,8 @@ function renderEtiquettes(){
   var parents=['Toutes'].concat(cats);
   pills.innerHTML=parents.map(function(c){
     var active=(c==='Toutes'&&etiqSelectedCat==='')||c===etiqSelectedCat;
-    var catVal=c==='Toutes'?'':c;
-    return '<div class="cat-pill '+(active?'active':'')+'" onclick="selectEtiqParent(this,&quot;'+catVal+'&quot;)">'+ c +'</div>';
+    var cv=c==='Toutes'?'':c;
+    return '<div class="cat-pill '+(active?'active':'')+'" onclick="selectEtiqParent(this,&quot;'+cv+'&quot;)">'+c+'</div>';
   }).join('');
   renderEtiqGrid();
 }
