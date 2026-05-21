@@ -1678,7 +1678,7 @@ function renderCommandes(){
   const filtered=commandes.filter(c=>{
     const s=document.getElementById('cmd-filter-statut')?.value||'';
     const statutOk=!s||c.statut===s;
-    const sourceOk=!CLIENT_MODE||(c.source==='client');
+    const sourceOk=!CLIENT_MODE||(c.source==='client'||!c.source);
     return statutOk&&sourceOk;
   });
   if(filtered.length===0){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;">Aucune commande.</td></tr>';return;}
