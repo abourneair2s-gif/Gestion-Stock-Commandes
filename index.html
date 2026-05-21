@@ -986,7 +986,8 @@ async function saveCommande(){
   var urgence=document.getElementById('cmd-urgence').value;
   var notes=document.getElementById('cmd-notes').value.trim();
   var num=cmdCounter||(commandes.length+1);
-  var r=await db.from('commandes').insert({num:num,chantier:chantier,nom:nom,urgence:urgence,notes:notes,items:cmdItems,statut:'en_attente'});
+  var src=CLIENT_MODE?'client':'admin';
+  var r=await db.from('commandes').insert({num:num,chantier:chantier,nom:nom,urgence:urgence,notes:notes,items:cmdItems,statut:'en_attente',source:src});
   if(r.error){showToast('Erreur: '+r.error.message);return;}
   cmdCounter=num+1;
   await db.from('config').upsert({key:'cmd_counter',value:cmdCounter},{onConflict:'key'});
@@ -1340,7 +1341,7 @@ function renderDashboard(){
   const totalVal=stock.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
   document.getElementById('kpi-grid').innerHTML=`
     <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div></div>
-    <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
+    <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;" onclick="showPage('commandes',document.querySelector('[data-page=\"commandes\"]'))"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
   const alertDiv=document.getElementById('dashboard-alerts');
   const top5=alerts.slice(0,5);
   alertDiv.innerHTML=top5.length===0?'<div style="font-size:13px;color:var(--green);padding:10px 0;">✅ Tous les stocks sont OK</div>'
@@ -1673,10 +1674,12 @@ function printQR(){
 }
 // ==================== RENDER COMMANDES ====================
 function renderCommandes(){
-  const tbody=document.getElementById('cmd-table');if(!tbody)return;
+  const tbody=document.getElementById('commandes-table');if(!tbody)return;
   const filtered=commandes.filter(c=>{
     const s=document.getElementById('cmd-filter-statut')?.value||'';
-    return !s||c.statut===s;
+    const statutOk=!s||c.statut===s;
+    const sourceOk=!CLIENT_MODE||(c.source==='client');
+    return statutOk&&sourceOk;
   });
   if(filtered.length===0){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;">Aucune commande.</td></tr>';return;}
   tbody.innerHTML=filtered.sort(function(a,b){return b.num-a.num;}).map(function(c){
