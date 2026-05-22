@@ -261,13 +261,20 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         </select>
         <button class="btn btn-primary btn-sm" onclick="openNewArticle()">+ Nouvel article</button>
       </div>
-      <div class="table-wrap">
-        <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th>
-          <th id="stock-th-prix">Prix unit.</th><th id="stock-th-valeur">Valeur</th><th id="stock-th-fourn">Fournisseur</th>
-          <th>Statut</th><th></th></tr></thead>
-        <tbody id="stock-table"></tbody></table>
-      </div>
+      <!-- Vue arbre famille + articles -->
+      <div id="stock-famille-tree-view"></div>
       <div id="stock-empty" class="empty-state" style="display:none;">Aucun article trouvé.</div>
+      <!-- Table cachée pour compat renderStockClient -->
+      <div id="stock-table-wrap" style="display:none;">
+        <div class="table-wrap">
+          <table><thead><tr>
+            <th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th>
+            <th id="stock-th-prix">Prix unit.</th><th id="stock-th-valeur">Valeur</th><th id="stock-th-fourn">Fournisseur</th>
+            <th>Statut</th><th></th>
+          </tr></thead>
+          <tbody id="stock-table"></tbody>
+        </div>
+      </div>
     </div>
 
     <!-- PARETO -->
@@ -600,7 +607,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <div class="section-title">Articles à commander</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-xs btn-primary" onclick="switchAddMode('search')">🔍 Recherche</button>
-          <button class="btn btn-xs" onclick="switchAddMode('cat')">📂 Par catégorie</button>
+          <button class="btn btn-xs" onclick="switchAddMode('cat')">🗂 Par famille</button>
           <button class="btn btn-xs" onclick="switchAddMode('qr')">📷 Scanner QR</button>
         </div>
       </div>
@@ -1386,6 +1393,236 @@ function selectCmdFamille(familleId,el){
 }
 
 // ── getCatsFamille : gère __sans_famille__ ──────────────────────
+// ════════════════════════════════════════════════════════════
+// VUE STOCK PAR FAMILLE — renderStockFamilleTree
+// ════════════════════════════════════════════════════════════
+
+function renderStockFamilleTree(){
+  var container=document.getElementById('stock-famille-tree-view');
+  var empty=document.getElementById('stock-empty');
+  if(!container)return;
+
+  var q=(document.getElementById('search-input')?document.getElementById('search-input').value:'').toLowerCase();
+  var status=document.getElementById('filter-status')?document.getElementById('filter-status').value:'';
+  var selFam=document.getElementById('filter-famille');
+  var famId=selFam?selFam.value:'';
+  var familleFilterCats=getCatsFamille(famId||null);
+
+  // Filtrer le stock
+  var filtered=stock.filter(function(a){
+    var mq=!q||a.id.toLowerCase().indexOf(q)!==-1||a.categorie.toLowerCase().indexOf(q)!==-1||String(a.diametre).toLowerCase().indexOf(q)!==-1;
+    var familleOk=!familleFilterCats||(familleFilterCats.indexOf(a.categorie)!==-1);
+    var statusOk=!status||getStatus(a)===status;
+    return mq&&familleOk&&statusOk;
+  });
+
+  if(filtered.length===0){
+    container.innerHTML='';
+    if(empty)empty.style.display='';
+    return;
+  }
+  if(empty)empty.style.display='none';
+
+  function artRow(a){
+    var s=getStatus(a);
+    var pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
+    var color=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
+    var sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
+    var rel=a.stock===0?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600;">RELIQUAT</span>':'';
+    return '<tr style="font-size:13px;">'+
+      '<td style="padding:7px 10px;"><code style="font-size:12px;">'+a.id+'</code></td>'+
+      '<td style="padding:7px 10px;"><span class="'+sc+'">'+a.stock+'</span>'+rel+
+        '<div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:'+color+';"></div></div></td>'+
+      '<td style="padding:7px 10px;color:var(--text3);">'+a.diametre+'</td>'+
+      '<td style="padding:7px 10px;color:var(--text3);">min. '+a.stockMin+'</td>'+
+      (CLIENT_MODE
+        ?'<td style="padding:7px 10px;color:var(--green);">'+(a.prixVente>0?a.prixVente.toFixed(2)+' \u20ac':'\u2014')+'</td>'
+        :'<td style="padding:7px 10px;">'+(a.prixUnitaire>0?a.prixUnitaire.toFixed(2)+' \u20ac':'\u2014')+'</td>'+
+         '<td style="padding:7px 10px;">'+(a.stock*a.prixUnitaire>0?(a.stock*a.prixUnitaire).toFixed(2)+' \u20ac':'\u2014')+'</td>')+
+      '<td style="padding:7px 10px;text-align:right;white-space:nowrap;">'+
+        (CLIENT_MODE?'':
+          '<button class="btn btn-xs" onclick="openMouvement(\''+a.id+'\')" title="Entrée/Sortie">&#177;</button> '+
+          '<button class="btn btn-xs" onclick="showQR(\''+a.id+'\')" title="QR Code">QR</button> '+
+          '<button class="btn btn-xs" onclick="editArticle(\''+a.id+'\')" title="Modifier">&#9998;</button> '+
+          '<button class="btn btn-xs btn-danger" onclick="deleteArticle(\''+a.id+'\')" title="Supprimer">&#128465;</button>'
+        )+
+      '</td></tr>';
+  }
+
+  function groupHeader(label, depth, nbArts, totalVal, nbCrit){
+    var bg=depth===0?'var(--surface)':'var(--bg)';
+    var fw=depth===0?'700':'600';
+    var fs=depth===0?'14px':'13px';
+    var pl=(10+depth*16)+'px';
+    var icon=depth===0?'&#x1F4C1;':'&#x1F4C2;';
+    return '<tr style="background:'+bg+';border-top:2px solid var(--border);">'+
+      '<td colspan="'+(CLIENT_MODE?5:7)+'" style="padding:'+(depth===0?'10px':'7px')+' 10px '+
+        (depth===0?'10px':'7px')+' '+pl+';font-size:'+fs+';font-weight:'+fw+';">'+
+        icon+' '+label+
+        '<span style="font-weight:400;font-size:11px;color:var(--text3);margin-left:8px;">'+nbArts+' article(s)'+
+        (totalVal>0?' &middot; '+(totalVal).toFixed(0)+' \u20ac':'')+
+        (nbCrit>0?'<span style="color:var(--red);margin-left:6px;">\u25cf '+nbCrit+' alerte(s)</span>':'')+
+        '</span></td>'+
+      '</tr>';
+  }
+
+  function tableHead(){
+    return '<thead><tr style="background:var(--surface2);">'+
+      '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Référence</th>'+
+      '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Stock</th>'+
+      '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Diam.</th>'+
+      '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Min.</th>'+
+      (CLIENT_MODE?'<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Prix vente</th>':
+        '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Prix achat</th>'+
+        '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Valeur</th>')+
+      '<th></th></tr></thead>';
+  }
+
+  var html='';
+
+  if(famillesTree&&famillesTree.length>0){
+    // Collecter tous les ids pour "sans famille"
+    var classedCats=collectAllCats(famillesTree);
+
+    function renderFamilleSection(nodes, depth){
+      nodes.forEach(function(n){
+        var nodeCats=n.categories||(n.categorie?[n.categorie]:[]);
+        // Toutes les cats de ce nœud et ses descendants
+        var allNodeCats=[];
+        function gatherCats(node){
+          var nc=node.categories||(node.categorie?[node.categorie]:[]);
+          nc.forEach(function(c){if(allNodeCats.indexOf(c)===-1)allNodeCats.push(c);});
+          if(node.enfants)node.enfants.forEach(gatherCats);
+        }
+        gatherCats(n);
+
+        // Articles filtrés pour ce nœud entier
+        var nodeArts=filtered.filter(function(a){return allNodeCats.indexOf(a.categorie)!==-1;});
+        if(nodeArts.length===0&&(!n.enfants||n.enfants.length===0))return;
+
+        // En-tête du groupe
+        var nodeVal=nodeArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
+        var nodeCrit=nodeArts.filter(function(a){return getStatus(a)!=='ok';}).length;
+        var groupId='sg-'+n.id;
+        var openState=stockGroupOpen[n.id]!==false; // ouvert par défaut
+
+        html+='<div id="'+groupId+'" style="margin-bottom:4px;">';
+        // Toggle row
+        html+='<div style="display:flex;align-items:center;cursor:pointer;background:'+(depth===0?'var(--surface)':'var(--bg)')+
+              ';border:1px solid var(--border);border-radius:8px;padding:'+(depth===0?'10px 14px':'7px 14px')+
+              ' '+(depth===0?'10px':'7px')+' '+(10+depth*16)+'px;margin-bottom:2px;" onclick="toggleStockGroup(\''+n.id+'\')">';
+        html+='<span id="arr-'+n.id+'" style="margin-right:8px;font-size:12px;color:var(--text3);">'+(openState?'&#9660;':'&#9654;')+'</span>';
+        html+='<span style="font-size:'+(depth===0?'15px':'13px')+';margin-right:6px;">'+(nodeCats.length?'&#x1F4C2;':'&#x1F4C1;')+'</span>';
+        html+='<span style="font-weight:'+(depth===0?700:600)+';flex:1;">'+n.nom+'</span>';
+        html+='<span style="font-size:11px;color:var(--text3);">'+nodeArts.length+' art.'+
+              (nodeVal>0?' &middot; '+nodeVal.toFixed(0)+' \u20ac':'')+
+              (nodeCrit>0?' <span style="color:var(--red);">&#9679; '+nodeCrit+'</span>':'')+
+              '</span></div>';
+
+        // Contenu
+        html+='<div id="body-'+n.id+'" style="'+(openState?'':'display:none;')+'">';
+
+        // Sous-familles d'abord
+        if(n.enfants&&n.enfants.length){
+          renderFamilleSection(n.enfants, depth+1);
+        }
+
+        // Articles directs de ce nœud (seulement les cats directement liées)
+        if(nodeCats.length>0){
+          var directArts=filtered.filter(function(a){return nodeCats.indexOf(a.categorie)!==-1;});
+          if(directArts.length>0){
+            // Grouper par catégorie
+            var catsSorted=[...new Set(directArts.map(function(a){return a.categorie;}))].sort();
+            catsSorted.forEach(function(cat){
+              var catArts=directArts.filter(function(a){return a.categorie===cat;}).sort(function(a,b){return a.id.localeCompare(b.id);});
+              var catVal=catArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
+              var catCrit=catArts.filter(function(a){return getStatus(a)!=='ok';}).length;
+              html+='<div style="margin-left:'+(8+depth*16)+'px;margin-bottom:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;">';
+              html+='<table style="width:100%;border-collapse:collapse;">';
+              html+=tableHead();
+              html+='<tbody>';
+              // En-tête catégorie
+              html+=groupHeader(cat, depth+1, catArts.length, catVal, catCrit);
+              catArts.forEach(function(a){html+=artRow(a);});
+              html+='</tbody></table></div>';
+            });
+          }
+        }
+
+        html+='</div></div>';
+      });
+    }
+
+    renderFamilleSection(famillesTree, 0);
+
+    // Articles sans famille
+    var sansFamily=filtered.filter(function(a){return classedCats.indexOf(a.categorie)===-1;});
+    if(sansFamily.length>0){
+      var sfCats=[...new Set(sansFamily.map(function(a){return a.categorie;}))].sort();
+      var sfVal=sansFamily.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
+      var sfCrit=sansFamily.filter(function(a){return getStatus(a)!=='ok';}).length;
+      var sfOpen=stockGroupOpen['__sf']!==false;
+      html+='<div style="margin-bottom:4px;">';
+      html+='<div style="display:flex;align-items:center;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;opacity:0.8;" onclick="toggleStockGroup(\'__sf\')">';
+      html+='<span id="arr-__sf" style="margin-right:8px;font-size:12px;color:var(--text3);">'+(sfOpen?'&#9660;':'&#9654;')+'</span>';
+      html+='<span style="font-size:15px;margin-right:6px;">&#x1F4C2;</span>';
+      html+='<span style="font-weight:600;flex:1;font-style:italic;">Sans famille ('+sansFamily.length+' articles)</span>';
+      html+='<span style="font-size:11px;color:var(--text3);">'+(sfVal>0?sfVal.toFixed(0)+' \u20ac':'')+
+            (sfCrit>0?' <span style="color:var(--red);">&#9679; '+sfCrit+'</span>':'')+
+            '</span></div>';
+      html+='<div id="body-__sf" style="'+(sfOpen?'':'display:none;')+'">';
+      sfCats.forEach(function(cat){
+        var catArts=sansFamily.filter(function(a){return a.categorie===cat;}).sort(function(a,b){return a.id.localeCompare(b.id);});
+        var catVal=catArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
+        var catCrit=catArts.filter(function(a){return getStatus(a)!=='ok';}).length;
+        html+='<div style="margin-left:8px;margin-bottom:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;">';
+        html+='<table style="width:100%;border-collapse:collapse;"><'+tableHead().slice(1)+'<tbody>';
+        html+=groupHeader(cat, 1, catArts.length, catVal, catCrit);
+        catArts.forEach(function(a){html+=artRow(a);});
+        html+='</tbody></table></div>';
+      });
+      html+='</div></div>';
+    }
+
+  } else {
+    // Fallback par catégorie si pas de familles
+    var cats=[...new Set(filtered.map(function(a){return a.categorie;}))].sort();
+    cats.forEach(function(cat){
+      var catArts=filtered.filter(function(a){return a.categorie===cat;}).sort(function(a,b){return a.id.localeCompare(b.id);});
+      var catVal=catArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
+      var catCrit=catArts.filter(function(a){return getStatus(a)!=='ok';}).length;
+      var catOpen=stockGroupOpen[cat]!==false;
+      html+='<div style="margin-bottom:4px;">';
+      html+='<div style="display:flex;align-items:center;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;" onclick="toggleStockGroup(\''+cat+'\')">';
+      html+='<span id="arr-'+cat.replace(/[^a-z0-9]/gi,'_')+'" style="margin-right:8px;font-size:12px;color:var(--text3);">'+(catOpen?'&#9660;':'&#9654;')+'</span>';
+      html+='<span style="font-size:15px;margin-right:6px;">&#x1F4C2;</span>';
+      html+='<span style="font-weight:700;flex:1;">'+cat+'</span>';
+      html+='<span style="font-size:11px;color:var(--text3);">'+catArts.length+' art.'+(catVal>0?' &middot; '+catVal.toFixed(0)+' \u20ac':'')+
+            (catCrit>0?' <span style="color:var(--red);">&#9679; '+catCrit+'</span>':'')+
+            '</span></div>';
+      html+='<div id="body-'+cat.replace(/[^a-z0-9]/gi,'_')+'" style="'+(catOpen?'':'display:none;')+'">';
+      html+='<div style="margin-left:8px;border:1px solid var(--border);border-radius:6px;overflow:hidden;">';
+      html+='<table style="width:100%;border-collapse:collapse;">'+tableHead()+'<tbody>';
+      catArts.forEach(function(a){html+=artRow(a);});
+      html+='</tbody></table></div></div></div>';
+    });
+  }
+
+  container.innerHTML=html;
+}
+
+// État ouvert/fermé des groupes
+var stockGroupOpen={};
+function toggleStockGroup(id){
+  var body=document.getElementById('body-'+id);
+  var arr=document.getElementById('arr-'+id);
+  if(!body)return;
+  var isOpen=body.style.display!=='none';
+  body.style.display=isOpen?'none':'';
+  if(arr)arr.innerHTML=isOpen?'&#9654;':'&#9660;';
+  stockGroupOpen[id]=!isOpen;
+}
+
 // ══════ FONCTIONS MANQUANTES — injectees avant initApp ══════
 
 function populateArtCatSelect(){
@@ -1500,20 +1737,8 @@ function switchAddMode(mode){
     var el=document.getElementById('add-mode-'+m);if(el)el.style.display=m===mode?'':'none';
   });
 }
-function buildCatPills(){
-  var pills=document.getElementById('cmd-cat-pills');if(!pills)return;
-  var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
-  pills.innerHTML=cats.map(function(c){return '<div class="cat-pill" onclick="selectCmdCat(&quot;'+c+'&quot;,this)">'+c+'</div>';}).join('');
-}
-function selectCmdCat(cat,el){
-  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
-  if(el)el.classList.add('active');
-  var items=document.getElementById('cmd-cat-items');if(!items)return;
-  items.innerHTML=stock.filter(function(a){return a.categorie===cat;}).map(function(a){
-    var rel=a.stock===0?' <span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;font-weight:600;">RELIQUAT</span>':'';
-    return '<div onclick="selectCmdArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong>'+rel+'</div>';
-  }).join('');
-}
+// buildCatPills remplacée par version famille ci-dessus
+// selectCmdCat remplacée — utiliser selectCmdFamille
 function selectCmdArt(id,el){
   pendingCmdArt=stock.find(function(a){return a.id===id;});if(!pendingCmdArt)return;
   document.querySelectorAll('#cmd-cat-items div').forEach(function(d){d.style.background='';});
@@ -1665,7 +1890,12 @@ function printCmd(id){
 }
 
 function renderStockClient(){
-  populateCatFilter();
+  peuplerFamilleSelect();
+  // Mode client : vue tableau simple (pas d'arbre)
+  var tw=document.getElementById('stock-table-wrap');
+  var ftv=document.getElementById('stock-famille-tree-view');
+  if(tw)tw.style.display='';
+  if(ftv)ftv.style.display='none';
   var q=(document.getElementById('search-input')?document.getElementById('search-input').value:'').toLowerCase();
   var cat=document.getElementById('filter-cat')?document.getElementById('filter-cat').value:'';
   var status=document.getElementById('filter-status')?document.getElementById('filter-status').value:'';
@@ -2054,13 +2284,10 @@ function populateCatFilter(){
 function renderStock(){
   if(CLIENT_MODE){renderStockClient();return;}
   peuplerFamilleSelect();
-  // Adapter les colonnes selon le mode
-  const thPrix=document.getElementById('stock-th-prix');
-  const thValeur=document.getElementById('stock-th-valeur');
-  const thFourn=document.getElementById('stock-th-fourn');
-  if(thPrix) thPrix.textContent=CLIENT_MODE?'Prix HT':'Prix achat';
-  if(thValeur) { thValeur.style.display=CLIENT_MODE?'none':''; }
-  if(thFourn) { thFourn.style.display=CLIENT_MODE?'none':''; }
+  // Mode admin : vue arbre famille
+  renderStockFamilleTree();
+  return;
+  // (code legacy ci-dessous conservé pour renderStockClient)
   peuplerFamilleSelect();
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
   const status=document.getElementById('filter-status')?.value||'';
