@@ -1228,7 +1228,6 @@ function filtrerStockParFamille(familleId){
   document.querySelectorAll('#stock-famille-filter .cat-pill').forEach(function(p){p.classList.remove('active');});
   // Récupérer les catégories de cette famille
   renderStock();
-  renderStockFamilleFilter();
 }
 
 function getCatsFamille(familleId){
@@ -1399,6 +1398,7 @@ function selectCmdFamille(familleId,el){
 
 function renderStockFamilleTree(){
   var container=document.getElementById('stock-famille-tree-view');
+  if(!container)return; // page pas encore chargée
   var empty=document.getElementById('stock-empty');
   if(!container)return;
 
@@ -1576,7 +1576,7 @@ function renderStockFamilleTree(){
         var catVal=catArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
         var catCrit=catArts.filter(function(a){return getStatus(a)!=='ok';}).length;
         html+='<div style="margin-left:8px;margin-bottom:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;">';
-        html+='<table style="width:100%;border-collapse:collapse;"><'+tableHead().slice(1)+'<tbody>';
+        html+='<table style="width:100%;border-collapse:collapse;">'+tableHead()+'<tbody>';
         html+=groupHeader(cat, 1, catArts.length, catVal, catCrit);
         catArts.forEach(function(a){html+=artRow(a);});
         html+='</tbody></table></div>';
@@ -1586,7 +1586,7 @@ function renderStockFamilleTree(){
 
   } else {
     // Fallback par catégorie si pas de familles
-    var cats=[...new Set(filtered.map(function(a){return a.categorie;}))].sort();
+    var cats=Array.from(new Set(filtered.map(function(a){return a.categorie;}))).sort();
     cats.forEach(function(cat){
       var catArts=filtered.filter(function(a){return a.categorie===cat;}).sort(function(a,b){return a.id.localeCompare(b.id);});
       var catVal=catArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
@@ -1695,11 +1695,7 @@ function switchScanManualMode(mode,btn){
   if(cc)cc.style.display=mode==='cat'?'':'none';
   if(mode==='cat')buildScanCatPills();
 }
-function buildScanCatPills(){
-  var pills=document.getElementById('scan-cat-pills');if(!pills)return;
-  var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
-  pills.innerHTML=cats.map(function(c){return '<div class="cat-pill" onclick="selectScanCat(&quot;'+c+'&quot;,this)">'+c+'</div>';}).join('');
-}
+// buildScanCatPills: voir version famille ci-dessus
 function selectScanCat(cat,el){
   document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
   if(el)el.classList.add('active');
@@ -2155,6 +2151,7 @@ function showToast(msg, duration=3500) {
 function showPage(page,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const activePage=document.getElementById('page-'+page);
+  if(!activePage){console.error('Page introuvable:',page);return;}
   activePage.classList.add('active');
   document.querySelectorAll('.nav-btn,.mob-btn').forEach(b=>b.classList.remove('active'));
   if(el)el.classList.add('active');
@@ -2190,7 +2187,15 @@ function showPage(page,el){
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
     commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
     chantiers:renderChantiers,categories:renderCategories,parametres:renderParams,familles:renderFamillesPage};
-  if(renders[page])renders[page]();
+  if(renders[page]){
+    try{renders[page]();}
+    catch(e){
+      console.error('Erreur render '+page+':',e);
+      var pg2=document.getElementById('page-'+page);
+      if(pg2)pg2.innerHTML='<div style="padding:20px;background:#fff0f0;color:red;border-radius:8px;margin:16px;">'+
+        '<strong>Erreur de rendu ('+page+') :</strong><br>'+e.message+'<br><small>'+e.stack+'</small></div>';
+    }
+  }
   if(page!=='scan'){stopQRScan();stopCmdQR();}
 }
 
@@ -2256,7 +2261,7 @@ function renderDashboard(){
     }
   } else {
     // Fallback : par catégorie si pas de familles définies
-    var cats=[...new Set(stock.map(function(a){return a.categorie;}))].sort();
+    var cats=Array.from(new Set(stock.map(function(a){return a.categorie;}))).sort();
     cats.forEach(function(cat){
       var items=stock.filter(function(a){return a.categorie===cat;});
       var val=items.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
@@ -2285,20 +2290,15 @@ function renderStock(){
   if(CLIENT_MODE){renderStockClient();return;}
   peuplerFamilleSelect();
   // Mode admin : vue arbre famille
-  renderStockFamilleTree();
+  try{
+    renderStockFamilleTree();
+  }catch(e){
+    console.error('renderStockFamilleTree error:',e);
+    // Fallback minimal
+    var c2=document.getElementById('stock-famille-tree-view');
+    if(c2)c2.innerHTML='<div style="padding:20px;color:red;">Erreur affichage: '+e.message+'</div>';
+  }
   return;
-  // (code legacy ci-dessous conservé pour renderStockClient)
-  peuplerFamilleSelect();
-  const q=(document.getElementById('search-input')?.value||'').toLowerCase();
-  const status=document.getElementById('filter-status')?.value||'';
-  var selFam=document.getElementById('filter-famille');
-  var famId=selFam?selFam.value:'';
-  var familleFilterCats=getCatsFamille(famId||null);
-  const filtered=stock.filter(a=>{
-    const mq=!q||a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).toLowerCase().includes(q);
-    var familleOk=!familleFilterCats||(familleFilterCats.indexOf(a.categorie)!==-1);
-    return mq&&(!status||getStatus(a)===status)&&familleOk;
-  });
   document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
   document.getElementById('stock-table').innerHTML=filtered.map(a=>{
     const s=getStatus(a),val=a.stock*a.prixUnitaire;
@@ -2897,7 +2897,7 @@ function printEtiquettes(){
   var w=window.open('','_blank');w.document.write(html);w.document.close();
 }
 function downloadEtiquettes(){showToast('Telechargement non disponible');}
-function exportChantiers(){showToast('Export non disponible');}
+// exportChantiers: voir ci-dessus
 function openNewChantier(){openModal('modal-chantier');}
 function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';openModal('modal-chantier');}
 async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1)l[i]={nom,desc};else l.push({nom,desc});await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistre');}
