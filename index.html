@@ -202,6 +202,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <div class="sb-section">Admin</div>
   <button class="nav-btn" onclick="showPage('alertes',this)" data-page="alertes"><span class="nav-icon">🔔</span>Alertes <span class="badge-sb" id="sb-alert-count" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showPage('historique',this)" data-page="historique"><span class="nav-icon">📜</span>Historique</button>
+  <button class="nav-btn" onclick="showPage('familles',this)" data-page="familles"><span class="nav-icon">🗂</span>Familles</button>
   <button class="nav-btn" onclick="showPage('categories',this)" data-page="categories"><span class="nav-icon">🏷</span>Catégories</button>
   <button class="nav-btn" onclick="showPage('parametres',this)" data-page="parametres"><span class="nav-icon">⚙️</span>Paramètres</button>
   <button class="nav-btn" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);"><span class="nav-icon">📥</span>Exporter Excel</button>
@@ -251,6 +252,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 
     <!-- STOCK -->
     <div class="page" id="page-stock">
+  <div id="stock-famille-filter" style="margin-bottom:8px;"></div>
       <div class="search-bar">
         <input type="search" id="search-input" placeholder="Rechercher référence, diamètre…" oninput="renderStock()">
         <select id="filter-cat" onchange="renderStock()"><option value="">Toutes catégories</option></select>
@@ -452,6 +454,66 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <thead id="chantier-detail-thead"></thead>
         <tbody id="chantier-detail-table"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+
+<!-- FAMILLES PAGE -->
+<div class="page" id="page-familles">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div class="section-title">🗂 Familles & Sous-familles</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px;">Glissez-déposez pour réorganiser · Cliquez sur un nœud pour l'éditer</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" onclick="ouvrirModalNouvelleRacine()">＋ Nouvelle famille</button>
+      <button class="btn btn-sm" onclick="saveFamillesTree()">💾 Sauvegarder</button>
+    </div>
+  </div>
+  <!-- Légende -->
+  <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;font-size:11px;color:var(--text3);">
+    <span>📁 Famille/sous-famille</span>
+    <span>📂 Catégorie liée à des articles</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:var(--green);display:inline-block;"></span> Visible client</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:var(--text3);display:inline-block;"></span> Masqué client</span>
+  </div>
+  <!-- Arbre -->
+  <div id="familles-tree-container" style="min-height:200px;">
+    <div id="familles-tree"></div>
+    <div id="familles-empty" style="display:none;text-align:center;padding:40px;color:var(--text3);">
+      <div style="font-size:2rem;margin-bottom:8px;">🗂</div>
+      <div>Aucune famille créée. Cliquez sur "+ Nouvelle famille".</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL Famille nœud -->
+<div class="modal-overlay" id="modal-famille-node" style="display:none;">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title" id="famille-node-title">Nouveau nœud</div>
+    <input type="hidden" id="famille-node-id">
+    <input type="hidden" id="famille-node-parent-id">
+    <div class="form-group">
+      <label>Nom</label>
+      <input type="text" id="famille-node-nom" style="width:100%;" placeholder="ex: Sans joint">
+    </div>
+    <div class="form-group" id="famille-node-cat-group">
+      <label>Catégorie liée (optionnel — laisser vide si c'est un groupe)</label>
+      <select id="famille-node-cat" style="width:100%;">
+        <option value="">— Groupe (contient d'autres nœuds) —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="famille-node-visible" checked>
+        <span>Visible en mode client</span>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-famille-node')">Annuler</button>
+      <button class="btn btn-danger" id="btn-famille-delete" onclick="supprimerNoeudFamille()" style="display:none;">🗑 Supprimer</button>
+      <button class="btn btn-primary" onclick="sauvegarderNoeudFamille()">Valider</button>
     </div>
   </div>
 </div>
@@ -788,6 +850,10 @@ let cmdItems = [];
 let html5QrCode = null;
 let cmdHtml5QrCode = null;
 let editingCat = null;
+let famillesTree = []; // Arbre des familles [{id,nom,categorie,visible_client,enfants:[]}]
+let familleNodeEditing = null; // ID du nœud en cours d'édition
+let dragSrcId = null; // ID du nœud glissé
+let stockFamilleFilter = null; // Filtre famille actif dans stock
 
 // Adapte les colonnes Supabase → format interne JS
 function openModal(id){const m=document.getElementById(id);if(m){m.classList.add('open');m.style.display='flex';}}
@@ -816,6 +882,371 @@ function openNewArticle(){document.getElementById('art-modal-title').textContent
 }
 
 // ==================== INIT SUPABASE ====================
+
+// ════════════════════════════════════════════════════════════
+// FAMILLES & SOUS-FAMILLES
+// ════════════════════════════════════════════════════════════
+
+// ── Utilitaires arbre ─────────────────────────────────────────
+function genId(){return 'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+
+function findNodeById(tree,id){
+  for(var i=0;i<tree.length;i++){
+    if(tree[i].id===id)return tree[i];
+    if(tree[i].enfants&&tree[i].enfants.length){
+      var found=findNodeById(tree[i].enfants,id);
+      if(found)return found;
+    }
+  }
+  return null;
+}
+
+function findParentOf(tree,id,parent){
+  parent=parent||null;
+  for(var i=0;i<tree.length;i++){
+    if(tree[i].id===id)return parent;
+    if(tree[i].enfants&&tree[i].enfants.length){
+      var found=findParentOf(tree[i].enfants,id,tree[i]);
+      if(found!==undefined)return found;
+    }
+  }
+  return undefined;
+}
+
+function removeNodeById(tree,id){
+  for(var i=0;i<tree.length;i++){
+    if(tree[i].id===id){tree.splice(i,1);return true;}
+    if(tree[i].enfants&&removeNodeById(tree[i].enfants,id))return true;
+  }
+  return false;
+}
+
+function collectAllCats(tree){
+  var cats=[];
+  function walk(nodes){
+    nodes.forEach(function(n){
+      if(n.categorie)cats.push(n.categorie);
+      if(n.enfants)walk(n.enfants);
+    });
+  }
+  walk(tree);
+  return cats;
+}
+
+// ── Rendu de l'arbre ─────────────────────────────────────────
+function renderFamillesPage(){
+  var container=document.getElementById('familles-tree');
+  var empty=document.getElementById('familles-empty');
+  if(!container)return;
+  if(famillesTree.length===0){
+    container.innerHTML='';
+    if(empty)empty.style.display='';
+    return;
+  }
+  if(empty)empty.style.display='none';
+  container.innerHTML=renderTreeNodes(famillesTree,0);
+  attachDragEvents();
+}
+
+function renderTreeNodes(nodes,depth){
+  return nodes.map(function(n){
+    var hasChildren=n.enfants&&n.enfants.length>0;
+    var isFeuille=!!n.categorie;
+    var nbArticles=isFeuille?stock.filter(function(a){return a.categorie===n.categorie;}).length:0;
+    var indent=depth*20;
+    var icon=isFeuille?'📂':'📁';
+    var visibleDot=n.visible_client!==false
+      ?'<span title="Visible client" style="width:9px;height:9px;border-radius:50%;background:var(--green);display:inline-block;margin-left:6px;flex-shrink:0;"></span>'
+      :'<span title="Masqué client" style="width:9px;height:9px;border-radius:50%;background:var(--text3);display:inline-block;margin-left:6px;flex-shrink:0;"></span>';
+
+    var html='<div class="fam-node" id="fn-'+n.id+'" data-id="'+n.id+'" draggable="true" style="margin-left:'+indent+'px;">';
+    html+='<div class="fam-node-row" onclick="editerNoeudFamille(\''+n.id+'\')" ondragover="famDragOver(event,\''+n.id+'\')" ondragleave="famDragLeave(event,\''+n.id+'\')" ondrop="famDrop(event,\''+n.id+'\')">';
+    html+='<span class="fam-drag-handle" ondragstart="famDragStart(event,\''+n.id+'\')" title="Glisser pour déplacer">⠿</span>';
+    html+='<span style="font-size:15px;margin-right:6px;">'+icon+'</span>';
+    html+='<span style="font-weight:600;flex:1;">'+n.nom+'</span>';
+    if(isFeuille)html+='<span style="font-size:11px;color:var(--text3);margin-right:6px;">'+nbArticles+' article(s)</span>';
+    html+=visibleDot;
+    html+='<button class="btn btn-xs" style="margin-left:8px;padding:1px 7px;" onclick="event.stopPropagation();ouvrirModalEnfant(\''+n.id+'\')">＋</button>';
+    html+='</div>';
+    if(hasChildren){
+      html+='<div class="fam-children" id="fch-'+n.id+'">'+renderTreeNodes(n.enfants,depth+1)+'</div>';
+    }
+    html+='<div class="fam-drop-zone" id="fdz-'+n.id+'" data-after="'+n.id+'" ondragover="famDropZoneOver(event,\''+n.id+'\')" ondragleave="famDropZoneLeave(event,\''+n.id+'\')" ondrop="famDropZoneDrop(event,\''+n.id+'\')"></div>';
+    html+='</div>';
+    return html;
+  }).join('');
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────
+function attachDragEvents(){
+  document.querySelectorAll('.fam-drag-handle').forEach(function(h){
+    h.setAttribute('draggable','true');
+  });
+}
+
+function famDragStart(event,id){
+  dragSrcId=id;
+  event.dataTransfer.effectAllowed='move';
+  event.dataTransfer.setData('text/plain',id);
+  var el=document.getElementById('fn-'+id);
+  if(el)setTimeout(function(){el.style.opacity='0.4';},0);
+}
+
+function famDragOver(event,targetId){
+  if(dragSrcId===targetId)return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect='move';
+  var el=document.querySelector('#fn-'+targetId+' > .fam-node-row');
+  if(el)el.style.background='rgba(26,143,102,0.12)';
+}
+
+function famDragLeave(event,targetId){
+  var el=document.querySelector('#fn-'+targetId+' > .fam-node-row');
+  if(el)el.style.background='';
+}
+
+function famDrop(event,targetId){
+  event.preventDefault();
+  event.stopPropagation();
+  var el=document.querySelector('#fn-'+targetId+' > .fam-node-row');
+  if(el)el.style.background='';
+  if(!dragSrcId||dragSrcId===targetId)return;
+  // Empêcher drop dans son propre descendant
+  var srcNode=findNodeById(famillesTree,dragSrcId);
+  if(!srcNode)return;
+  // Retirer source de l'arbre
+  removeNodeById(famillesTree,dragSrcId);
+  // Ajouter comme enfant de target
+  var target=findNodeById(famillesTree,targetId);
+  if(!target){famillesTree.push(srcNode);}
+  else{
+    if(!target.enfants)target.enfants=[];
+    target.enfants.push(srcNode);
+  }
+  var srcEl=document.getElementById('fn-'+dragSrcId);
+  if(srcEl)srcEl.style.opacity='1';
+  dragSrcId=null;
+  renderFamillesPage();
+  showToast('Déplacé — pensez à sauvegarder');
+}
+
+function famDropZoneOver(event,afterId){
+  event.preventDefault();
+  event.dataTransfer.dropEffect='move';
+  var el=document.getElementById('fdz-'+afterId);
+  if(el)el.style.borderTop='2px solid var(--green)';
+}
+function famDropZoneLeave(event,afterId){
+  var el=document.getElementById('fdz-'+afterId);
+  if(el)el.style.borderTop='';
+}
+function famDropZoneDrop(event,afterId){
+  event.preventDefault();event.stopPropagation();
+  var el=document.getElementById('fdz-'+afterId);
+  if(el)el.style.borderTop='';
+  if(!dragSrcId||dragSrcId===afterId)return;
+  var srcNode=findNodeById(famillesTree,dragSrcId);
+  if(!srcNode)return;
+  removeNodeById(famillesTree,dragSrcId);
+  // Insérer après le nœud afterId dans son parent
+  var parent=findParentOf(famillesTree,afterId);
+  var list=parent?parent.enfants:famillesTree;
+  var idx=list.findIndex(function(n){return n.id===afterId;});
+  list.splice(idx+1,0,srcNode);
+  var srcEl=document.getElementById('fn-'+dragSrcId);
+  if(srcEl)srcEl.style.opacity='1';
+  dragSrcId=null;
+  renderFamillesPage();
+  showToast('Réordonné — pensez à sauvegarder');
+}
+
+// ── Modales nœud ─────────────────────────────────────────────
+function peuplerSelectCategories(){
+  var sel=document.getElementById('famille-node-cat');
+  if(!sel)return;
+  var usedCats=collectAllCats(famillesTree);
+  var editingNode=familleNodeEditing?findNodeById(famillesTree,familleNodeEditing):null;
+  sel.innerHTML='<option value="">— Groupe (contient d\'autres nœuds) —</option>'+
+    categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort().map(function(c){
+      var used=usedCats.indexOf(c)!==-1&&(!editingNode||editingNode.categorie!==c);
+      return '<option value="'+c+'" '+(used?'style="color:var(--text3);" title="Déjà utilisée dans une autre famille"':'')+'>'+c+(used?' (déjà classée)':'')+'</option>';
+    }).join('');
+}
+
+function ouvrirModalNouvelleRacine(){
+  familleNodeEditing=null;
+  document.getElementById('famille-node-title').textContent='Nouvelle famille racine';
+  document.getElementById('famille-node-id').value='';
+  document.getElementById('famille-node-parent-id').value='';
+  document.getElementById('famille-node-nom').value='';
+  document.getElementById('famille-node-visible').checked=true;
+  document.getElementById('btn-famille-delete').style.display='none';
+  peuplerSelectCategories();
+  document.getElementById('famille-node-cat').value='';
+  openModal('modal-famille-node');
+  setTimeout(function(){document.getElementById('famille-node-nom').focus();},100);
+}
+
+function ouvrirModalEnfant(parentId){
+  familleNodeEditing=null;
+  document.getElementById('famille-node-title').textContent='Ajouter un nœud';
+  document.getElementById('famille-node-id').value='';
+  document.getElementById('famille-node-parent-id').value=parentId;
+  document.getElementById('famille-node-nom').value='';
+  document.getElementById('famille-node-visible').checked=true;
+  document.getElementById('btn-famille-delete').style.display='none';
+  peuplerSelectCategories();
+  document.getElementById('famille-node-cat').value='';
+  openModal('modal-famille-node');
+  setTimeout(function(){document.getElementById('famille-node-nom').focus();},100);
+}
+
+function editerNoeudFamille(id){
+  var node=findNodeById(famillesTree,id);if(!node)return;
+  familleNodeEditing=id;
+  document.getElementById('famille-node-title').textContent='Modifier — '+node.nom;
+  document.getElementById('famille-node-id').value=id;
+  document.getElementById('famille-node-parent-id').value='';
+  document.getElementById('famille-node-nom').value=node.nom;
+  document.getElementById('famille-node-visible').checked=node.visible_client!==false;
+  document.getElementById('btn-famille-delete').style.display='';
+  peuplerSelectCategories();
+  document.getElementById('famille-node-cat').value=node.categorie||'';
+  openModal('modal-famille-node');
+}
+
+function sauvegarderNoeudFamille(){
+  var nom=document.getElementById('famille-node-nom').value.trim();
+  if(!nom){showToast('Saisissez un nom');return;}
+  var cat=document.getElementById('famille-node-cat').value;
+  var visible=document.getElementById('famille-node-visible').checked;
+  var parentId=document.getElementById('famille-node-parent-id').value;
+  var editId=document.getElementById('famille-node-id').value;
+
+  if(editId){
+    // Modification
+    var node=findNodeById(famillesTree,editId);
+    if(!node){showToast('Nœud introuvable');return;}
+    node.nom=nom;node.categorie=cat||null;node.visible_client=visible;
+  } else {
+    // Création
+    var newNode={id:genId(),nom:nom,categorie:cat||null,visible_client:visible,enfants:[]};
+    if(parentId){
+      var parent=findNodeById(famillesTree,parentId);
+      if(!parent){showToast('Parent introuvable');return;}
+      if(!parent.enfants)parent.enfants=[];
+      parent.enfants.push(newNode);
+    } else {
+      famillesTree.push(newNode);
+    }
+  }
+  closeModal('modal-famille-node');
+  renderFamillesPage();
+  showToast('Nœud enregistré — pensez à sauvegarder');
+}
+
+function supprimerNoeudFamille(){
+  var id=document.getElementById('famille-node-id').value;
+  if(!id)return;
+  var node=findNodeById(famillesTree,id);
+  var hasKids=node&&node.enfants&&node.enfants.length>0;
+  var msg=hasKids
+    ?'Supprimer "'+node.nom+'" ET tous ses enfants ('+node.enfants.length+' nœud(s)) ?'
+    :'Supprimer "'+node.nom+'" ?';
+  if(!confirm(msg))return;
+  removeNodeById(famillesTree,id);
+  closeModal('modal-famille-node');
+  renderFamillesPage();
+  showToast('Nœud supprimé — pensez à sauvegarder');
+}
+
+async function saveFamillesTree(){
+  var r=await db.from('config').upsert({key:'familles',value:famillesTree},{onConflict:'key'});
+  if(r.error){showToast('Erreur sauvegarde: '+r.error.message);return;}
+  showToast('Familles sauvegardées ✓');
+  // Mettre à jour les filtres stock
+  renderStockFamilleFilter();
+}
+
+// ── Filtre Famille dans Stock ─────────────────────────────────
+function renderStockFamilleFilter(){
+  var container=document.getElementById('stock-famille-filter');
+  if(!container)return;
+  if(famillesTree.length===0){container.innerHTML='';return;}
+
+  function buildPills(nodes,depth){
+    var html='';
+    nodes.forEach(function(n){
+      var cats=[];
+      function collectCats(node){if(node.categorie)cats.push(node.categorie);if(node.enfants)node.enfants.forEach(collectCats);}
+      collectCats(n);
+      var nbArts=cats.reduce(function(s,c){return s+stock.filter(function(a){return a.categorie===c;}).length;},0);
+      if(nbArts===0&&!n.enfants.length)return;
+      var active=stockFamilleFilter===n.id;
+      html+='<button class="cat-pill'+(active?' active':'')+'" style="margin-left:'+(depth*12)+'px;" onclick="filtrerStockParFamille(\''+n.id+'\')">';
+      html+=(n.categorie?'📂':'📁')+' '+n.nom+' <span style="opacity:0.6;font-size:10px;">('+nbArts+')</span>';
+      html+='</button>';
+      if(n.enfants&&n.enfants.length)html+=buildPills(n.enfants,depth+1);
+    });
+    return html;
+  }
+
+  var html='<div style="margin-bottom:8px;">';
+  html+='<button class="cat-pill'+(stockFamilleFilter===null?' active':'')+'" onclick="filtrerStockParFamille(null)">🗂 Toutes</button>';
+  html+=buildPills(famillesTree,0);
+  html+='</div>';
+  container.innerHTML=html;
+}
+
+function filtrerStockParFamille(familleId){
+  stockFamilleFilter=familleId;
+  // Mettre à jour le style des pills
+  document.querySelectorAll('#stock-famille-filter .cat-pill').forEach(function(p){p.classList.remove('active');});
+  // Récupérer les catégories de cette famille
+  renderStock();
+  renderStockFamilleFilter();
+}
+
+function getCatsFamille(familleId){
+  if(!familleId)return null; // null = toutes
+  var node=findNodeById(famillesTree,familleId);
+  if(!node)return [];
+  var cats=[];
+  function collect(n){if(n.categorie)cats.push(n.categorie);if(n.enfants)n.enfants.forEach(collect);}
+  collect(node);
+  return cats;
+}
+
+// ── Mode client : familles visibles ──────────────────────────
+function getVisibleCatsClient(){
+  if(famillesTree.length===0)return null; // pas de filtrage si pas de familles
+  var cats=[];
+  function walk(nodes){
+    nodes.forEach(function(n){
+      if(n.visible_client===false)return; // nœud masqué → tous ses enfants masqués
+      if(n.categorie)cats.push(n.categorie);
+      if(n.enfants)walk(n.enfants);
+    });
+  }
+  walk(famillesTree);
+  return cats;
+}
+
+// ── CSS familles ───────────────────────────────────────────────
+(function injectFamilleCSS(){
+  var s=document.createElement('style');
+  s.textContent=[
+    '.fam-node{border-radius:8px;margin-bottom:2px;}',
+    '.fam-node-row{display:flex;align-items:center;padding:8px 12px;border-radius:8px;cursor:pointer;background:var(--surface);border:1px solid var(--border);gap:6px;user-select:none;transition:background 0.1s;}',
+    '.fam-node-row:hover{background:var(--surface2);}',
+    '.fam-drag-handle{cursor:grab;color:var(--text3);font-size:16px;padding:0 4px;flex-shrink:0;}',
+    '.fam-drag-handle:active{cursor:grabbing;}',
+    '.fam-children{margin-top:2px;}',
+    '.fam-drop-zone{height:6px;border-radius:4px;margin:2px 0 2px 20px;transition:border 0.1s;}',
+    '.fam-drop-zone:hover{border-top:2px solid var(--green)!important;}',
+  ].join('');
+  document.head.appendChild(s);
+})();
 
 // ══════ FONCTIONS MANQUANTES — injectees avant initApp ══════
 
@@ -847,7 +1278,8 @@ async function saveArticle(){
   closeModal('modal-article');
   var rd=await db.from('stock').select('*').order('categorie').order('id');
   if(rd.data)stock=rd.data.map(adaptArticle);
-  renderStock();renderDashboard();updateBadges();showToast('Article enregistre');
+  renderStock();renderStockFamilleFilter();
+  renderDashboard();updateBadges();showToast('Article enregistre');
 }
 
 async function deleteArticle(id){
@@ -1101,7 +1533,8 @@ function renderStockClient(){
   var status=document.getElementById('filter-status')?document.getElementById('filter-status').value:'';
   var filtered=stock.filter(function(a){
     var mq=!q||a.id.toLowerCase().indexOf(q)!==-1||a.categorie.toLowerCase().indexOf(q)!==-1||String(a.diametre).toLowerCase().indexOf(q)!==-1;
-    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
+    var familleOk=!familleFilterCats||(familleFilterCats.indexOf(a.categorie)!==-1);
+    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status)&&familleOk;
   });
   var thPrix=document.getElementById('stock-th-prix');var thV=document.getElementById('stock-th-valeur');var thF=document.getElementById('stock-th-fourn');
   if(thPrix)thPrix.textContent='Prix vente HT';if(thV)thV.style.display='none';if(thF)thF.style.display='none';
@@ -1267,6 +1700,7 @@ async function loadAllData() {
       if (row.key === 'categories') categories = row.value;
       if (row.key === 'chantiers') chantiers = Array.isArray(row.value)?row.value:[];
       if (row.key === 'cmd_counter') cmdCounter = row.value;
+      if (row.key === 'familles') famillesTree = Array.isArray(row.value)?row.value:[];
       if (row.key === 'email') params.email = row.value;
       if (row.key === 'company') params.company = row.value;
     });
@@ -1302,6 +1736,7 @@ function subscribeRealtime() {
         if (row.key === 'categories') { categories = row.value; renderCategories(); }
         if (row.key === 'chantiers') { chantiers = Array.isArray(row.value)?row.value:[]; renderChantiers(); }
         if (row.key === 'cmd_counter') cmdCounter = row.value;
+      if (row.key === 'familles') famillesTree = Array.isArray(row.value)?row.value:[];
       });
     })
     .subscribe((status) => {
@@ -1386,7 +1821,7 @@ function showPage(page,el){
   else ab.style.display='none';
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
     commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
-    chantiers:renderChantiers,categories:renderCategories,parametres:renderParams};
+    chantiers:renderChantiers,categories:renderCategories,parametres:renderParams,familles:renderFamillesPage};
   if(renders[page])renders[page]();
   if(page!=='scan'){stopQRScan();stopCmdQR();}
 }
@@ -1443,6 +1878,7 @@ function populateCatFilter(){
 }
 function renderStock(){
   if(CLIENT_MODE){renderStockClient();return;}
+  renderStockFamilleFilter();
   // Adapter les colonnes selon le mode
   const thPrix=document.getElementById('stock-th-prix');
   const thValeur=document.getElementById('stock-th-valeur');
@@ -1454,6 +1890,7 @@ function renderStock(){
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
   const cat=document.getElementById('filter-cat')?.value||'';
   const status=document.getElementById('filter-status')?.value||'';
+  var familleFilterCats=getCatsFamille(stockFamilleFilter);
   const filtered=stock.filter(a=>{
     const mq=!q||a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).toLowerCase().includes(q);
     return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
