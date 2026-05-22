@@ -852,6 +852,15 @@ async function saveArticle(){
   renderStock();renderDashboard();updateBadges();showToast('Article enregistre');
 }
 
+async function deleteArticle(id){
+  if(!confirm('Supprimer cet article ? Cette action est irréversible.'))return;
+  var r=await db.from('stock').delete().eq('id',id);
+  if(r.error){showToast('Erreur: '+r.error.message);return;}
+  var rd=await db.from('stock').select('*').order('categorie').order('id');
+  if(rd.data)stock=rd.data.map(adaptArticle);
+  renderStock();renderDashboard();updateBadges();showToast('Article supprimé');
+}
+
 async function editArticle(id){
   var art=stock.find(function(a){return a.id===id;});if(!art)return;
   document.getElementById('art-modal-title').textContent='Modifier - '+id;
@@ -977,7 +986,47 @@ function selectCmdSearchArt(id,el){
   var inp=document.getElementById('cmd-art-search');if(inp)inp.value=pendingCmdArt.id;
   showCmdQtyPicker(pendingCmdArt);
 }
-function stopCmdQR(){}
+function stopCmdQR(){
+  var btn1=document.getElementById('btn-cmd-qr-start');
+  var btn2=document.getElementById('btn-cmd-qr-stop');
+  if(btn1)btn1.style.display='';
+  if(btn2)btn2.style.display='none';
+  if(cmdHtml5QrCode){
+    try{cmdHtml5QrCode.stop().then(function(){cmdHtml5QrCode.clear();var z=document.getElementById('cmd-qr-zone');if(z)z.innerHTML='';}).catch(function(){});}catch(e){}
+    cmdHtml5QrCode=null;
+  }
+}
+
+async function startCmdQR(){
+  var btn1=document.getElementById('btn-cmd-qr-start');
+  var btn2=document.getElementById('btn-cmd-qr-stop');
+  if(btn1)btn1.style.display='none';
+  if(btn2)btn2.style.display='';
+  var zone=document.getElementById('cmd-qr-zone');
+  if(!zone)return;
+  zone.innerHTML='<div id="cmd-qr-reader" style="width:100%;"></div>';
+  if(!window.Html5Qrcode){showToast('Librairie QR non chargée');return;}
+  cmdHtml5QrCode=new Html5Qrcode('cmd-qr-reader');
+  try{
+    await cmdHtml5QrCode.start(
+      {facingMode:'environment'},
+      {fps:10,qrbox:220},
+      function(text){
+        stopCmdQR();
+        var art=stock.find(function(a){return a.id===text;});
+        if(art){
+          showToast('Article trouvé: '+art.id);
+          pendingCmdArt=art;
+          showCmdQtyPicker(art);
+          switchAddMode('search');
+        } else {
+          showToast('Référence inconnue: '+text);
+        }
+      },
+      function(){}
+    );
+  }catch(e){showToast('Caméra inaccessible: '+e);stopCmdQR();}
+}
 
 async function saveCommande(){
   var libre=document.getElementById('cmd-chantier-libre');
@@ -1433,7 +1482,8 @@ function renderStock(){
         ? ''
         : `<button class="btn btn-xs" onclick="openMouvement('${a.id}')">±</button>
            <button class="btn btn-xs" style="margin-left:3px;" onclick="showQR('${a.id}')">QR</button>
-           <button class="btn btn-xs" style="margin-left:3px;" onclick="editArticle('${a.id}')">✏</button>`
+           <button class="btn btn-xs" style="margin-left:3px;" onclick="editArticle('${a.id}')">✏</button>
+           <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteArticle('${a.id}')">🗑</button>`
       }</td></tr>`;
   }).join('');
 }
@@ -1797,10 +1847,68 @@ function renderChantiers(){
   if(tbody){tbody.innerHTML=chantiers.map(c=>'<tr><td>'+c.nom+'</td><td>0</td><td>0</td><td>0</td><td><button class="btn btn-xs" onclick="editChantier(\''+c.nom+'\')">edit</button><button class="btn btn-xs btn-danger" onclick="deleteChantier(\''+c.nom+'\')">del</button></td></tr>').join('');}
 }
 function showChantierDetail(nom){
-  const d=document.getElementById('chantier-detail');
+  var d=document.getElementById('chantier-detail');
   if(!d)return;
-  document.getElementById('chantier-detail-title').textContent='Detail - '+nom;
+  document.getElementById('chantier-detail-title').textContent='Chantier : '+nom;
   d.style.display='';
+
+  // Commandes du chantier
+  var cmdsChantier=commandes.filter(function(c){return c.chantier===nom;});
+  var tbody=document.getElementById('chantier-detail-table');
+  if(!tbody)return;
+
+  if(cmdsChantier.length===0){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px;">Aucune commande pour ce chantier</td></tr>';
+    return;
+  }
+
+  var rows='';
+  cmdsChantier.forEach(function(c){
+    var statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
+    var statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
+    var date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
+    // Détail articles
+    var lignes=(c.items||[]).map(function(i){
+      var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',prixUnitaire:0,prixVente:0};
+      var pu=art.prixUnitaire||0;
+      var pv=art.prixVente||0;
+      var rel=i.reliquat?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;">RELIQUAT</span>':'';
+      return '<tr style="background:var(--surface);">'+
+        '<td style="padding:4px 10px;font-size:12px;"><code>'+i.id+'</code> '+rel+'</td>'+
+        '<td style="padding:4px 10px;font-size:12px;">'+art.categorie+' O'+art.diametre+'</td>'+
+        '<td style="padding:4px 10px;font-size:12px;text-align:center;">'+i.qty+'</td>'+
+        '<td style="padding:4px 10px;font-size:12px;">'+(pu>0?pu.toFixed(2)+' EUR':'-')+'</td>'+
+        '<td style="padding:4px 10px;font-size:12px;">'+(pv>0?pv.toFixed(2)+' EUR':'-')+'</td>'+
+        '<td style="padding:4px 10px;font-size:12px;">'+(pu>0?(pu*i.qty).toFixed(2)+' EUR':'-')+'</td>'+
+        '</tr>';
+    }).join('');
+
+    var totalAchat=(c.items||[]).reduce(function(s,i){
+      var art=stock.find(function(a){return a.id===i.id;})||{prixUnitaire:0};
+      return s+(art.prixUnitaire||0)*i.qty;
+    },0);
+
+    rows+='<tr style="font-weight:600;border-top:2px solid var(--border);">'+
+      '<td style="padding:8px 10px;" colspan="2"><strong>#'+String(c.num).padStart(3,'0')+' — '+date+'</strong></td>'+
+      '<td style="padding:8px 10px;"><span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span></td>'+
+      '<td colspan="2" style="padding:8px 10px;font-size:12px;color:var(--text2);">'+(c.nom||'')+(c.urgence?'  · Urgence: '+c.urgence:'')+'</td>'+
+      '<td style="padding:8px 10px;font-weight:700;">'+(totalAchat>0?'Total: '+totalAchat.toFixed(2)+' EUR':'')+'</td>'+
+      '</tr>'+lignes;
+  });
+  tbody.innerHTML=rows;
+
+  // Mettre à jour les en-têtes si nécessaire
+  var thead=tbody.parentElement?tbody.parentElement.querySelector('thead'):null;
+  if(thead){
+    thead.innerHTML='<tr>'+
+      '<th style="padding:7px 10px;">Référence</th>'+
+      '<th style="padding:7px 10px;">Article</th>'+
+      '<th style="padding:7px 10px;text-align:center;">Qté</th>'+
+      '<th style="padding:7px 10px;">Prix achat</th>'+
+      '<th style="padding:7px 10px;">Prix vente</th>'+
+      '<th style="padding:7px 10px;">Total achat</th>'+
+      '</tr>';
+  }
 }
 function renderEtiquettes(){
   var pills=document.getElementById('etiq-cat-pills');if(!pills)return;
