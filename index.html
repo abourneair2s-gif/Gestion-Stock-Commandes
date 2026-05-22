@@ -435,25 +435,23 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     </div>
   </div>
   <!-- Cartes chantiers IMMEDIATEMENT visibles -->
-  <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;"></div>
-  <!-- Détail chantier sélectionné (affiché ici, avant le tableau) -->
-  <!-- Tableau récapitulatif -->
-  <div class="section-header" style="margin-top:4px;">
-    <div class="section-title" style="font-size:13px;color:var(--text2);">Récapitulatif</div>
-  </div>
-  <div class="table-wrap" style="margin-bottom:16px;">
-    <table><thead><tr><th>Chantier</th><th>Commandes</th><th>Mouvements</th><th>Articles sortis</th><th>Coût total</th><th></th></tr></thead>
-    <tbody id="chantiers-table"></tbody></table>
-  </div>
+  <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;"></div>
+  <div id="chantiers-admin-btns"></div>
   <!-- Détail chantier -->
-  <div id="chantier-detail" style="display:none;">
+  <div id="chantier-detail" style="display:none;margin-top:12px;">
     <div class="section-header" style="margin-top:8px;">
       <div class="section-title" id="chantier-detail-title">Détail chantier</div>
-      <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-xs btn-primary" onclick="exportChantierExcel()">⬇ Excel</button>
+        <button class="btn btn-xs" onclick="printChantierDetail()">🖨 Imprimer</button>
+        <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
+      </div>
     </div>
     <div class="table-wrap">
-      <table><thead><tr><th>Date</th><th>Type</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Qté</th><th>Source</th></tr></thead>
-      <tbody id="chantier-detail-table"></tbody></table>
+      <table id="chantier-detail-table-wrap">
+        <thead id="chantier-detail-thead"></thead>
+        <tbody id="chantier-detail-table"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -1836,80 +1834,186 @@ async function deleteCmd(id){
   renderCommandes();updateBadges();showToast('Commande supprimee');
 }
 function renderChantiers(){
-  const cards=document.getElementById('chantiers-cards');
-  const tbody=document.getElementById('chantiers-table');
-  if(cards){cards.innerHTML=chantiers.map(c=>{
-    const mvts=historique.filter(h=>h.chantier===c.nom&&h.type==='out');
-    const cmds=commandes.filter(x=>x.chantier===c.nom&&x.statut==='approuvee');
-    const q=mvts.reduce((s,h)=>s+h.qty,0)+cmds.reduce((s,x)=>(x.items||[]).reduce((a,i)=>a+i.qty,0)+s,0);
-    return '<div onclick="showChantierDetail(\''+c.nom+'\')" style="cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-width:160px;flex:1;max-width:220px;"><div style="font-weight:700;">'+c.nom+'</div><div style="font-size:12px;color:var(--text2);">'+q+' unites</div><div style="font-size:11px;color:var(--blue);">Voir detail</div></div>';
-  }).join('');}
-  if(tbody){tbody.innerHTML=chantiers.map(c=>'<tr><td>'+c.nom+'</td><td>0</td><td>0</td><td>0</td><td><button class="btn btn-xs" onclick="editChantier(\''+c.nom+'\')">edit</button><button class="btn btn-xs btn-danger" onclick="deleteChantier(\''+c.nom+'\')">del</button></td></tr>').join('');}
+  var cards=document.getElementById('chantiers-cards');
+  if(!cards)return;
+  cards.innerHTML=chantiers.map(function(c){
+    var cmdsChantier=commandes.filter(function(x){return x.chantier===c.nom;});
+    var nbCmds=cmdsChantier.length;
+    var totalAchat=cmdsChantier.reduce(function(s,cmd){
+      return s+(cmd.items||[]).reduce(function(ss,i){
+        var art=stock.find(function(a){return a.id===i.id;})||{prixUnitaire:0};
+        return ss+(art.prixUnitaire||0)*i.qty;
+      },0);
+    },0);
+    var totalStr=totalAchat>0?totalAchat.toFixed(2)+' EUR':'0 EUR';
+    var hasAttente=cmdsChantier.some(function(x){return x.statut==='en_attente';});
+    var borderColor=hasAttente?'var(--amber)':'var(--border)';
+    var mq2='"';return '<div onclick='+mq2+'showChantierDetail(&quot;'+c.nom+'&quot;)'+mq2+' style='+mq2+'cursor:pointer;background:var(--surface);border:2px solid '+borderColor+';border-radius:var(--radius);padding:14px 16px;min-width:180px;flex:1;max-width:240px;'+mq2+'>'+
+      '<div style="font-weight:700;font-size:14px;margin-bottom:4px;">'+c.nom+'</div>'+
+      '<div style="font-size:12px;color:var(--text2);margin-bottom:2px;">'+nbCmds+' commande'+(nbCmds!==1?'s':'')+'</div>'+
+      '<div style="font-size:13px;font-weight:600;color:var(--green);">'+totalStr+'</div>'+
+      (hasAttente?'<div style="font-size:11px;color:var(--amber);margin-top:4px;">&#9203; En attente</div>':'')+
+      '<div style="font-size:11px;color:var(--blue);margin-top:6px;">Voir d&eacute;tail &#8594;</div></div>';
+  }).join('');
+  // Boutons admin edit/delete
+  var adminBtns=document.getElementById('chantiers-admin-btns');
+  if(adminBtns&&!CLIENT_MODE){
+    adminBtns.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">'+
+      chantiers.map(function(c){
+        return '<span style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 8px;display:inline-flex;align-items:center;gap:4px;">'+c.nom+
+          ' <button class="btn btn-xs" style="padding:1px 5px;" onclick="editChantier(&quot;'+c.nom+'&quot;)">&#9998;</button>'+
+          '<button class="btn btn-xs btn-danger" style="padding:1px 5px;" onclick="deleteChantier(&quot;'+c.nom+'&quot;)">&#128465;</button></span>';
+      }).join('')+'</div>';
+  }
 }
 function showChantierDetail(nom){
+  currentChantierDetail=nom;
   var d=document.getElementById('chantier-detail');
   if(!d)return;
   document.getElementById('chantier-detail-title').textContent='Chantier : '+nom;
   d.style.display='';
 
-  // Commandes du chantier
   var cmdsChantier=commandes.filter(function(c){return c.chantier===nom;});
   var tbody=document.getElementById('chantier-detail-table');
+  var thead=document.getElementById('chantier-detail-thead');
   if(!tbody)return;
 
   if(cmdsChantier.length===0){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px;">Aucune commande pour ce chantier</td></tr>';
+    if(thead)thead.innerHTML='';
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">Aucune commande pour ce chantier</td></tr>';
     return;
   }
 
-  var rows='';
+  // Regrouper tous les articles de toutes les commandes par référence
+  var articlesMap={};
   cmdsChantier.forEach(function(c){
     var statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
-    var statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
-    var date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
-    // Détail articles
-    var lignes=(c.items||[]).map(function(i){
+    (c.items||[]).forEach(function(i){
       var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',prixUnitaire:0,prixVente:0};
-      var pu=art.prixUnitaire||0;
-      var pv=art.prixVente||0;
-      var rel=i.reliquat?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;">RELIQUAT</span>':'';
-      return '<tr style="background:var(--surface);">'+
-        '<td style="padding:4px 10px;font-size:12px;"><code>'+i.id+'</code> '+rel+'</td>'+
-        '<td style="padding:4px 10px;font-size:12px;">'+art.categorie+' O'+art.diametre+'</td>'+
-        '<td style="padding:4px 10px;font-size:12px;text-align:center;">'+i.qty+'</td>'+
-        '<td style="padding:4px 10px;font-size:12px;">'+(pu>0?pu.toFixed(2)+' EUR':'-')+'</td>'+
-        '<td style="padding:4px 10px;font-size:12px;">'+(pv>0?pv.toFixed(2)+' EUR':'-')+'</td>'+
-        '<td style="padding:4px 10px;font-size:12px;">'+(pu>0?(pu*i.qty).toFixed(2)+' EUR':'-')+'</td>'+
-        '</tr>';
-    }).join('');
-
-    var totalAchat=(c.items||[]).reduce(function(s,i){
-      var art=stock.find(function(a){return a.id===i.id;})||{prixUnitaire:0};
-      return s+(art.prixUnitaire||0)*i.qty;
-    },0);
-
-    rows+='<tr style="font-weight:600;border-top:2px solid var(--border);">'+
-      '<td style="padding:8px 10px;" colspan="2"><strong>#'+String(c.num).padStart(3,'0')+' — '+date+'</strong></td>'+
-      '<td style="padding:8px 10px;"><span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span></td>'+
-      '<td colspan="2" style="padding:8px 10px;font-size:12px;color:var(--text2);">'+(c.nom||'')+(c.urgence?'  · Urgence: '+c.urgence:'')+'</td>'+
-      '<td style="padding:8px 10px;font-weight:700;">'+(totalAchat>0?'Total: '+totalAchat.toFixed(2)+' EUR':'')+'</td>'+
-      '</tr>'+lignes;
+      var key=i.id;
+      if(!articlesMap[key]){
+        articlesMap[key]={id:i.id,categorie:art.categorie,diametre:art.diametre,
+          prixUnitaire:art.prixUnitaire||0,prixVente:art.prixVente||0,
+          qtyTotal:0,reliquat:false,commandes:[]};
+      }
+      articlesMap[key].qtyTotal+=i.qty;
+      if(i.reliquat)articlesMap[key].reliquat=true;
+      articlesMap[key].commandes.push('#'+String(c.num).padStart(3,'0')+' ('+statLabel+')');
+    });
   });
-  tbody.innerHTML=rows;
 
-  // Mettre à jour les en-têtes si nécessaire
-  var thead=tbody.parentElement?tbody.parentElement.querySelector('thead'):null;
+  // Trier par référence
+  var articles=Object.values(articlesMap).sort(function(a,b){return a.id.localeCompare(b.id);});
+
+  // Regrouper par famille/catégorie
+  var familles={};
+  articles.forEach(function(a){
+    if(!familles[a.categorie])familles[a.categorie]={articles:[],totalAchat:0,totalVente:0};
+    familles[a.categorie].articles.push(a);
+    familles[a.categorie].totalAchat+=a.prixUnitaire*a.qtyTotal;
+    familles[a.categorie].totalVente+=a.prixVente*a.qtyTotal;
+  });
+
+  // En-têtes
   if(thead){
     thead.innerHTML='<tr>'+
       '<th style="padding:7px 10px;">Référence</th>'+
-      '<th style="padding:7px 10px;">Article</th>'+
-      '<th style="padding:7px 10px;text-align:center;">Qté</th>'+
+      '<th style="padding:7px 10px;">Désignation</th>'+
+      '<th style="padding:7px 10px;text-align:center;">Qté totale</th>'+
       '<th style="padding:7px 10px;">Prix achat</th>'+
-      '<th style="padding:7px 10px;">Prix vente</th>'+
       '<th style="padding:7px 10px;">Total achat</th>'+
+      '<th style="padding:7px 10px;">Prix vente</th>'+
+      '<th style="padding:7px 10px;">Commandes</th>'+
       '</tr>';
   }
+
+  // Construire les lignes par famille
+  var totalGlobalAchat=0;var totalGlobalVente=0;
+  var rows='';
+  Object.keys(familles).sort().forEach(function(fam){
+    var f=familles[fam];
+    totalGlobalAchat+=f.totalAchat;totalGlobalVente+=f.totalVente;
+    // En-tête famille
+    rows+='<tr style="background:var(--surface2);font-weight:700;">'+
+      '<td colspan="2" style="padding:8px 10px;font-size:13px;color:var(--blue);">&#128230; '+fam+'</td>'+
+      '<td style="padding:8px 10px;text-align:center;">'+f.articles.reduce(function(s,a){return s+a.qtyTotal;},0)+'</td>'+
+      '<td></td>'+
+      '<td style="padding:8px 10px;font-weight:700;color:var(--green);">'+(f.totalAchat>0?f.totalAchat.toFixed(2)+' EUR':'—')+'</td>'+
+      '<td style="padding:8px 10px;color:var(--text2);">'+(f.totalVente>0?f.totalVente.toFixed(2)+' EUR':'—')+'</td>'+
+      '<td></td></tr>';
+    // Articles de la famille
+    f.articles.forEach(function(a){
+      var rel=a.reliquat?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px;">RELIQUAT</span>':'';
+      rows+='<tr style="background:var(--bg);">'+
+        '<td style="padding:6px 10px 6px 20px;font-size:12px;"><code>'+a.id+'</code>'+rel+'</td>'+
+        '<td style="padding:6px 10px;font-size:12px;">'+a.categorie+' O'+a.diametre+'</td>'+
+        '<td style="padding:6px 10px;text-align:center;font-weight:600;">'+a.qtyTotal+'</td>'+
+        '<td style="padding:6px 10px;font-size:12px;">'+(a.prixUnitaire>0?a.prixUnitaire.toFixed(2)+' EUR':'—')+'</td>'+
+        '<td style="padding:6px 10px;font-size:12px;font-weight:600;">'+(a.prixUnitaire>0?(a.prixUnitaire*a.qtyTotal).toFixed(2)+' EUR':'—')+'</td>'+
+        '<td style="padding:6px 10px;font-size:12px;color:var(--green);">'+(a.prixVente>0?a.prixVente.toFixed(2)+' EUR':'—')+'</td>'+
+        '<td style="padding:6px 10px;font-size:11px;color:var(--text3);">'+a.commandes.join(', ')+'</td>'+
+        '</tr>';
+    });
+  });
+
+  // Ligne total global
+  rows+='<tr style="background:var(--surface2);font-weight:700;border-top:3px solid var(--border2);">'+
+    '<td colspan="2" style="padding:10px;font-size:14px;">&#127381; TOTAL CHANTIER</td>'+
+    '<td></td><td></td>'+
+    '<td style="padding:10px;font-size:14px;color:var(--green);">'+(totalGlobalAchat>0?totalGlobalAchat.toFixed(2)+' EUR':'—')+'</td>'+
+    '<td style="padding:10px;font-size:13px;color:var(--text2);">'+(totalGlobalVente>0?totalGlobalVente.toFixed(2)+' EUR':'—')+'</td>'+
+    '<td style="padding:10px;font-size:11px;color:var(--text3);">'+cmdsChantier.length+' commande(s)</td></tr>';
+
+  tbody.innerHTML=rows;
 }
+
+// Variable pour mémoriser le chantier courant (export/print)
+var currentChantierDetail='';
+
+function exportChantierExcel(){
+  if(!currentChantierDetail||!window.XLSX){showToast('Aucun chantier sélectionné ou XLSX non chargé');return;}
+  var nom=currentChantierDetail;
+  var cmdsChantier=commandes.filter(function(c){return c.chantier===nom;});
+  var wb=window.XLSX.utils.book_new();
+  var rows=[['Reference','Categorie','Diametre','Qte totale','Prix achat','Total achat','Prix vente','Total vente','Commandes','Reliquat']];
+  var articlesMap={};
+  cmdsChantier.forEach(function(c){
+    var statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
+    (c.items||[]).forEach(function(i){
+      var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',prixUnitaire:0,prixVente:0};
+      if(!articlesMap[i.id])articlesMap[i.id]={id:i.id,cat:art.categorie,diam:art.diametre,pu:art.prixUnitaire||0,pv:art.prixVente||0,qty:0,rel:false,cmds:[]};
+      articlesMap[i.id].qty+=i.qty;
+      if(i.reliquat)articlesMap[i.id].rel=true;
+      articlesMap[i.id].cmds.push('#'+String(c.num).padStart(3,'0'));
+    });
+  });
+  Object.values(articlesMap).sort(function(a,b){return a.id.localeCompare(b.id);}).forEach(function(a){
+    rows.push([a.id,a.cat,a.diam,a.qty,a.pu,(a.pu*a.qty).toFixed(2),a.pv,(a.pv*a.qty).toFixed(2),a.cmds.join(', '),a.rel?'OUI':'']);
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Chantier_'+nom.replace(/[^a-z0-9]/gi,'_'));
+  XLSX.writeFile(wb,'Chantier_'+nom+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  showToast('Export Excel téléchargé');
+}
+
+function printChantierDetail(){
+  if(!currentChantierDetail)return;
+  var nom=currentChantierDetail;
+  var table=document.getElementById('chantier-detail-table-wrap');
+  if(!table)return;
+  var w=window.open('','_blank');
+  w.document.write('<!DOCTYPE html><html><head><title>Chantier '+nom+'</title>'+
+    '<style>body{font-family:sans-serif;padding:20px;font-size:12px;}h2{font-size:16px;margin-bottom:4px;}'+
+    'table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;}'+
+    'th{background:#f5f4f0;font-weight:600;}tr:nth-child(even){background:#fafaf8;}'+
+    '.total{font-weight:700;background:#e6f5ef;}'+
+    '@media print{body{padding:10px;}}</style></head><body>'+
+    '<h2>Chantier : '+nom+'</h2>'+
+    '<p style="color:#777;margin-bottom:12px;font-size:11px;">Imprimé le '+new Date().toLocaleString('fr-FR')+'</p>'+
+    table.outerHTML+
+    '<scr'+'ipt>window.print();<'+'/script></body></html>');
+  w.document.close();
+}
+
 function renderEtiquettes(){
   var pills=document.getElementById('etiq-cat-pills');if(!pills)return;
   var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
