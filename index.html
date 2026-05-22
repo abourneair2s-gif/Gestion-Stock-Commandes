@@ -167,6 +167,16 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 @media(min-width:701px){#mobile-nav{display:none!important;}}
 @media print{#sidebar,#topbar,#mobile-nav,.btn{display:none!important;}body{background:#fff;}.page{display:block!important;}}
 </style>
+
+<style>
+.fam-node{border-radius:8px;margin-bottom:2px;}
+.fam-node-row{display:flex;align-items:center;padding:8px 12px;border-radius:8px;cursor:pointer;background:var(--surface);border:1px solid var(--border);gap:6px;user-select:none;transition:background 0.1s;}
+.fam-node-row:hover{background:var(--surface2);}
+.fam-drag-handle{cursor:grab;color:var(--text3);font-size:16px;padding:0 4px;flex-shrink:0;}
+.fam-drag-handle:active{cursor:grabbing;}
+.fam-children{margin-top:2px;}
+.fam-drop-zone{height:6px;border-radius:4px;margin:2px 0 2px 20px;transition:border 0.1s;}
+</style>
 </head>
 <body>
 
@@ -261,10 +271,8 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         </select>
         <button class="btn btn-primary btn-sm" onclick="openNewArticle()">+ Nouvel article</button>
       </div>
-      <!-- Vue arbre famille + articles -->
       <div id="stock-famille-tree-view"></div>
       <div id="stock-empty" class="empty-state" style="display:none;">Aucun article trouvé.</div>
-      <!-- Table cachée pour compat renderStockClient -->
       <div id="stock-table-wrap" style="display:none;">
         <div class="table-wrap">
           <table><thead><tr>
@@ -320,7 +328,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       <div id="scan-tab-manual" style="display:none;">
         <div class="tab-switch" style="margin-bottom:10px;">
           <button class="tab-sw-btn active" onclick="switchScanManualMode('ref',this)">⌨️ Par référence</button>
-          <button class="tab-sw-btn" onclick="switchScanManualMode('cat',this)">🗂 Par famille</button>
+          <button class="tab-sw-btn" onclick="switchScanManualMode('cat',this)">📂 Par catégorie</button>
         </div>
         <div id="scan-manual-ref">
           <div class="form-row"><label class="form-label">Référence article</label><input type="text" id="manual-ref" placeholder="ex: GAI 450, C90 315…" oninput="lookupArticle(this.value)"></div>
@@ -443,27 +451,28 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     </div>
   </div>
   <!-- Cartes chantiers IMMEDIATEMENT visibles -->
-  <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;"></div>
-  <div id="chantiers-admin-btns"></div>
+  <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;"></div>
+  <!-- Détail chantier sélectionné (affiché ici, avant le tableau) -->
+  <!-- Tableau récapitulatif -->
+  <div class="section-header" style="margin-top:4px;">
+    <div class="section-title" style="font-size:13px;color:var(--text2);">Récapitulatif</div>
+  </div>
+  <div class="table-wrap" style="margin-bottom:16px;">
+    <table><thead><tr><th>Chantier</th><th>Commandes</th><th>Mouvements</th><th>Articles sortis</th><th>Coût total</th><th></th></tr></thead>
+    <tbody id="chantiers-table"></tbody></table>
+  </div>
   <!-- Détail chantier -->
-  <div id="chantier-detail" style="display:none;margin-top:12px;">
+  <div id="chantier-detail" style="display:none;">
     <div class="section-header" style="margin-top:8px;">
       <div class="section-title" id="chantier-detail-title">Détail chantier</div>
-      <div style="display:flex;gap:6px;">
-        <button class="btn btn-xs btn-primary" onclick="exportChantierExcel()">⬇ Excel</button>
-        <button class="btn btn-xs" onclick="printChantierDetail()">🖨 Imprimer</button>
-        <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
-      </div>
+      <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
     </div>
     <div class="table-wrap">
-      <table id="chantier-detail-table-wrap">
-        <thead id="chantier-detail-thead"></thead>
-        <tbody id="chantier-detail-table"></tbody>
-      </table>
+      <table><thead><tr><th>Date</th><th>Type</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Qté</th><th>Source</th></tr></thead>
+      <tbody id="chantier-detail-table"></tbody></table>
     </div>
   </div>
 </div>
-
 
 <!-- FAMILLES PAGE -->
 <div class="page" id="page-familles">
@@ -523,6 +532,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   </div>
 </div>
 
+
 <!-- ETIQUETTES PAGE -->
 <div class="page" id="page-etiquettes">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
@@ -541,6 +551,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <!-- Grille articles -->
   <div id="etiq-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;"></div>
 </div>
+
 
 <!-- ===== MODALS ===== -->
 
@@ -601,7 +612,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <div class="section-title">Articles à commander</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-xs btn-primary" onclick="switchAddMode('search')">🔍 Recherche</button>
-          <button class="btn btn-xs" onclick="switchAddMode('cat')">🗂 Par famille</button>
+          <button class="btn btn-xs" onclick="switchAddMode('cat')">📂 Par catégorie</button>
           <button class="btn btn-xs" onclick="switchAddMode('qr')">📷 Scanner QR</button>
         </div>
       </div>
@@ -849,10 +860,10 @@ let cmdItems = [];
 let html5QrCode = null;
 let cmdHtml5QrCode = null;
 let editingCat = null;
-let famillesTree = []; // Arbre des familles [{id,nom,categorie,visible_client,enfants:[]}]
-let familleNodeEditing = null; // ID du nœud en cours d'édition
-let dragSrcId = null; // ID du nœud glissé
-let stockFamilleFilter = null; // Filtre famille actif dans stock
+let famillesTree = [];
+let stockGroupOpen = {};
+let stockFamilleFilter = null;
+let currentChantierDetail = '';
 
 // Adapte les colonnes Supabase → format interne JS
 function openModal(id){const m=document.getElementById(id);if(m){m.style.display='flex';m.classList.add('open');}}
@@ -881,6 +892,7 @@ function openNewArticle(){document.getElementById('art-modal-title').textContent
 }
 
 // ==================== INIT SUPABASE ====================
+
 
 // ════════════════════════════════════════════════════════════
 // FAMILLES & SOUS-FAMILLES
@@ -1386,6 +1398,7 @@ function selectCmdFamille(familleId,el){
 }
 
 // ── getCatsFamille : gère __sans_famille__ ──────────────────────
+
 // ════════════════════════════════════════════════════════════
 // VUE STOCK PAR FAMILLE — renderStockFamilleTree
 // ════════════════════════════════════════════════════════════
@@ -1606,7 +1619,6 @@ function renderStockFamilleTree(){
 }
 
 // État ouvert/fermé des groupes
-var stockGroupOpen={};
 function toggleStockGroup(id){
   var body=document.getElementById('body-'+id);
   var arr=document.getElementById('arr-'+id);
@@ -1616,6 +1628,7 @@ function toggleStockGroup(id){
   if(arr)arr.innerHTML=isOpen?'&#9654;':'&#9660;';
   stockGroupOpen[id]=!isOpen;
 }
+
 
 // ══════ FONCTIONS MANQUANTES — injectees avant initApp ══════
 
@@ -1973,6 +1986,7 @@ function exportExcel(){
 }
 
 // ════════════════════════════════════════════════════════════
+
 async function initApp() {
   try {
     db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -2000,6 +2014,7 @@ async function initApp() {
 
     document.getElementById('loading-overlay').classList.add('hidden');
     setConnected(true);
+    peuplerFamilleSelect();
     renderDashboard();
     updateBadges();
     if(CLIENT_MODE) applyClientMode();
@@ -2145,7 +2160,6 @@ function showToast(msg, duration=3500) {
 function showPage(page,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const activePage=document.getElementById('page-'+page);
-  if(!activePage){console.error('Page introuvable:',page);return;}
   activePage.classList.add('active');
   document.querySelectorAll('.nav-btn,.mob-btn').forEach(b=>b.classList.remove('active'));
   if(el)el.classList.add('active');
@@ -2181,15 +2195,7 @@ function showPage(page,el){
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
     commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
     chantiers:renderChantiers,categories:renderCategories,parametres:renderParams,familles:renderFamillesPage};
-  if(renders[page]){
-    try{renders[page]();}
-    catch(e){
-      console.error('Erreur render '+page+':',e);
-      var pg2=document.getElementById('page-'+page);
-      if(pg2)pg2.innerHTML='<div style="padding:20px;background:#fff0f0;color:red;border-radius:8px;margin:16px;">'+
-        '<strong>Erreur de rendu ('+page+') :</strong><br>'+e.message+'<br><small>'+e.stack+'</small></div>';
-    }
-  }
+  if(renders[page])renders[page]();
   if(page!=='scan'){stopQRScan();stopCmdQR();}
 }
 
@@ -2199,7 +2205,7 @@ function renderDashboard(){
   const totalVal=stock.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
   document.getElementById('kpi-grid').innerHTML=`
     <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div></div>
-    <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;" onclick="showPage('commandes',document.querySelector('[data-page=\"commandes\"]'))"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
+    <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
   const alertDiv=document.getElementById('dashboard-alerts');
   const top5=alerts.slice(0,5);
   alertDiv.innerHTML=top5.length===0?'<div style="font-size:13px;color:var(--green);padding:10px 0;">✅ Tous les stocks sont OK</div>'
@@ -2210,66 +2216,20 @@ function renderDashboard(){
   document.getElementById('dash-commandes').innerHTML=recent.length===0
     ?'<tr><td colspan="3" style="text-align:center;color:var(--text3);font-size:12px;">Aucune commande</td></tr>'
     :recent.map(c=>`<tr><td>${c.chantier}</td><td style="font-size:11px;">${c.items?c.items.length+' article(s)':'—'}</td><td>${cmdBadge(c.statut)}</td></tr>`).join('');
+  const cats=[...new Set(stock.map(a=>a.categorie))];
   const totalArticles=stock.length;
   const totalValeur=totalVal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f');
-  // Rendu par famille/sous-famille ou par catégorie si pas de familles
-  var dashRows='';
-  function dashFamilleRows(nodes,depth){
-    nodes.forEach(function(n){
-      var cats=n.categories||(n.categorie?[n.categorie]:[]);
-      var allCats=[];
-      function collectDashCats(node){
-        var nc=node.categories||(node.categorie?[node.categorie]:[]);
-        nc.forEach(function(c){allCats.push(c);});
-        if(node.enfants)node.enfants.forEach(collectDashCats);
-      }
-      collectDashCats(n);
-      var items=stock.filter(function(a){return allCats.indexOf(a.categorie)!==-1;});
-      var val=items.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-      var critiques=items.filter(function(a){return getStatus(a)!=='ok';}).length;
-      var indent='  '.repeat(depth);
-      var icon=cats.length>0?'📂':'📁';
-      dashRows+='<tr style="'+(depth===0?'background:var(--surface);font-weight:700;':'font-size:13px;')+'">'+
-        '<td style="padding-left:'+(8+depth*16)+'px;">'+icon+' '+n.nom+'</td>'+
-        '<td>'+(items.length>0?items.length:'—')+'</td>'+
-        '<td>'+(val>0?val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+' €':'—')+'</td>'+
-        '<td class="'+(critiques>0?'stock-danger':'')+'">'+(critiques>0?critiques+' art.':'—')+'</td>'+
-        '<td>'+(items.length===0?'':''+critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>')+'</td></tr>';
-      if(n.enfants&&n.enfants.length)dashFamilleRows(n.enfants,depth+1);
-    });
-  }
-  if(famillesTree&&famillesTree.length>0){
-    dashFamilleRows(famillesTree,0);
-    // Articles sans famille
-    var classedCats=collectAllCats(famillesTree);
-    var sansFamily=stock.filter(function(a){return classedCats.indexOf(a.categorie)===-1;});
-    if(sansFamily.length>0){
-      var sfVal=sansFamily.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-      var sfCrit=sansFamily.filter(function(a){return getStatus(a)!=='ok';}).length;
-      dashRows+='<tr style="opacity:0.6;font-style:italic;">'+
-        '<td style="padding-left:8px;">📂 Sans famille ('+[...new Set(sansFamily.map(function(a){return a.categorie;}))].join(', ')+')</td>'+
-        '<td>'+sansFamily.length+'</td>'+
-        '<td>'+(sfVal>0?sfVal.toFixed(0)+' €':'—')+'</td>'+
-        '<td class="'+(sfCrit>0?'stock-danger':'')+'">'+(sfCrit>0?sfCrit+' art.':'—')+'</td>'+
-        '<td>'+(sfCrit===0?'<span class="badge badge-ok">OK</span>':'<span class="badge badge-warn">Attention</span>')+'</td></tr>';
-    }
-  } else {
-    // Fallback : par catégorie si pas de familles définies
-    var cats=Array.from(new Set(stock.map(function(a){return a.categorie;}))).sort();
-    cats.forEach(function(cat){
-      var items=stock.filter(function(a){return a.categorie===cat;});
-      var val=items.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-      var critiques=items.filter(function(a){return getStatus(a)!=='ok';}).length;
-      dashRows+='<tr><td><strong>'+cat+'</strong></td><td>'+items.length+'</td>'+
-        '<td>'+(val>0?val.toFixed(0)+' €':'—')+'</td>'+
-        '<td class="'+(critiques>0?'stock-danger':'')+'">'+(critiques>0?critiques+' art.':'—')+'</td>'+
-        '<td>'+(critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>')+'</td></tr>';
-    });
-  }
-  document.getElementById('dash-categories').innerHTML=dashRows+
-    '<tr style="background:#fafaf8;border-top:2px solid var(--border);font-size:12px;color:var(--text3);">'+
-    '<td colspan="2" style="padding:6px 12px;">Total : <strong>'+totalArticles+'</strong> articles</td>'+
-    '<td colspan="3" style="padding:6px 12px;">Valeur : <strong>'+totalValeur+' €</strong></td></tr>';
+  document.getElementById('dash-categories').innerHTML=cats.map(cat=>{
+    const items=stock.filter(a=>a.categorie===cat);
+    const val=items.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
+    const critiques=items.filter(a=>getStatus(a)!=='ok').length;
+    return`<tr><td><strong>${cat}</strong></td><td>${items.length}</td>
+      <td>${val>0?val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+' €':'—'}</td>
+      <td class="${critiques>0?'stock-danger':''}">${critiques>0?critiques+' article(s)':'—'}</td>
+      <td>${critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>'}</td></tr>`;
+  }).join('')+`<tr style="background:#fafaf8;border-top:2px solid var(--border);font-size:12px;color:var(--text3);">
+    <td colspan="2" style="padding:6px 12px;">Total : <strong>${totalArticles}</strong> articles référencés</td>
+    <td colspan="3" style="padding:6px 12px;">Valeur inventaire : <strong>${totalValeur} €</strong></td></tr>`;
   updateBadges();
 }
 
@@ -2278,7 +2238,16 @@ function renderDashboard(){
 
 
 function populateCatFilter(){
-  peuplerFamilleSelect();
+  const sel=document.getElementById('filter-cat');
+  if(sel&&sel.options.length<=1){
+    const parents=categories.filter(c=>!c.includes(' > ')).sort();
+    parents.forEach(p=>{
+      const o=document.createElement('option');o.value=p;o.textContent=p;sel.appendChild(o);
+      categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>{
+        const o2=document.createElement('option');o2.value=sc;o2.textContent='  ↳ '+sc.split(' > ')[1];sel.appendChild(o2);
+      });
+    });
+  }
 }
 function renderStock(){
   if(CLIENT_MODE){renderStockClient();return;}
@@ -2562,7 +2531,8 @@ function printQR(){
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>Étiquette ${art.id}</title>
   <style>body{font-family:sans-serif;text-align:center;padding:20px;}.label{border:2px solid #333;border-radius:8px;padding:16px;display:inline-block;}h2{font-size:13px;margin:0 0 2px;}p{font-size:10px;color:#555;margin:2px 0;}img{width:150px;height:150px;}</style>
-  </head><body><div class="label"><h2>${art.categorie}</h2><p>Ø ${art.diametre}</p><p><strong>${art.id}</strong></p><img src="${src}"><p style="margin-top:6px;font-size:9px;">StockPro Alu · ${art.id}</p></div><script>window.print();<\/script></body></html>`);
+  
+</head><body><div class="label"><h2>${art.categorie}</h2><p>Ø ${art.diametre}</p><p><strong>${art.id}</strong></p><img src="${src}"><p style="margin-top:6px;font-size:9px;">StockPro Alu · ${art.id}</p></div><script>window.print();<\/script></body></html>`);
   w.document.close();
 }
 // ==================== RENDER COMMANDES ====================
@@ -2801,54 +2771,6 @@ function showChantierDetail(nom){
 
   tbody.innerHTML=rows;
 }
-
-// Variable pour mémoriser le chantier courant (export/print)
-var currentChantierDetail='';
-
-function exportChantierExcel(){
-  if(!currentChantierDetail||!window.XLSX){showToast('Aucun chantier sélectionné ou XLSX non chargé');return;}
-  var nom=currentChantierDetail;
-  var cmdsChantier=commandes.filter(function(c){return c.chantier===nom;});
-  var wb=window.XLSX.utils.book_new();
-  var rows=[['Reference','Categorie','Diametre','Qte totale','Prix achat','Total achat','Prix vente','Total vente','Commandes','Reliquat']];
-  var articlesMap={};
-  cmdsChantier.forEach(function(c){
-    var statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
-    (c.items||[]).forEach(function(i){
-      var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',prixUnitaire:0,prixVente:0};
-      if(!articlesMap[i.id])articlesMap[i.id]={id:i.id,cat:art.categorie,diam:art.diametre,pu:art.prixUnitaire||0,pv:art.prixVente||0,qty:0,rel:false,cmds:[]};
-      articlesMap[i.id].qty+=i.qty;
-      if(i.reliquat)articlesMap[i.id].rel=true;
-      articlesMap[i.id].cmds.push('#'+String(c.num).padStart(3,'0'));
-    });
-  });
-  Object.values(articlesMap).sort(function(a,b){return a.id.localeCompare(b.id);}).forEach(function(a){
-    rows.push([a.id,a.cat,a.diam,a.qty,a.pu,(a.pu*a.qty).toFixed(2),a.pv,(a.pv*a.qty).toFixed(2),a.cmds.join(', '),a.rel?'OUI':'']);
-  });
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Chantier_'+nom.replace(/[^a-z0-9]/gi,'_'));
-  XLSX.writeFile(wb,'Chantier_'+nom+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  showToast('Export Excel téléchargé');
-}
-
-function printChantierDetail(){
-  if(!currentChantierDetail)return;
-  var nom=currentChantierDetail;
-  var table=document.getElementById('chantier-detail-table-wrap');
-  if(!table)return;
-  var w=window.open('','_blank');
-  w.document.write('<!DOCTYPE html><html><head><title>Chantier '+nom+'</title>'+
-    '<style>body{font-family:sans-serif;padding:20px;font-size:12px;}h2{font-size:16px;margin-bottom:4px;}'+
-    'table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;}'+
-    'th{background:#f5f4f0;font-weight:600;}tr:nth-child(even){background:#fafaf8;}'+
-    '.total{font-weight:700;background:#e6f5ef;}'+
-    '@media print{body{padding:10px;}}</style></head><body>'+
-    '<h2>Chantier : '+nom+'</h2>'+
-    '<p style="color:#777;margin-bottom:12px;font-size:11px;">Imprimé le '+new Date().toLocaleString('fr-FR')+'</p>'+
-    table.outerHTML+
-    '<scr'+'ipt>window.print();<'+'/script></body></html>');
-  w.document.close();
-}
-
 function renderEtiquettes(){
   var pills=document.getElementById('etiq-cat-pills');if(!pills)return;
   var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
@@ -2891,7 +2813,6 @@ function printEtiquettes(){
   var w=window.open('','_blank');w.document.write(html);w.document.close();
 }
 function downloadEtiquettes(){showToast('Telechargement non disponible');}
-// exportChantiers: voir ci-dessus
 function openNewChantier(){openModal('modal-chantier');}
 function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';openModal('modal-chantier');}
 async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1)l[i]={nom,desc};else l.push({nom,desc});await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistre');}
