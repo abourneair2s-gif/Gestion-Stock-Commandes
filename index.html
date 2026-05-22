@@ -499,10 +499,9 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       <input type="text" id="famille-node-nom" style="width:100%;" placeholder="ex: Sans joint">
     </div>
     <div class="form-group" id="famille-node-cat-group">
-      <label>Catégorie liée (optionnel — laisser vide si c'est un groupe)</label>
-      <select id="famille-node-cat" style="width:100%;">
-        <option value="">— Groupe (contient d'autres nœuds) —</option>
-      </select>
+      <label>Catégories liées (cochez une ou plusieurs)</label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">Laissez tout décoché si ce nœud est un groupe contenant d'autres nœuds.</div>
+      <div id="famille-node-cats-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;display:flex;flex-direction:column;gap:4px;"></div>
     </div>
     <div class="form-group">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -856,8 +855,8 @@ let dragSrcId = null; // ID du nœud glissé
 let stockFamilleFilter = null; // Filtre famille actif dans stock
 
 // Adapte les colonnes Supabase → format interne JS
-function openModal(id){const m=document.getElementById(id);if(m){m.classList.add('open');m.style.display='flex';}}
-function closeModal(id){const m=document.getElementById(id);if(m){m.classList.remove('open');m.style.display='';}}
+function openModal(id){const m=document.getElementById(id);if(m){m.style.display='flex';m.classList.add('open');}}
+function closeModal(id){const m=document.getElementById(id);if(m){m.classList.remove('open');m.style.display='none';}}
 function openCmdModal(){
   editingCmdId=null;cmdItems=[];
   var selC=document.getElementById('cmd-chantier');
@@ -925,7 +924,8 @@ function collectAllCats(tree){
   var cats=[];
   function walk(nodes){
     nodes.forEach(function(n){
-      if(n.categorie)cats.push(n.categorie);
+      if(n.categories&&n.categories.length)n.categories.forEach(function(c){cats.push(c);});
+      else if(n.categorie)cats.push(n.categorie); // compat ancienne version
       if(n.enfants)walk(n.enfants);
     });
   }
@@ -951,27 +951,28 @@ function renderFamillesPage(){
 function renderTreeNodes(nodes,depth){
   return nodes.map(function(n){
     var hasChildren=n.enfants&&n.enfants.length>0;
-    var isFeuille=!!n.categorie;
-    var nbArticles=isFeuille?stock.filter(function(a){return a.categorie===n.categorie;}).length:0;
+    var cats=n.categories||(n.categorie?[n.categorie]:[]);
+    var isFeuille=cats.length>0;
+    var nbArticles=cats.reduce(function(s,c){return s+stock.filter(function(a){return a.categorie===c;}).length;},0);
     var indent=depth*20;
-    var icon=isFeuille?'📂':'📁';
+    var icon=isFeuille?'&#x1F4C2;':'&#x1F4C1;';
     var visibleDot=n.visible_client!==false
       ?'<span title="Visible client" style="width:9px;height:9px;border-radius:50%;background:var(--green);display:inline-block;margin-left:6px;flex-shrink:0;"></span>'
-      :'<span title="Masqué client" style="width:9px;height:9px;border-radius:50%;background:var(--text3);display:inline-block;margin-left:6px;flex-shrink:0;"></span>';
-
+      :'<span title="Masque client" style="width:9px;height:9px;border-radius:50%;background:var(--text3);display:inline-block;margin-left:6px;flex-shrink:0;"></span>';
+    var catsStr=isFeuille?'<span style="font-size:11px;color:var(--blue);margin-right:6px;">'+cats.join(' &middot; ')+(nbArticles?' ('+nbArticles+' art.)':'')+'</span>':'';
     var html='<div class="fam-node" id="fn-'+n.id+'" data-id="'+n.id+'" draggable="true" style="margin-left:'+indent+'px;">';
-    html+='<div class="fam-node-row" onclick="editerNoeudFamille(\''+n.id+'\')" ondragover="famDragOver(event,\''+n.id+'\')" ondragleave="famDragLeave(event,\''+n.id+'\')" ondrop="famDrop(event,\''+n.id+'\')">';
-    html+='<span class="fam-drag-handle" ondragstart="famDragStart(event,\''+n.id+'\')" title="Glisser pour déplacer">⠿</span>';
+    html+='<div class="fam-node-row" onclick="editerNoeudFamille(&quot;'+n.id+'&quot;)" ondragover="famDragOver(event,&quot;'+n.id+'&quot;)" ondragleave="famDragLeave(event,&quot;'+n.id+'&quot;)" ondrop="famDrop(event,&quot;'+n.id+'&quot;)">';
+    html+='<span class="fam-drag-handle" ondragstart="famDragStart(event,&quot;'+n.id+'&quot;)" title="Glisser pour deplacer">&#x2807;</span>';
     html+='<span style="font-size:15px;margin-right:6px;">'+icon+'</span>';
     html+='<span style="font-weight:600;flex:1;">'+n.nom+'</span>';
-    if(isFeuille)html+='<span style="font-size:11px;color:var(--text3);margin-right:6px;">'+nbArticles+' article(s)</span>';
+    html+=catsStr;
     html+=visibleDot;
-    html+='<button class="btn btn-xs" style="margin-left:8px;padding:1px 7px;" onclick="event.stopPropagation();ouvrirModalEnfant(\''+n.id+'\')">＋</button>';
+    html+='<button class="btn btn-xs" style="margin-left:8px;padding:1px 7px;" onclick="event.stopPropagation();ouvrirModalEnfant(&quot;'+n.id+'&quot;)">&#xFF0B;</button>';
     html+='</div>';
     if(hasChildren){
       html+='<div class="fam-children" id="fch-'+n.id+'">'+renderTreeNodes(n.enfants,depth+1)+'</div>';
     }
-    html+='<div class="fam-drop-zone" id="fdz-'+n.id+'" data-after="'+n.id+'" ondragover="famDropZoneOver(event,\''+n.id+'\')" ondragleave="famDropZoneLeave(event,\''+n.id+'\')" ondrop="famDropZoneDrop(event,\''+n.id+'\')"></div>';
+    html+='<div class="fam-drop-zone" id="fdz-'+n.id+'" data-after="'+n.id+'" ondragover="famDropZoneOver(event,&quot;'+n.id+'&quot;)" ondragleave="famDropZoneLeave(event,&quot;'+n.id+'&quot;)" ondrop="famDropZoneDrop(event,&quot;'+n.id+'&quot;)"></div>';
     html+='</div>';
     return html;
   }).join('');
@@ -1061,17 +1062,32 @@ function famDropZoneDrop(event,afterId){
 }
 
 // ── Modales nœud ─────────────────────────────────────────────
-function peuplerSelectCategories(){
-  var sel=document.getElementById('famille-node-cat');
-  if(!sel)return;
+function peuplerCheckboxCategories(selectedCats){
+  selectedCats=selectedCats||[];
+  var list=document.getElementById('famille-node-cats-list');
+  if(!list)return;
   var usedCats=collectAllCats(famillesTree);
   var editingNode=familleNodeEditing?findNodeById(famillesTree,familleNodeEditing):null;
-  sel.innerHTML='<option value="">— Groupe (contient d\'autres nœuds) —</option>'+
-    categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort().map(function(c){
-      var used=usedCats.indexOf(c)!==-1&&(!editingNode||editingNode.categorie!==c);
-      return '<option value="'+c+'" '+(used?'style="color:var(--text3);" title="Déjà utilisée dans une autre famille"':'')+'>'+c+(used?' (déjà classée)':'')+'</option>';
-    }).join('');
+  var editingCats=editingNode?(editingNode.categories||[]):[]; 
+  var cats=categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort();
+  stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});
+  cats.sort();
+  list.innerHTML=cats.map(function(c){
+    var used=usedCats.indexOf(c)!==-1&&editingCats.indexOf(c)===-1;
+    var checked=selectedCats.indexOf(c)!==-1;
+    return '<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;'+(used?'opacity:0.4;':'')+'">'+
+      '<input type="checkbox" value="'+c+'" '+(checked?'checked':'')+(used?' disabled':'')+' style="width:16px;height:16px;cursor:pointer;">'+
+      '<span style="font-size:13px;">'+c+'</span>'+
+      (used?'<span style="font-size:10px;color:var(--text3);">(deja classee)</span>':'')+
+      '</label>';
+  }).join('');
 }
+function getCheckedCategories(){
+  var list=document.getElementById('famille-node-cats-list');
+  if(!list)return [];
+  return Array.from(list.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function peuplerSelectCategories(){peuplerCheckboxCategories([]);}
 
 function ouvrirModalNouvelleRacine(){
   familleNodeEditing=null;
@@ -1081,8 +1097,7 @@ function ouvrirModalNouvelleRacine(){
   document.getElementById('famille-node-nom').value='';
   document.getElementById('famille-node-visible').checked=true;
   document.getElementById('btn-famille-delete').style.display='none';
-  peuplerSelectCategories();
-  document.getElementById('famille-node-cat').value='';
+  peuplerCheckboxCategories([]);
   openModal('modal-famille-node');
   setTimeout(function(){document.getElementById('famille-node-nom').focus();},100);
 }
@@ -1095,8 +1110,7 @@ function ouvrirModalEnfant(parentId){
   document.getElementById('famille-node-nom').value='';
   document.getElementById('famille-node-visible').checked=true;
   document.getElementById('btn-famille-delete').style.display='none';
-  peuplerSelectCategories();
-  document.getElementById('famille-node-cat').value='';
+  peuplerCheckboxCategories([]);
   openModal('modal-famille-node');
   setTimeout(function(){document.getElementById('famille-node-nom').focus();},100);
 }
@@ -1110,15 +1124,15 @@ function editerNoeudFamille(id){
   document.getElementById('famille-node-nom').value=node.nom;
   document.getElementById('famille-node-visible').checked=node.visible_client!==false;
   document.getElementById('btn-famille-delete').style.display='';
-  peuplerSelectCategories();
-  document.getElementById('famille-node-cat').value=node.categorie||'';
+  var nodeCats=node.categories||(node.categorie?[node.categorie]:[]);
+  peuplerCheckboxCategories(nodeCats);
   openModal('modal-famille-node');
 }
 
 function sauvegarderNoeudFamille(){
   var nom=document.getElementById('famille-node-nom').value.trim();
   if(!nom){showToast('Saisissez un nom');return;}
-  var cat=document.getElementById('famille-node-cat').value;
+  var checkedCats=getCheckedCategories();
   var visible=document.getElementById('famille-node-visible').checked;
   var parentId=document.getElementById('famille-node-parent-id').value;
   var editId=document.getElementById('famille-node-id').value;
@@ -1127,10 +1141,10 @@ function sauvegarderNoeudFamille(){
     // Modification
     var node=findNodeById(famillesTree,editId);
     if(!node){showToast('Nœud introuvable');return;}
-    node.nom=nom;node.categorie=cat||null;node.visible_client=visible;
+    node.nom=nom;node.categories=checkedCats;node.categorie=null;node.visible_client=visible;
   } else {
     // Création
-    var newNode={id:genId(),nom:nom,categorie:cat||null,visible_client:visible,enfants:[]};
+    var newNode={id:genId(),nom:nom,categories:checkedCats,categorie:null,visible_client:visible,enfants:[]};
     if(parentId){
       var parent=findNodeById(famillesTree,parentId);
       if(!parent){showToast('Parent introuvable');return;}
@@ -1178,7 +1192,11 @@ function renderStockFamilleFilter(){
     var html='';
     nodes.forEach(function(n){
       var cats=[];
-      function collectCats(node){if(node.categorie)cats.push(node.categorie);if(node.enfants)node.enfants.forEach(collectCats);}
+      function collectCats(node){
+        if(node.categories&&node.categories.length)node.categories.forEach(function(c){cats.push(c);});
+        else if(node.categorie)cats.push(node.categorie);
+        if(node.enfants)node.enfants.forEach(collectCats);
+      }
       collectCats(n);
       var nbArts=cats.reduce(function(s,c){return s+stock.filter(function(a){return a.categorie===c;}).length;},0);
       if(nbArts===0&&!n.enfants.length)return;
@@ -1212,7 +1230,11 @@ function getCatsFamille(familleId){
   var node=findNodeById(famillesTree,familleId);
   if(!node)return [];
   var cats=[];
-  function collect(n){if(n.categorie)cats.push(n.categorie);if(n.enfants)n.enfants.forEach(collect);}
+  function collect(n){
+    if(n.categories&&n.categories.length)n.categories.forEach(function(c){cats.push(c);});
+    else if(n.categorie)cats.push(n.categorie);
+    if(n.enfants)n.enfants.forEach(collect);
+  }
   collect(node);
   return cats;
 }
@@ -1224,7 +1246,8 @@ function getVisibleCatsClient(){
   function walk(nodes){
     nodes.forEach(function(n){
       if(n.visible_client===false)return; // nœud masqué → tous ses enfants masqués
-      if(n.categorie)cats.push(n.categorie);
+      if(n.categories&&n.categories.length)n.categories.forEach(function(c){cats.push(c);});
+      else if(n.categorie)cats.push(n.categorie);
       if(n.enfants)walk(n.enfants);
     });
   }
