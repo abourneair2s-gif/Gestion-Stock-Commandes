@@ -243,19 +243,18 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
           </div>
         </div>
       </div>
-      <div class="section-header"><div class="section-title">Aperçu stock par catégorie</div></div>
+      <div class="section-header"><div class="section-title">Aperçu stock par famille</div></div>
       <div class="table-wrap">
-        <table><thead><tr><th>Catégorie</th><th>Articles</th><th>Valeur</th><th>Critiques</th><th>État</th></tr></thead>
+        <table><thead><tr><th>Famille / Catégorie</th><th>Articles</th><th>Valeur achat</th><th>Critiques</th><th>État</th></tr></thead>
         <tbody id="dash-categories"></tbody></table>
       </div>
     </div>
 
     <!-- STOCK -->
     <div class="page" id="page-stock">
-  <div id="stock-famille-filter" style="margin-bottom:8px;"></div>
       <div class="search-bar">
         <input type="search" id="search-input" placeholder="Rechercher référence, diamètre…" oninput="renderStock()">
-        <select id="filter-cat" onchange="renderStock()"><option value="">Toutes catégories</option></select>
+        <select id="filter-famille" onchange="filtreStockFamilleSelect(this.value)" style="min-width:180px;"><option value="">Toutes familles</option></select>
         <select id="filter-status" onchange="renderStock()">
           <option value="">Tous statuts</option>
           <option value="ok">OK</option><option value="warn">Bas</option><option value="danger">Critique</option>
@@ -314,7 +313,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       <div id="scan-tab-manual" style="display:none;">
         <div class="tab-switch" style="margin-bottom:10px;">
           <button class="tab-sw-btn active" onclick="switchScanManualMode('ref',this)">⌨️ Par référence</button>
-          <button class="tab-sw-btn" onclick="switchScanManualMode('cat',this)">📂 Par catégorie</button>
+          <button class="tab-sw-btn" onclick="switchScanManualMode('cat',this)">🗂 Par famille</button>
         </div>
         <div id="scan-manual-ref">
           <div class="form-row"><label class="form-label">Référence article</label><input type="text" id="manual-ref" placeholder="ex: GAI 450, C90 315…" oninput="lookupArticle(this.value)"></div>
@@ -1177,9 +1176,9 @@ function supprimerNoeudFamille(){
 async function saveFamillesTree(){
   var r=await db.from('config').upsert({key:'familles',value:famillesTree},{onConflict:'key'});
   if(r.error){showToast('Erreur sauvegarde: '+r.error.message);return;}
-  showToast('Familles sauvegardées ✓');
-  // Mettre à jour les filtres stock
-  renderStockFamilleFilter();
+  showToast('Familles sauvegardees ✓');
+  peuplerFamilleSelect();
+  renderDashboard();
 }
 
 // ── Filtre Famille dans Stock ─────────────────────────────────
@@ -1227,6 +1226,10 @@ function filtrerStockParFamille(familleId){
 
 function getCatsFamille(familleId){
   if(!familleId)return null; // null = toutes
+  if(familleId==='__sans_famille__'){
+    var allC=collectAllCats(famillesTree);
+    return stock.map(function(a){return a.categorie;}).filter(function(c){return allC.indexOf(c)===-1;});
+  }
   var node=findNodeById(famillesTree,familleId);
   if(!node)return [];
   var cats=[];
@@ -1271,6 +1274,118 @@ function getVisibleCatsClient(){
   document.head.appendChild(s);
 })();
 
+
+// ── Filtre stock par famille (select) ──────────────────────────
+function peuplerFamilleSelect(){
+  var sel=document.getElementById('filter-famille');
+  if(!sel)return;
+  // Vider sauf "Toutes familles"
+  sel.innerHTML='<option value="">Toutes familles</option>';
+  if(!famillesTree||famillesTree.length===0)return;
+  function addOptions(nodes,depth){
+    nodes.forEach(function(n){
+      var opt=document.createElement('option');
+      opt.value=n.id;
+      opt.textContent=('    ').repeat(depth)+(depth===0?'📁 ':'  ↳ ')+n.nom;
+      sel.appendChild(opt);
+      if(n.enfants&&n.enfants.length)addOptions(n.enfants,depth+1);
+    });
+  }
+  addOptions(famillesTree,0);
+  // Option spéciale : sans famille
+  var classedCats=collectAllCats(famillesTree);
+  var hasSans=stock.some(function(a){return classedCats.indexOf(a.categorie)===-1;});
+  if(hasSans){
+    var opt2=document.createElement('option');
+    opt2.value='__sans_famille__';
+    opt2.textContent='📂 Sans famille';
+    sel.appendChild(opt2);
+  }
+}
+
+function filtreStockFamilleSelect(familleId){
+  stockFamilleFilter=familleId||null;
+  renderStock();
+}
+
+// ── Scan : navigation par famille ──────────────────────────────
+function buildScanCatPills(){
+  var pills=document.getElementById('scan-cat-pills');if(!pills)return;
+  var html='';
+  if(famillesTree&&famillesTree.length>0){
+    function addScanPills(nodes,depth){
+      nodes.forEach(function(n){
+        var indent='margin-left:'+(depth*12)+'px;';
+        html+='<div class="cat-pill" style="'+indent+'" onclick="selectScanFamille(&quot;'+n.id+'&quot;,this)">'+(n.categories&&n.categories.length?'📂':'📁')+' '+n.nom+'</div>';
+        if(n.enfants&&n.enfants.length)addScanPills(n.enfants,depth+1);
+      });
+    }
+    addScanPills(famillesTree,0);
+  } else {
+    // Fallback : catégories
+    var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
+    cats.forEach(function(c){html+='<div class="cat-pill" onclick="selectScanCat(&quot;'+c+'&quot;,this)">'+c+'</div>';});
+  }
+  pills.innerHTML=html;
+}
+
+function selectScanFamille(familleId,el){
+  document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
+  if(el)el.classList.add('active');
+  // Récupérer les catégories de cette famille
+  var cats=getCatsFamille(familleId);
+  if(!cats||cats.length===0){
+    // C'est un groupe, montrer ses enfants cliquables plutôt
+    var items=document.getElementById('scan-cat-items');
+    if(items)items.innerHTML='<div style="padding:8px;color:var(--text3);font-size:12px;">Sélectionnez une sous-famille ci-dessus.</div>';
+    return;
+  }
+  var items=document.getElementById('scan-cat-items');if(!items)return;
+  var filtered=stock.filter(function(a){return cats.indexOf(a.categorie)!==-1;});
+  items.innerHTML=filtered.map(function(a){
+    var rel=a.stock===0?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px;">RELIQUAT</span>':'';
+    return '<div onclick="selectScanArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; '+a.categorie+' O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong>'+rel+'</div>';
+  }).join('');
+}
+
+// ── Commandes : navigation par famille ─────────────────────────
+function buildCatPills(){
+  var pills=document.getElementById('cmd-cat-pills');if(!pills)return;
+  var html='';
+  if(famillesTree&&famillesTree.length>0){
+    function addCmdPills(nodes,depth){
+      nodes.forEach(function(n){
+        var indent='margin-left:'+(depth*12)+'px;';
+        html+='<div class="cat-pill" style="'+indent+'" onclick="selectCmdFamille(&quot;'+n.id+'&quot;,this)">'+(n.categories&&n.categories.length?'📂':'📁')+' '+n.nom+'</div>';
+        if(n.enfants&&n.enfants.length)addCmdPills(n.enfants,depth+1);
+      });
+    }
+    addCmdPills(famillesTree,0);
+  } else {
+    var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
+    cats.forEach(function(c){html+='<div class="cat-pill" onclick="selectCmdCat(&quot;'+c+'&quot;,this)">'+c+'</div>';});
+  }
+  pills.innerHTML=html;
+}
+
+function selectCmdFamille(familleId,el){
+  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
+  if(el)el.classList.add('active');
+  var cats=getCatsFamille(familleId);
+  if(!cats||cats.length===0){
+    var items=document.getElementById('cmd-cat-items');
+    if(items)items.innerHTML='<div style="padding:8px;color:var(--text3);font-size:12px;">Sélectionnez une sous-famille ci-dessus.</div>';
+    return;
+  }
+  var items=document.getElementById('cmd-cat-items');if(!items)return;
+  var filtered=stock.filter(function(a){return cats.indexOf(a.categorie)!==-1;});
+  items.innerHTML=filtered.map(function(a){
+    var rel=a.stock===0?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;font-weight:600;">RELIQUAT</span>':'';
+    return '<div onclick="selectCmdArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; '+a.categorie+' O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong>'+rel+'</div>';
+  }).join('');
+}
+
+// ── getCatsFamille : gère __sans_famille__ ──────────────────────
 // ══════ FONCTIONS MANQUANTES — injectees avant initApp ══════
 
 function populateArtCatSelect(){
@@ -1866,20 +1981,66 @@ function renderDashboard(){
   document.getElementById('dash-commandes').innerHTML=recent.length===0
     ?'<tr><td colspan="3" style="text-align:center;color:var(--text3);font-size:12px;">Aucune commande</td></tr>'
     :recent.map(c=>`<tr><td>${c.chantier}</td><td style="font-size:11px;">${c.items?c.items.length+' article(s)':'—'}</td><td>${cmdBadge(c.statut)}</td></tr>`).join('');
-  const cats=[...new Set(stock.map(a=>a.categorie))];
   const totalArticles=stock.length;
   const totalValeur=totalVal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f');
-  document.getElementById('dash-categories').innerHTML=cats.map(cat=>{
-    const items=stock.filter(a=>a.categorie===cat);
-    const val=items.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
-    const critiques=items.filter(a=>getStatus(a)!=='ok').length;
-    return`<tr><td><strong>${cat}</strong></td><td>${items.length}</td>
-      <td>${val>0?val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+' €':'—'}</td>
-      <td class="${critiques>0?'stock-danger':''}">${critiques>0?critiques+' article(s)':'—'}</td>
-      <td>${critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>'}</td></tr>`;
-  }).join('')+`<tr style="background:#fafaf8;border-top:2px solid var(--border);font-size:12px;color:var(--text3);">
-    <td colspan="2" style="padding:6px 12px;">Total : <strong>${totalArticles}</strong> articles référencés</td>
-    <td colspan="3" style="padding:6px 12px;">Valeur inventaire : <strong>${totalValeur} €</strong></td></tr>`;
+  // Rendu par famille/sous-famille ou par catégorie si pas de familles
+  var dashRows='';
+  function dashFamilleRows(nodes,depth){
+    nodes.forEach(function(n){
+      var cats=n.categories||(n.categorie?[n.categorie]:[]);
+      var allCats=[];
+      function collectDashCats(node){
+        var nc=node.categories||(node.categorie?[node.categorie]:[]);
+        nc.forEach(function(c){allCats.push(c);});
+        if(node.enfants)node.enfants.forEach(collectDashCats);
+      }
+      collectDashCats(n);
+      var items=stock.filter(function(a){return allCats.indexOf(a.categorie)!==-1;});
+      var val=items.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
+      var critiques=items.filter(function(a){return getStatus(a)!=='ok';}).length;
+      var indent='  '.repeat(depth);
+      var icon=cats.length>0?'📂':'📁';
+      dashRows+='<tr style="'+(depth===0?'background:var(--surface);font-weight:700;':'font-size:13px;')+'">'+
+        '<td style="padding-left:'+(8+depth*16)+'px;">'+icon+' '+n.nom+'</td>'+
+        '<td>'+(items.length>0?items.length:'—')+'</td>'+
+        '<td>'+(val>0?val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+' €':'—')+'</td>'+
+        '<td class="'+(critiques>0?'stock-danger':'')+'">'+(critiques>0?critiques+' art.':'—')+'</td>'+
+        '<td>'+(items.length===0?'':''+critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>')+'</td></tr>';
+      if(n.enfants&&n.enfants.length)dashFamilleRows(n.enfants,depth+1);
+    });
+  }
+  if(famillesTree&&famillesTree.length>0){
+    dashFamilleRows(famillesTree,0);
+    // Articles sans famille
+    var classedCats=collectAllCats(famillesTree);
+    var sansFamily=stock.filter(function(a){return classedCats.indexOf(a.categorie)===-1;});
+    if(sansFamily.length>0){
+      var sfVal=sansFamily.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
+      var sfCrit=sansFamily.filter(function(a){return getStatus(a)!=='ok';}).length;
+      dashRows+='<tr style="opacity:0.6;font-style:italic;">'+
+        '<td style="padding-left:8px;">📂 Sans famille ('+[...new Set(sansFamily.map(function(a){return a.categorie;}))].join(', ')+')</td>'+
+        '<td>'+sansFamily.length+'</td>'+
+        '<td>'+(sfVal>0?sfVal.toFixed(0)+' €':'—')+'</td>'+
+        '<td class="'+(sfCrit>0?'stock-danger':'')+'">'+(sfCrit>0?sfCrit+' art.':'—')+'</td>'+
+        '<td>'+(sfCrit===0?'<span class="badge badge-ok">OK</span>':'<span class="badge badge-warn">Attention</span>')+'</td></tr>';
+    }
+  } else {
+    // Fallback : par catégorie si pas de familles définies
+    var cats=[...new Set(stock.map(function(a){return a.categorie;}))].sort();
+    cats.forEach(function(cat){
+      var items=stock.filter(function(a){return a.categorie===cat;});
+      var val=items.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
+      var critiques=items.filter(function(a){return getStatus(a)!=='ok';}).length;
+      dashRows+='<tr><td><strong>'+cat+'</strong></td><td>'+items.length+'</td>'+
+        '<td>'+(val>0?val.toFixed(0)+' €':'—')+'</td>'+
+        '<td class="'+(critiques>0?'stock-danger':'')+'">'+(critiques>0?critiques+' art.':'—')+'</td>'+
+        '<td>'+(critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>')+'</td></tr>';
+    });
+  }
+  document.getElementById('dash-categories').innerHTML=dashRows+
+    '<tr style="background:#fafaf8;border-top:2px solid var(--border);font-size:12px;color:var(--text3);">'+
+    '<td colspan="2" style="padding:6px 12px;">Total : <strong>'+totalArticles+'</strong> articles</td>'+
+    '<td colspan="3" style="padding:6px 12px;">Valeur : <strong>'+totalValeur+' €</strong></td></tr>';
   updateBadges();
 }
 
@@ -1888,20 +2049,11 @@ function renderDashboard(){
 
 
 function populateCatFilter(){
-  const sel=document.getElementById('filter-cat');
-  if(sel&&sel.options.length<=1){
-    const parents=categories.filter(c=>!c.includes(' > ')).sort();
-    parents.forEach(p=>{
-      const o=document.createElement('option');o.value=p;o.textContent=p;sel.appendChild(o);
-      categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>{
-        const o2=document.createElement('option');o2.value=sc;o2.textContent='  ↳ '+sc.split(' > ')[1];sel.appendChild(o2);
-      });
-    });
-  }
+  peuplerFamilleSelect();
 }
 function renderStock(){
   if(CLIENT_MODE){renderStockClient();return;}
-  renderStockFamilleFilter();
+  peuplerFamilleSelect();
   // Adapter les colonnes selon le mode
   const thPrix=document.getElementById('stock-th-prix');
   const thValeur=document.getElementById('stock-th-valeur');
@@ -1909,14 +2061,16 @@ function renderStock(){
   if(thPrix) thPrix.textContent=CLIENT_MODE?'Prix HT':'Prix achat';
   if(thValeur) { thValeur.style.display=CLIENT_MODE?'none':''; }
   if(thFourn) { thFourn.style.display=CLIENT_MODE?'none':''; }
-  populateCatFilter();
+  peuplerFamilleSelect();
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
-  const cat=document.getElementById('filter-cat')?.value||'';
   const status=document.getElementById('filter-status')?.value||'';
-  var familleFilterCats=getCatsFamille(stockFamilleFilter);
+  var selFam=document.getElementById('filter-famille');
+  var famId=selFam?selFam.value:'';
+  var familleFilterCats=getCatsFamille(famId||null);
   const filtered=stock.filter(a=>{
     const mq=!q||a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).toLowerCase().includes(q);
-    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
+    var familleOk=!familleFilterCats||(familleFilterCats.indexOf(a.categorie)!==-1);
+    return mq&&(!status||getStatus(a)===status)&&familleOk;
   });
   document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
   document.getElementById('stock-table').innerHTML=filtered.map(a=>{
