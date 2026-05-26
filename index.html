@@ -626,8 +626,19 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         </div>
       </div>
       <div id="add-mode-cat" style="display:none;">
-        <div class="cat-pills" id="cmd-cat-pills"></div>
-        <div id="cmd-cat-items" style="max-height:180px;overflow-y:auto;"></div>
+        <!-- Niveau 1 : Familles -->
+        <div class="cat-pills" id="cmd-cat-pills" style="margin-bottom:0;"></div>
+        <!-- Niveau 2 : Sous-familles (affiché après clic famille) -->
+        <div id="cmd-sf-pills-wrap" style="display:none;border-top:1px dashed var(--border);padding-top:6px;margin-top:4px;">
+          <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;padding-left:2px;">Sous-famille</div>
+          <div class="cat-pills" id="cmd-sf-pills" style="margin-bottom:0;"></div>
+        </div>
+        <!-- Niveau 3 : Articles (affiché après clic sous-famille) -->
+        <div id="cmd-cat-items" style="max-height:200px;overflow-y:auto;display:none;margin-top:4px;border:1px solid var(--border);border-radius:var(--radius-sm);"></div>
+        <!-- Message invite -->
+        <div id="cmd-cat-hint" style="text-align:center;color:var(--text3);font-size:12px;padding:16px 0;">
+          Sélectionnez une famille ci-dessus
+        </div>
       </div>
       <div id="add-mode-qr" style="display:none;">
         <div id="cmd-qr-zone"></div>
@@ -2012,89 +2023,164 @@ function switchAddMode(mode){
 function buildCatPills(){
   const el=document.getElementById('cmd-cat-pills');
   if(!el)return;
-  let pills='<span class="cat-pill active" onclick="filterCmdFam(this,null)">Toutes</span>';
+  let pills='<span class="cat-pill active" onclick="cmdSelectFam(this,null)">Toutes</span>';
   if(famillesTree.length>0){
     famillesTree.forEach(f=>{
       const hasCats=(f.categories||[]).length||(f.enfants||[]).some(sf=>(sf.categories||[]).length);
-      if(hasCats) pills+=`<span class="cat-pill" onclick="filterCmdFam(this,'${f.id}')" data-famid="${f.id}">${escH(f.nom)}</span>`;
+      if(hasCats) pills+=`<span class="cat-pill" onclick="cmdSelectFam(this,'${f.id}')">${escH(f.nom)}</span>`;
     });
   } else {
+    // Pas de familles → on affiche directement les catégories comme SF
     const parents=categories.filter(c=>!c.includes(' > ')).sort();
-    parents.forEach(p=>{pills+=`<span class="cat-pill" onclick="filterCmdFam(this,'__cat__${p.replace(/'/g,"\'")}')">  ${p}</span>`;});
+    parents.forEach(p=>{pills+=`<span class="cat-pill" onclick="cmdSelectFam(this,'__cat__${p.replace(/'/g,"\\'")}')">  ${p}</span>`;});
   }
   el.innerHTML=pills;
-  filterCmdFam(null,null);
+  // État initial : invite, pas de SF, pas d'articles
+  cmdShowHint('Sélectionnez une famille ci-dessus');
 }
 
 let _cmdFamFilter=null;
-function filterCmdFam(el,famId){
-  _cmdFamFilter=famId;
-  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
-  if(el)el.classList.add('active');
-  renderCmdCatItems();
-}
+let _cmdSFFilter=null;
 
 // Rétro-compat
 let _cmdCatFilter='';
-function filterCmdCat(el,val){filterCmdFam(el,val?'__cat__'+val:null);}
+function filterCmdFam(el,famId){cmdSelectFam(el,famId);}
+function filterCmdCat(el,val){cmdSelectFam(el,val?'__cat__'+val:null);}
+
+function cmdShowHint(msg){
+  const hint=document.getElementById('cmd-cat-hint');
+  const items=document.getElementById('cmd-cat-items');
+  if(hint){hint.textContent=msg;hint.style.display='';}
+  if(items)items.style.display='none';
+}
+
+function cmdHideHint(){
+  const hint=document.getElementById('cmd-cat-hint');
+  const items=document.getElementById('cmd-cat-items');
+  if(hint)hint.style.display='none';
+  if(items)items.style.display='';
+}
+
+function cmdSelectFam(el,famId){
+  _cmdFamFilter=famId;
+  _cmdSFFilter=null;
+  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+
+  const sfWrap=document.getElementById('cmd-sf-pills-wrap');
+  const sfEl=document.getElementById('cmd-sf-pills');
+
+  if(!famId){
+    // "Toutes" → cacher SF, montrer tous les articles groupés
+    if(sfWrap)sfWrap.style.display='none';
+    cmdHideHint();
+    renderCmdArtList(null);
+    return;
+  }
+
+  if(famId.startsWith('__cat__')){
+    // Pas de familles configurées, catégorie directe
+    if(sfWrap)sfWrap.style.display='none';
+    cmdHideHint();
+    renderCmdArtList(famId);
+    return;
+  }
+
+  const f=famillesTree.find(x=>x.id===famId);
+  if(!f)return;
+
+  const sfList=(f.enfants||[]).filter(sf=>(sf.categories||[]).length);
+  const hasDirect=(f.categories||[]).length;
+
+  if(!sfList.length&&hasDirect){
+    // Famille sans sous-famille → afficher articles directement
+    if(sfWrap)sfWrap.style.display='none';
+    cmdHideHint();
+    renderCmdArtList(famId);
+    return;
+  }
+
+  // Afficher les sous-familles
+  if(sfWrap)sfWrap.style.display='';
+  let sfPills='';
+  if(hasDirect) sfPills+=`<span class="cat-pill" onclick="cmdSelectSF(this,'${f.id}','__direct__')">— Général</span>`;
+  sfList.forEach(sf=>{
+    sfPills+=`<span class="cat-pill" onclick="cmdSelectSF(this,'${f.id}','${sf.id}')">${escH(sf.nom)}</span>`;
+  });
+  if(sfEl)sfEl.innerHTML=sfPills;
+  // Attendre la sélection d'une SF
+  cmdShowHint('Sélectionnez une sous-famille');
+}
+
+function cmdSelectSF(el,famId,sfId){
+  _cmdSFFilter=sfId;
+  document.querySelectorAll('#cmd-sf-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  cmdHideHint();
+  renderCmdArtList(famId,sfId);
+}
 
 function artCmdRow(a){
   const s=getStatus(a);const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
-  return`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;" onclick="addCmdItem('${a.id}')" onmouseenter="this.style.background='var(--green-bg)'" onmouseleave="this.style.background=''">
-    <code style="font-size:12px;font-weight:700;flex:1;min-width:72px;">${a.id}</code>
-    <span style="font-size:11px;color:var(--text2);flex:1;">Ø ${a.diametre}</span>
-    <span class="${sc}" style="font-size:11px;font-weight:700;min-width:28px;text-align:right;">${a.stock}</span>
-    <span style="font-size:16px;color:var(--green);font-weight:700;padding-left:4px;">+</span>
+  return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;" onclick="addCmdItem('${a.id}')" onmouseenter="this.style.background='var(--green-bg)'" onmouseleave="this.style.background=''">
+    <code style="font-size:12px;font-weight:700;min-width:80px;">${a.id}</code>
+    <span style="font-size:12px;color:var(--text2);">Ø ${a.diametre}</span>
+    <span class="${sc}" style="font-size:12px;font-weight:700;margin-left:auto;">${a.stock}</span>
+    <span style="font-size:18px;color:var(--green);font-weight:700;padding-left:6px;">+</span>
   </div>`;
 }
 
-function sfHeader(nom){
-  return`<div style="padding:5px 10px;background:var(--bg);font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.04em;border-bottom:1px solid var(--border);text-transform:uppercase;">📁 ${escH(nom)}</div>`;
-}
-
-function renderCmdCatItems(){
+function renderCmdArtList(famId,sfId){
   const el=document.getElementById('cmd-cat-items');if(!el)return;
-  let html='';
+  let arts=[];
 
-  if(!_cmdFamFilter){
-    // Toutes — groupé par famille > sous-famille
+  if(!famId){
+    // Toutes les familles groupées
+    let html='';
     if(famillesTree.length>0){
       famillesTree.forEach(f=>{
-        const fDirectArts=stock.filter(a=>(f.categories||[]).includes(a.categorie));
-        const sfGroups=(f.enfants||[]).map(sf=>({sf,arts:stock.filter(a=>(sf.categories||[]).includes(a.categorie))})).filter(g=>g.arts.length);
-        if(!fDirectArts.length&&!sfGroups.length)return;
-        html+=`<div style="padding:6px 10px 2px;background:var(--bg2);font-size:12px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);border-top:2px solid var(--border2);">📁 ${escH(f.nom)}</div>`;
-        fDirectArts.forEach(a=>{html+=artCmdRow(a);});
-        sfGroups.forEach(({sf,arts})=>{
-          html+=sfHeader(sf.nom);
-          arts.forEach(a=>{html+=artCmdRow(a);});
+        const allFamCats=[...(f.categories||[]),...(f.enfants||[]).flatMap(sf=>sf.categories||[])];
+        const famArts=stock.filter(a=>allFamCats.includes(a.categorie));
+        if(!famArts.length)return;
+        html+=`<div style="padding:6px 10px;background:var(--bg2);font-size:12px;font-weight:700;border-bottom:1px solid var(--border);border-top:2px solid var(--border2);">📁 ${escH(f.nom)}</div>`;
+        (f.enfants||[]).forEach(sf=>{
+          const sfArts=famArts.filter(a=>(sf.categories||[]).includes(a.categorie));
+          if(!sfArts.length)return;
+          html+=`<div style="padding:4px 10px 4px 20px;background:var(--bg);font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.04em;">📁 ${escH(sf.nom)}</div>`;
+          sfArts.forEach(a=>{html+=artCmdRow(a);});
         });
+        const directArts=famArts.filter(a=>(f.categories||[]).includes(a.categorie));
+        directArts.forEach(a=>{html+=artCmdRow(a);});
       });
     } else {
       stock.forEach(a=>{html+=artCmdRow(a);});
     }
-  } else if(_cmdFamFilter.startsWith('__cat__')){
-    const cat=_cmdFamFilter.slice(7);
-    stock.filter(a=>a.categorie===cat||a.categorie.startsWith(cat+' > ')).forEach(a=>{html+=artCmdRow(a);});
-  } else {
-    // Famille spécifique — groupé par sous-famille
-    const f=famillesTree.find(x=>x.id===_cmdFamFilter);
-    if(!f){el.innerHTML='<div style="text-align:center;color:var(--text3);padding:12px;">Aucun article.</div>';return;}
-    // Catégories directes de la famille (si pas de sous-famille ou en plus)
-    const fDirectArts=stock.filter(a=>(f.categories||[]).includes(a.categorie));
-    const sfGroups=(f.enfants||[]).map(sf=>({sf,arts:stock.filter(a=>(sf.categories||[]).includes(a.categorie))})).filter(g=>g.arts.length);
-    if(fDirectArts.length){
-      fDirectArts.forEach(a=>{html+=artCmdRow(a);});
-    }
-    sfGroups.forEach(({sf,arts})=>{
-      html+=sfHeader(sf.nom);
-      arts.forEach(a=>{html+=artCmdRow(a);});
-    });
+    el.innerHTML=html||'<div style="text-align:center;color:var(--text3);padding:14px;">Aucun article.</div>';
+    return;
   }
 
-  if(!html){el.innerHTML='<div style="text-align:center;color:var(--text3);padding:12px;">Aucun article dans cette famille.</div>';return;}
-  el.innerHTML=html;
+  if(famId.startsWith('__cat__')){
+    const cat=famId.slice(7);
+    arts=stock.filter(a=>a.categorie===cat);
+  } else {
+    const f=famillesTree.find(x=>x.id===famId);
+    if(!f){el.innerHTML='';return;}
+    if(!sfId||sfId==='__direct__'){
+      arts=stock.filter(a=>(f.categories||[]).includes(a.categorie));
+    } else {
+      const sf=(f.enfants||[]).find(x=>x.id===sfId);
+      arts=sf?stock.filter(a=>(sf.categories||[]).includes(a.categorie)):[];
+    }
+  }
+
+  if(!arts.length){
+    el.innerHTML='<div style="text-align:center;color:var(--text3);padding:14px;">Aucun article dans cette sous-famille.</div>';
+    return;
+  }
+  el.innerHTML=arts.map(artCmdRow).join('');
 }
+
+function renderCmdCatItems(){renderCmdArtList(_cmdFamFilter,_cmdSFFilter);}
 
 function buildScanCatPills(){
   const el=document.getElementById('scan-cat-pills');if(!el)return;
