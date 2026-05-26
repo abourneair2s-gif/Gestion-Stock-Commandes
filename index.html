@@ -1509,15 +1509,78 @@ function renderCommandes(){
 function viewCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
   const date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
-  const statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
-  document.getElementById('cmd-detail-title').textContent='Commande #'+String(c.num).padStart(3,'0')+' - '+c.chantier;
-  document.getElementById('cmd-detail-body').innerHTML='<div style="font-size:13px;margin-bottom:12px;"><strong>Date:</strong> '+date+' | <strong>Demandeur:</strong> '+(c.nom||'')+'<br><strong>Urgence:</strong> '+(c.urgence||'')+' | <strong>Statut:</strong> '+statLabel+(c.notes?'<br><strong>Notes:</strong> '+c.notes:'')+'</div><table style="width:100%;font-size:13px;"><thead><tr><th>Ref</th><th>Article</th><th>Qte</th><th>Stock</th></tr></thead><tbody>'+(c.items||[]).map(i=>{const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:'?'};return'<tr><td><code>'+i.id+'</code></td><td>'+art.categorie+' '+art.diametre+'</td><td>'+i.qty+'</td><td>'+art.stock+'</td></tr>';}).join('')+'</tbody></table>';
+  const statLabel={'en_attente':'⏳ En attente','approuvee':'✅ Approuvée','refusee':'❌ Refusée'}[c.statut]||c.statut;
+  const statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
+  document.getElementById('cmd-detail-title').textContent='Commande #'+String(c.num).padStart(3,'0')+' — '+c.chantier;
+  // Tableau articles : masquer colonne Stock en mode client
+  const thStock=CLIENT_MODE?'':'<th>Stock</th>';
+  const tdStock=CLIENT_MODE?'':(art)=>'<td>'+art.stock+'</td>';
+  const rows=(c.items||[]).map(i=>{
+    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:'?'};
+    return'<tr><td><code>'+i.id+'</code></td><td>'+art.categorie+' Ø'+art.diametre+'</td><td style="text-align:center;font-weight:700;">'+i.qty+'</td>'+(CLIENT_MODE?'':'<td>'+art.stock+'</td>')+'</tr>';
+  }).join('');
+  document.getElementById('cmd-detail-body').innerHTML=
+    '<div style="font-size:13px;margin-bottom:14px;line-height:1.7;">'+
+    '<strong>Date :</strong> '+date+' &nbsp;|&nbsp; <strong>Demandeur :</strong> '+(c.nom||'—')+'<br>'+
+    '<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'+
+    (c.notes?'<br><strong>Notes :</strong> '+c.notes:'')+'</div>'+
+    '<table style="width:100%;font-size:13px;border-collapse:collapse;">'+
+    '<thead><tr style="background:var(--bg2);"><th style="padding:6px 10px;text-align:left;">Réf.</th><th style="padding:6px 10px;text-align:left;">Article</th><th style="padding:6px 10px;text-align:center;">Qté</th>'+(CLIENT_MODE?'':'<th style="padding:6px 10px;">Stock</th>')+'</tr></thead>'+
+    '<tbody>'+rows+'</tbody></table>';
   const cid=c.id,isP=c.statut==='en_attente';
-  document.getElementById('cmd-detail-footer').innerHTML=
-    `<button class="btn" onclick="closeModal('modal-cmd-detail')">Fermer</button>`+
-    (isP?`<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">Modifier</button><button class="btn btn-danger btn-sm" onclick="refuserCmd('${cid}');closeModal('modal-cmd-detail');">Refuser</button><button class="btn btn-primary btn-sm" onclick="approuverCmd('${cid}');closeModal('modal-cmd-detail');">Approuver</button>`:
-    `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">Supprimer</button>`);
+  const btnFermer=`<button class="btn" onclick="closeModal('modal-cmd-detail')">Fermer</button>`;
+  const btnImprimer=`<button class="btn btn-sm" onclick="printCmd('${cid}')" style="gap:4px;">🖨 Imprimer</button>`;
+  let footer=btnFermer+btnImprimer;
+  if(CLIENT_MODE){
+    // Client : Modifier si en attente, pas de Refuser/Approuver
+    if(isP) footer+=`<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">✏ Modifier</button>`;
+  } else {
+    // Admin : tous les boutons
+    if(isP) footer+=
+      `<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">✏ Modifier</button>`+
+      `<button class="btn btn-danger btn-sm" onclick="refuserCmd('${cid}');closeModal('modal-cmd-detail');">✕ Refuser</button>`+
+      `<button class="btn btn-primary btn-sm" onclick="approuverCmd('${cid}');closeModal('modal-cmd-detail');">✓ Approuver</button>`;
+    else footer+=`<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
+  }
+  document.getElementById('cmd-detail-footer').innerHTML=footer;
   openModal('modal-cmd-detail');
+}
+
+function printCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  const date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
+  const statLabel={'en_attente':'En attente','approuvee':'Approuvée','refusee':'Refusée'}[c.statut]||c.statut;
+  const rows=(c.items||[]).map(i=>{
+    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?'};
+    return`<tr><td style="padding:6px 10px;border-bottom:1px solid #ddd;"><code>${i.id}</code></td><td style="padding:6px 10px;border-bottom:1px solid #ddd;">${art.categorie} Ø${art.diametre}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700;">${i.qty}</td></tr>`;
+  }).join('');
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Commande #${String(c.num).padStart(3,'0')}</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px;color:#1a1917;font-size:14px;}
+    h1{font-size:20px;margin-bottom:4px;}
+    .meta{font-size:13px;color:#555;margin-bottom:20px;line-height:1.8;}
+    table{width:100%;border-collapse:collapse;margin-top:12px;}
+    th{background:#f5f4f0;padding:8px 10px;text-align:left;font-size:12px;font-weight:600;color:#666;border-bottom:2px solid #ddd;}
+    td{padding:7px 10px;border-bottom:1px solid #eee;}
+    .footer{margin-top:32px;font-size:11px;color:#999;text-align:center;border-top:1px solid #eee;padding-top:12px;}
+    @media print{body{padding:16px;}}
+  </style></head><body>
+  <h1>Demande de matériel — #${String(c.num).padStart(3,'0')}</h1>
+  <div class="meta">
+    <strong>Chantier / Entreprise :</strong> ${c.chantier||'—'}<br>
+    <strong>Demandeur :</strong> ${c.nom||'—'} &nbsp;|&nbsp; <strong>Date :</strong> ${date}<br>
+    <strong>Urgence :</strong> ${c.urgence||'—'} &nbsp;|&nbsp; <strong>Statut :</strong> ${statLabel}
+    ${c.notes?'<br><strong>Notes :</strong> '+c.notes:''}
+  </div>
+  <table>
+    <thead><tr><th>Référence</th><th>Article</th><th style="text-align:center;">Quantité</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">StockPro AIR2S — Imprimé le ${new Date().toLocaleString('fr-FR')}</div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  w.document.close();
 }
 async function approuverCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
