@@ -762,7 +762,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       <div class="form-row"><label class="form-label">Nom de la catégorie</label><input type="text" id="newcat-name" placeholder="ex: Manchons, Joints…"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-newcat')">Annuler</button>
+      <button class="btn" onclick="closeModal('modal-newcat');delete document.getElementById('modal-newcat').dataset.editing;document.getElementById('newcat-name').value='';">Annuler</button>
       <button class="btn btn-primary" onclick="saveCat()">Enregistrer</button>
     </div>
   </div>
@@ -1709,6 +1709,8 @@ function genId(){return Date.now().toString(36)+Math.random().toString(36).slice
 
 async function saveFamillesTree(){
   await db.from('config').upsert({key:'familles',value:famillesTree},{onConflict:'key'});
+  // Rafraîchir le stock et le dashboard après toute modification de famille
+  renderStock();renderDashboard();
 }
 
 function renderFamillesPage(){
@@ -2541,6 +2543,90 @@ async function saveArticle(){
   if(data)stock=data.map(adaptArticle);
   renderStock();renderDashboard();updateBadges();
   showToast(isEdit?'✅ Article modifié':'✅ Article ajouté');
+}
+
+// ==================== CATÉGORIES CRUD ====================
+async function saveCategoriesToDB(){
+  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
+}
+
+async function saveCat(){
+  const nom=(document.getElementById('newcat-name')?.value||'').trim();
+  if(!nom){showToast('⚠ Nom requis');return;}
+  const editingCat=document.getElementById('modal-newcat').dataset.editing||'';
+  if(editingCat){
+    // Renommer : mettre à jour toutes les références
+    const idx=categories.indexOf(editingCat);
+    if(idx>-1)categories[idx]=nom;
+    // Mettre à jour les articles ayant cette catégorie
+    stock.filter(a=>a.categorie===editingCat).forEach(a=>a.categorie=nom);
+    await db.from('stock').update({categorie:nom}).eq('categorie',editingCat);
+    // Mettre à jour famillesTree
+    famillesTree.forEach(f=>{
+      if(f.categories){const ci=f.categories.indexOf(editingCat);if(ci>-1)f.categories[ci]=nom;}
+      (f.enfants||[]).forEach(sf=>{if(sf.categories){const ci=sf.categories.indexOf(editingCat);if(ci>-1)sf.categories[ci]=nom;}});
+    });
+    await saveFamillesTree();
+  } else {
+    if(categories.includes(nom)){showToast('⚠ Cette catégorie existe déjà');return;}
+    categories.push(nom);categories.sort();
+  }
+  await saveCategoriesToDB();
+  closeModal('modal-newcat');
+  delete document.getElementById('modal-newcat').dataset.editing;
+  document.getElementById('newcat-name').value='';
+  renderCategories();renderStock();renderDashboard();
+  showToast('✅ Catégorie enregistrée');
+}
+
+async function saveSubCat(){
+  const parent=(document.getElementById('subcat-parent')?.value||'').trim();
+  const nom=(document.getElementById('subcat-name')?.value||'').trim();
+  if(!parent||!nom){showToast('⚠ Parent et nom requis');return;}
+  const full=parent+' > '+nom;
+  if(categories.includes(full)){showToast('⚠ Cette sous-catégorie existe déjà');return;}
+  categories.push(full);categories.sort();
+  await saveCategoriesToDB();
+  closeModal('modal-newsubcat');
+  document.getElementById('subcat-name').value='';
+  renderCategories();renderStock();
+  showToast('✅ Sous-catégorie créée');
+}
+
+function editCat(cat){
+  const modal=document.getElementById('modal-newcat');
+  modal.dataset.editing=cat;
+  document.getElementById('cat-modal-title').textContent='Renommer la catégorie';
+  document.getElementById('newcat-name').value=cat.includes(' > ')?cat.split(' > ')[1]:cat;
+  openModal('modal-newcat');
+}
+
+async function deleteCat(cat){
+  if(!confirm('Supprimer la catégorie "'+cat+'" ?'))return;
+  const hasArts=stock.some(a=>a.categorie===cat);
+  if(hasArts){showToast('⚠ Impossible : des articles utilisent cette catégorie');return;}
+  categories=categories.filter(c=>c!==cat);
+  // Retirer de famillesTree
+  famillesTree.forEach(f=>{
+    if(f.categories)f.categories=f.categories.filter(c=>c!==cat);
+    (f.enfants||[]).forEach(sf=>{if(sf.categories)sf.categories=sf.categories.filter(c=>c!==cat);});
+  });
+  await saveCategoriesToDB();
+  await saveFamillesTree();
+  renderCategories();renderStock();renderDashboard();
+  showToast('Catégorie supprimée');
+}
+
+function openNewSubCat(){
+  const sel=document.getElementById('subcat-parent');
+  if(sel){
+    sel.innerHTML='';
+    categories.filter(c=>!c.includes(' > ')).sort().forEach(c=>{
+      const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);
+    });
+  }
+  document.getElementById('subcat-name').value='';
+  openModal('modal-newsubcat');
 }
 
 initApp();
