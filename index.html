@@ -2677,6 +2677,17 @@ function applyClientMode(){
   ['categories','parametres','familles','historique','pareto','alertes','etiquettes','dashboard','scan','chantiers'].forEach(p=>{
     document.querySelectorAll('.nav-btn[data-page="'+p+'"],.mob-btn[data-page="'+p+'"]').forEach(b=>b.style.display='none');
   });
+  // Masquer physiquement la page dashboard et basculer sur commandes
+  const dash=document.getElementById('page-dashboard');
+  if(dash){dash.classList.remove('active');dash.style.display='none';}
+  // Activer page-commandes par défaut
+  const defaultPage=document.getElementById('page-commandes');
+  if(defaultPage)defaultPage.classList.add('active');
+  const defaultBtn=document.querySelector('.nav-btn[data-page="commandes"]');
+  if(defaultBtn)defaultBtn.classList.add('active');
+  // Titre de la page
+  const pageTitle=document.getElementById('page-title');
+  if(pageTitle)pageTitle.textContent='Mes commandes';
   // Champ chantier → input texte libre "Nom de l'entreprise"
   const row=document.getElementById('cmd-chantier-row');
   if(row){
