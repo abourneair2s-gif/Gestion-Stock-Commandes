@@ -2043,8 +2043,11 @@ function sarRow(a,indented){
     </div>
     <div class="sar-min" title="Stock minimum">min. ${a.stockMin}</div>
     ${CLIENT_MODE
-      ? `<div class="sar-prix">${a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—'}</div>`
-      : `<div class="sar-prix" title="Prix achat">${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</div>`
+      ? `<div class="sar-prix" title="Prix vente HT">${a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—'}</div>`
+      : `<div class="sar-prix" style="line-height:1.4;">
+           <div style="font-size:11px;" title="Prix achat">🛒 ${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</div>
+           <div style="font-size:11px;color:var(--blue);" title="Prix vente">🏷 ${a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—'}</div>
+         </div>`
     }
     <div class="sar-statut">${statusLabel(s)}</div>
     <div class="sar-actions">${CLIENT_MODE?'':`
@@ -2200,8 +2203,8 @@ function artCmdRow(a){
   return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;" onclick="addCmdItem('${a.id}')" onmouseenter="this.style.background='var(--green-bg)'" onmouseleave="this.style.background=''">
     <code style="font-size:12px;font-weight:700;min-width:80px;">${a.id}</code>
     <span style="font-size:12px;color:var(--text2);">Ø ${a.diametre}</span>
-    ${CLIENT_MODE?'':`<span class="${getStatus(a)==='ok'?'stock-ok':getStatus(a)==='warn'?'stock-warn':'stock-danger'}" style="font-size:12px;font-weight:700;margin-left:auto;">${a.stock}</span>`}
-    <span style="font-size:18px;color:var(--green);font-weight:700;${CLIENT_MODE?'margin-left:auto;':''}padding-left:6px;">+</span>
+    <span class="${getStatus(a)==='ok'?'stock-ok':getStatus(a)==='warn'?'stock-warn':'stock-danger'}" style="font-size:12px;font-weight:700;margin-left:auto;">${a.stock}</span>
+    <span style="font-size:18px;color:var(--green);font-weight:700;padding-left:6px;">+</span>
   </div>`;
 }
 
@@ -2461,6 +2464,83 @@ function selectScanArt(id){
   const el=document.getElementById('scan-selected-art');
   if(el&&scanSelectedArt)el.innerHTML='✅ <strong>'+scanSelectedArt.id+'</strong> — '+scanSelectedArt.categorie+' Ø'+scanSelectedArt.diametre+' · Stock : <strong>'+scanSelectedArt.stock+'</strong>';
   document.getElementById('manual-ref').value=id;
+}
+
+// ==================== ARTICLES CRUD ====================
+function populateArtCatSelect(){
+  const sel=document.getElementById('art-cat');if(!sel)return;
+  sel.innerHTML='';
+  if(famillesTree.length>0){
+    famillesTree.forEach(f=>{
+      const grp=document.createElement('optgroup');grp.label='📁 '+f.nom;
+      (f.categories||[]).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;grp.appendChild(o);});
+      (f.enfants||[]).forEach(sf=>{
+        const sg=document.createElement('optgroup');sg.label='  📁 '+sf.nom;
+        (sf.categories||[]).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sg.appendChild(o);});
+        if(sg.children.length)sel.appendChild(sg);
+      });
+      if(grp.children.length)sel.appendChild(grp);
+    });
+  } else {
+    categories.sort().forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
+  }
+}
+
+function editArticle(id){
+  const a=stock.find(x=>x.id===id);if(!a)return;
+  document.getElementById('art-modal-title').textContent='Modifier l\'article';
+  const artId=document.getElementById('art-id');
+  artId.value=a.id;artId.readOnly=true;artId.style.color='var(--text3)';
+  const row=document.getElementById('art-newid-row');if(row)row.style.display='';
+  const newId=document.getElementById('art-newid');if(newId)newId.value='';
+  document.getElementById('art-fournisseur').value=a.fournisseur||'';
+  document.getElementById('art-diam').value=a.diametre||'';
+  document.getElementById('art-stock').value=a.stock||0;
+  document.getElementById('art-min').value=a.stockMin||0;
+  document.getElementById('art-prix').value=a.prixUnitaire||0;
+  document.getElementById('art-prix-vente').value=a.prixVente||0;
+  populateArtCatSelect();
+  const sel=document.getElementById('art-cat');
+  if(sel)sel.value=a.categorie||'';
+  openModal('modal-article');
+}
+
+async function saveArticle(){
+  const id=document.getElementById('art-id').value.trim();
+  const newId=document.getElementById('art-newid')?.value.trim()||'';
+  const cat=document.getElementById('art-cat').value;
+  const diam=document.getElementById('art-diam').value.trim();
+  const stockVal=parseInt(document.getElementById('art-stock').value)||0;
+  const stockMin=parseInt(document.getElementById('art-min').value)||0;
+  const prix=parseFloat(document.getElementById('art-prix').value)||0;
+  const prixVente=parseFloat(document.getElementById('art-prix-vente').value)||0;
+  const fourn=document.getElementById('art-fournisseur').value.trim();
+  if(!id||!cat||!diam){showToast('⚠ Référence, catégorie et diamètre requis');return;}
+  const finalId=newId||id;
+  const payload={id:finalId,categorie:cat,diametre:diam,stock:stockVal,stock_min:stockMin,prix_unitaire:prix,prix_vente:prixVente,fournisseur:fourn};
+  const isEdit=document.getElementById('art-id').readOnly;
+  let error;
+  if(isEdit){
+    // Si renommage, supprimer l'ancien et insérer le nouveau
+    if(newId&&newId!==id){
+      const {error:delErr}=await db.from('stock').delete().eq('id',id);
+      if(delErr){showToast('❌ '+delErr.message);return;}
+      const {error:insErr}=await db.from('stock').insert(payload);
+      error=insErr;
+    } else {
+      const {error:updErr}=await db.from('stock').update(payload).eq('id',id);
+      error=updErr;
+    }
+  } else {
+    const {error:insErr}=await db.from('stock').insert(payload);
+    error=insErr;
+  }
+  if(error){showToast('❌ '+error.message);return;}
+  closeModal('modal-article');
+  const {data}=await db.from('stock').select('*').order('categorie').order('id');
+  if(data)stock=data.map(adaptArticle);
+  renderStock();renderDashboard();updateBadges();
+  showToast(isEdit?'✅ Article modifié':'✅ Article ajouté');
 }
 
 initApp();
