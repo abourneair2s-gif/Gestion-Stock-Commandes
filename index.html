@@ -1955,11 +1955,10 @@ function renderStockAccordion(filtered,isFiltered){
       if(sfArts.length)sfGroups.push({sf,arts:sfArts});
     });
     const allArts=[...famDirect,...sfGroups.flatMap(g=>g.arts)];
-    if(!allArts.length)return;
     const crit=allArts.filter(a=>getStatus(a)==='danger').length;
     const warn=allArts.filter(a=>getStatus(a)==='warn').length;
     const val=allArts.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
-    const isOpen=_stockOpen.has(f.id)||_stockOpen.size===0;// ouvert par défaut
+    const isOpen=_stockOpen.has(f.id)||_stockOpen.size===0;
     html+=`<div class="stock-fam-block">
       <div class="stock-fam-header" onclick="toggleStockFam('${f.id}',this)">
         <span class="sfh-toggle${isOpen?' open':''}">▶</span>
@@ -1972,6 +1971,7 @@ function renderStockAccordion(filtered,isFiltered){
         ${!CLIENT_MODE?`<span class="sfh-total">${val>0?val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+' €':'—'}</span>`:''}
       </div>
       <div class="stock-fam-body${isOpen?' open':''}" id="sfbody-${f.id}">
+        ${!allArts.length?'<div style="padding:12px 16px;font-size:12px;color:var(--text3);font-style:italic;">Aucun article — assignez des catégories à cette famille via le menu Familles.</div>':''}
         ${famDirect.map(a=>sarRow(a,false)).join('')}
         ${sfGroups.map(({sf,arts})=>{
           const sfOpen=_stockOpen.has(sf.id)||_stockOpen.size===0;
