@@ -600,7 +600,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <div class="modal-body">
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Référence actuelle</label><input type="text" id="art-id" placeholder="ex: GAI 355"></div>
-        <div class="form-row" id="art-newid-row" style="display:none;"><label class="form-label">Nouvelle référence <small style="color:var(--text3);">(laisser vide = inchangée)</small></label><input type="text" id="art-newid" placeholder="ex: GAI 360"></div>
+        <div class="form-row" id="art-newid-row" style="display:none;"><label class="form-label" style="color:var(--blue);">✏ Nouvelle référence <small style="color:var(--text3);font-weight:400;">(vide = inchangée)</small></label><input type="text" id="art-newid" placeholder="Saisir la nouvelle référence…" style="border-color:var(--blue);background:#f0f6ff;"></div>
       </div>
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Catégorie</label><select id="art-cat"></select></div>
@@ -2754,9 +2754,12 @@ function populateArtCatSelect(){
 
 function editArticle(id){
   const a=stock.find(x=>x.id===id);if(!a)return;
-  document.getElementById('art-modal-title').textContent='Modifier l\'article';
+  document.getElementById('art-modal-title').textContent='Modifier l\'article — '+id;
   const artId=document.getElementById('art-id');
   artId.value=a.id;artId.readOnly=true;artId.style.color='var(--text3)';
+  // Changer le label de la ref actuelle
+  const artIdLabel=artId.closest('.form-row')?.querySelector('.form-label');
+  if(artIdLabel)artIdLabel.textContent='Référence actuelle';
   const row=document.getElementById('art-newid-row');if(row)row.style.display='';
   const newId=document.getElementById('art-newid');if(newId)newId.value='';
   document.getElementById('art-fournisseur').value=a.fournisseur||'';
