@@ -1683,7 +1683,13 @@ function renderChantiers(){
       const d=getChantierData(c.nom);const ne=c.nom.replace(/'/g,"\\'");
       return`<tr style="${c.archived?'opacity:.6;':''}">
         <td><strong>${escH(c.nom)}</strong>${c.archived?' <span class="badge-archived">Archivé</span>':''}</td>
-        <td>${d.cmdsApprouv.length}</td><td>${d.mvtsOut.length}</td><td>${d.qtyTot}</td><td>${c.heures?c.heures+'h':'—'}</td><td>${fmtV(d.valAchat)}</td>
+        <td>${d.cmdsApprouv.length}</td><td>${d.mvtsOut.length}</td><td>${d.qtyTot}</td><td style="padding:4px 8px;">
+          <input type="number" min="0" step="0.5" value="${c.heures||''}"
+            placeholder="—"
+            style="width:64px;padding:4px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);text-align:center;font-size:12px;"
+            onchange="saveChantierHeures('${c.nom.replace(/'/g,"\'")}',this.value)"
+            onclick="event.stopPropagation()">
+        </td><td>${fmtV(d.valAchat)}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-xs" onclick="showChantierDetail('${ne}')">Détail</button>
           <button class="btn btn-xs" onclick="exportChantierExcel('${ne}')">📥</button>
@@ -2947,6 +2953,16 @@ async function desarchiverChantier(nom){
   await db.from('config').upsert({key:'chantiers',value:chantiers},{onConflict:'key'});
   renderChantiers();showChantierDetail(nom);
   showToast('✅ Chantier réactivé');
+}
+
+async function saveChantierHeures(nom, val){
+  const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  c.heures=parseFloat(val)||0;
+  await db.from('config').upsert({key:'chantiers',value:chantiers},{onConflict:'key'});
+  // Rafraîchir le détail si ouvert sur ce chantier
+  const title=document.getElementById('chantier-detail-title');
+  if(title&&title.textContent.includes(nom))showChantierDetail(nom);
+  showToast('⏱ Heures mises à jour');
 }
 
 initApp();
