@@ -166,6 +166,22 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 }
 @media(min-width:701px){#mobile-nav{display:none!important;}}
 @media print{#sidebar,#topbar,#mobile-nav,.btn{display:none!important;}body{background:#fff;}.page{display:block!important;}}
+
+/* ===== FAMILLES TREE ===== */
+.fam-node{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;}
+.fam-node-header{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.fam-icon{font-size:16px;}
+.fam-nom{font-weight:700;font-size:14px;cursor:pointer;flex:1;min-width:100px;}
+.fam-nom:hover{color:var(--blue);}
+.fam-children{padding:6px 6px 6px 24px;}
+.fam-sf-node{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;}
+.fam-sf-header{display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap;}
+.fam-cats{display:flex;flex-wrap:wrap;gap:4px;padding:6px 12px 10px;border-top:1px dashed var(--border);}
+.fam-cat-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:var(--surface);border:1.5px solid var(--border);cursor:pointer;transition:all .15s;}
+.fam-cat-pill.active{background:#e6f5ef;border-color:var(--green);color:var(--green);}
+.fam-cat-pill:hover{border-color:var(--blue);color:var(--blue);}
+.fam-inline-edit{display:none;align-items:center;gap:6px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);}
+.fam-inline-edit.visible{display:flex;}
 </style>
 </head>
 <body>
@@ -202,8 +218,8 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <div class="sb-section">Admin</div>
   <button class="nav-btn" onclick="showPage('alertes',this)" data-page="alertes"><span class="nav-icon">🔔</span>Alertes <span class="badge-sb" id="sb-alert-count" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showPage('historique',this)" data-page="historique"><span class="nav-icon">📜</span>Historique</button>
-  <button class="nav-btn" onclick="showPage('familles',this)" data-page="familles"><span class="nav-icon">🗂</span>Familles</button>
   <button class="nav-btn" onclick="showPage('categories',this)" data-page="categories"><span class="nav-icon">🏷</span>Catégories</button>
+  <button class="nav-btn" onclick="showPage('familles',this)" data-page="familles"><span class="nav-icon">🗂</span>Familles</button>
   <button class="nav-btn" onclick="showPage('parametres',this)" data-page="parametres"><span class="nav-icon">⚙️</span>Paramètres</button>
   <button class="nav-btn" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);"><span class="nav-icon">📥</span>Exporter Excel</button>
 </div>
@@ -245,7 +261,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       </div>
       <div class="section-header"><div class="section-title">Aperçu stock par famille</div></div>
       <div class="table-wrap">
-        <table><thead><tr><th>Famille / Catégorie</th><th>Articles</th><th>Valeur achat</th><th>Critiques</th><th>État</th></tr></thead>
+        <table><thead><tr><th>Famille / Sous-famille</th><th>Articles</th><th>Valeur</th><th>Critiques</th><th>État</th></tr></thead>
         <tbody id="dash-categories"></tbody></table>
       </div>
     </div>
@@ -254,27 +270,20 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <div class="page" id="page-stock">
       <div class="search-bar">
         <input type="search" id="search-input" placeholder="Rechercher référence, diamètre…" oninput="renderStock()">
-        <select id="filter-famille" onchange="filtreStockFamilleSelect(this.value)" style="min-width:180px;"><option value="">Toutes familles</option></select>
+        <select id="filter-cat" onchange="renderStock()"><option value="">Toutes familles</option></select>
         <select id="filter-status" onchange="renderStock()">
           <option value="">Tous statuts</option>
           <option value="ok">OK</option><option value="warn">Bas</option><option value="danger">Critique</option>
         </select>
         <button class="btn btn-primary btn-sm" onclick="openNewArticle()">+ Nouvel article</button>
       </div>
-      <!-- Vue arbre famille + articles -->
-      <div id="stock-famille-tree-view"></div>
-      <div id="stock-empty" class="empty-state" style="display:none;">Aucun article trouvé.</div>
-      <!-- Table cachée pour compat renderStockClient -->
-      <div id="stock-table-wrap" style="display:none;">
-        <div class="table-wrap">
-          <table><thead><tr>
-            <th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th>
-            <th id="stock-th-prix">Prix unit.</th><th id="stock-th-valeur">Valeur</th><th id="stock-th-fourn">Fournisseur</th>
-            <th>Statut</th><th></th>
-          </tr></thead>
-          <tbody id="stock-table"></tbody>
-        </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th>
+          <th id="stock-th-prix">Prix unit.</th><th id="stock-th-valeur">Valeur</th><th id="stock-th-fourn">Fournisseur</th>
+          <th>Statut</th><th></th></tr></thead>
+        <tbody id="stock-table"></tbody></table>
       </div>
+      <div id="stock-empty" class="empty-state" style="display:none;">Aucun article trouvé.</div>
     </div>
 
     <!-- PARETO -->
@@ -320,7 +329,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       <div id="scan-tab-manual" style="display:none;">
         <div class="tab-switch" style="margin-bottom:10px;">
           <button class="tab-sw-btn active" onclick="switchScanManualMode('ref',this)">⌨️ Par référence</button>
-          <button class="tab-sw-btn" onclick="switchScanManualMode('cat',this)">🗂 Par famille</button>
+          <button class="tab-sw-btn" onclick="switchScanManualMode('cat',this)">📂 Par famille</button>
         </div>
         <div id="scan-manual-ref">
           <div class="form-row"><label class="form-label">Référence article</label><input type="text" id="manual-ref" placeholder="ex: GAI 450, C90 315…" oninput="lookupArticle(this.value)"></div>
@@ -443,82 +452,25 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     </div>
   </div>
   <!-- Cartes chantiers IMMEDIATEMENT visibles -->
-  <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;"></div>
-  <div id="chantiers-admin-btns"></div>
+  <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;"></div>
+  <!-- Détail chantier sélectionné (affiché ici, avant le tableau) -->
+  <!-- Tableau récapitulatif -->
+  <div class="section-header" style="margin-top:4px;">
+    <div class="section-title" style="font-size:13px;color:var(--text2);">Récapitulatif</div>
+  </div>
+  <div class="table-wrap" style="margin-bottom:16px;">
+    <table><thead><tr><th>Chantier</th><th>Commandes</th><th>Mouvements</th><th>Articles sortis</th><th>Coût total</th><th></th></tr></thead>
+    <tbody id="chantiers-table"></tbody></table>
+  </div>
   <!-- Détail chantier -->
-  <div id="chantier-detail" style="display:none;margin-top:12px;">
+  <div id="chantier-detail" style="display:none;">
     <div class="section-header" style="margin-top:8px;">
       <div class="section-title" id="chantier-detail-title">Détail chantier</div>
-      <div style="display:flex;gap:6px;">
-        <button class="btn btn-xs btn-primary" onclick="exportChantierExcel()">⬇ Excel</button>
-        <button class="btn btn-xs" onclick="printChantierDetail()">🖨 Imprimer</button>
-        <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
-      </div>
+      <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
     </div>
     <div class="table-wrap">
-      <table id="chantier-detail-table-wrap">
-        <thead id="chantier-detail-thead"></thead>
-        <tbody id="chantier-detail-table"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-
-<!-- FAMILLES PAGE -->
-<div class="page" id="page-familles">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
-    <div>
-      <div class="section-title">🗂 Familles & Sous-familles</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:2px;">Glissez-déposez pour réorganiser · Cliquez sur un nœud pour l'éditer</div>
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-      <button class="btn btn-primary btn-sm" onclick="ouvrirModalNouvelleRacine()">＋ Nouvelle famille</button>
-      <button class="btn btn-sm" onclick="saveFamillesTree()">💾 Sauvegarder</button>
-    </div>
-  </div>
-  <!-- Légende -->
-  <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;font-size:11px;color:var(--text3);">
-    <span>📁 Famille/sous-famille</span>
-    <span>📂 Catégorie liée à des articles</span>
-    <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:var(--green);display:inline-block;"></span> Visible client</span>
-    <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:var(--text3);display:inline-block;"></span> Masqué client</span>
-  </div>
-  <!-- Arbre -->
-  <div id="familles-tree-container" style="min-height:200px;">
-    <div id="familles-tree"></div>
-    <div id="familles-empty" style="display:none;text-align:center;padding:40px;color:var(--text3);">
-      <div style="font-size:2rem;margin-bottom:8px;">🗂</div>
-      <div>Aucune famille créée. Cliquez sur "+ Nouvelle famille".</div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL Famille nœud -->
-<div class="modal-overlay" id="modal-famille-node" style="display:none;">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-title" id="famille-node-title">Nouveau nœud</div>
-    <input type="hidden" id="famille-node-id">
-    <input type="hidden" id="famille-node-parent-id">
-    <div class="form-group">
-      <label>Nom</label>
-      <input type="text" id="famille-node-nom" style="width:100%;" placeholder="ex: Sans joint">
-    </div>
-    <div class="form-group" id="famille-node-cat-group">
-      <label>Catégories liées (cochez une ou plusieurs)</label>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">Laissez tout décoché si ce nœud est un groupe contenant d'autres nœuds.</div>
-      <div id="famille-node-cats-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;display:flex;flex-direction:column;gap:4px;"></div>
-    </div>
-    <div class="form-group">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-        <input type="checkbox" id="famille-node-visible" checked>
-        <span>Visible en mode client</span>
-      </label>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-famille-node')">Annuler</button>
-      <button class="btn btn-danger" id="btn-famille-delete" onclick="supprimerNoeudFamille()" style="display:none;">🗑 Supprimer</button>
-      <button class="btn btn-primary" onclick="sauvegarderNoeudFamille()">Valider</button>
+      <table><thead><tr><th>Date</th><th>Type</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Qté</th><th>Source</th></tr></thead>
+      <tbody id="chantier-detail-table"></tbody></table>
     </div>
   </div>
 </div>
@@ -541,6 +493,29 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <!-- Grille articles -->
   <div id="etiq-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;"></div>
 </div>
+
+<!-- FAMILLES PAGE -->
+<div class="page" id="page-familles">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+    <div class="section-title">🗂 Familles & Sous-familles</div>
+    <button class="btn btn-primary btn-sm" onclick="openAddFamille()">+ Nouvelle famille</button>
+  </div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;">
+    Organisez vos catégories en familles et sous-familles pour faciliter la navigation dans le stock et les commandes.<br>
+    <strong>Exemple :</strong> 📁 Gaines &amp; Accessoires → 📁 Sans joint → ☑ Gaines ☑ Coudes 90°
+  </div>
+  <div id="familles-tree"></div>
+  <!-- Zone édition inline famille -->
+  <div class="fam-inline-edit" id="fam-edit-zone">
+    <input type="text" id="fam-edit-input" placeholder="Nom de la famille…" style="flex:1;">
+    <label style="font-size:12px;display:flex;align-items:center;gap:4px;">
+      <input type="checkbox" id="fam-edit-client" checked> Visible client
+    </label>
+    <button class="btn btn-primary btn-sm" onclick="confirmEditFamille()">✓</button>
+    <button class="btn btn-xs" onclick="cancelEditFamille()">✕</button>
+  </div>
+</div>
+
   </div>
 </div>
 
@@ -593,7 +568,6 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
           <select id="cmd-chantier">
             <option value="">— Sélectionner un chantier —</option>
           </select>
-          <input type="text" id="cmd-chantier-libre" placeholder="Votre entreprise / société..." style="display:none;">
         </div>
         <div class="form-row"><label class="form-label">Urgence</label>
           <select id="cmd-urgence"><option value="normale">Normale</option><option value="urgent">Urgent</option><option value="critique">Critique</option></select>
@@ -607,14 +581,14 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <div class="section-title">Articles à commander</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-xs btn-primary" onclick="switchAddMode('search')">🔍 Recherche</button>
-          <button class="btn btn-xs" onclick="switchAddMode('cat')">🗂 Par famille</button>
+          <button class="btn btn-xs" onclick="switchAddMode('cat')">📂 Par famille</button>
           <button class="btn btn-xs" onclick="switchAddMode('qr')">📷 Scanner QR</button>
         </div>
       </div>
       <div id="add-mode-search">
         <div style="position:relative;">
-          <input type="text" id="cmd-art-search" placeholder="Taper référence ou diamètre…" oninput="searchCmdArt(this.value)" autocomplete="off">
-          <div id="cmd-search-results" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:4px;"></div>
+          <input type="text" id="cmd-art-search" placeholder="Taper référence ou diamètre…" oninput="filterCmdSearch(this.value)" autocomplete="off">
+          <div id="cmd-search-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);max-height:180px;overflow-y:auto;box-shadow:var(--shadow);"></div>
         </div>
       </div>
       <div id="add-mode-cat" style="display:none;">
@@ -760,10 +734,11 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 // ==================== SUPABASE ====================
 const SUPABASE_URL = 'https://cjvlqicfjjhxjhtawbnq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdmxxaWNmampoeGpodGF3Ym5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNDc2MTAsImV4cCI6MjA5MjgyMzYxMH0.G-j8H3PDCt2OI2qPiHUeWYJ9zmSwnGNJQyGp4tib8UE';
-let db = null;
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ==================== DONNEES PAR DEFAUT ====================
-const DEFAULT_CATEGORIES = ["Gaines","Coudes 90°","Coudes 45°","RM","Piquage droit","Raccord sur plat","Réduction","Bouchons","Té souche","Té égal","Sifflet","Colliers","Flexible"];
+const DEFAULT_CATEGORIES = ["Gaines","Coudes 90°","Coudes 45°","RM","Piquage droit","Raccord sur plat","Réduction","Bouchons","Té souche","Té égal","Sifflet","Colliers"];
 
 const INVENTORY_DATA = [
   {id:"GAI 500",categorie:"Gaines",diametre:"500",stock:4,prix_unitaire:0,stock_min:5},
@@ -849,30 +824,22 @@ const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='c
 let categories = [...DEFAULT_CATEGORIES];
 let cmdCounter = 1;
 let params = {email:'',company:''};
+let famillesTree = [];
+let scanSelectedArt = null;
+let editingCmdId = null;
+let editingFamilleIdx = null;
+let editingSFIdx = null;
 let currentMvArticle = null;
 let currentQRArticle = null;
 let cmdItems = [];
 let html5QrCode = null;
 let cmdHtml5QrCode = null;
 let editingCat = null;
-let famillesTree = []; // Arbre des familles [{id,nom,categorie,visible_client,enfants:[]}]
-let familleNodeEditing = null; // ID du nœud en cours d'édition
-let dragSrcId = null; // ID du nœud glissé
-let stockFamilleFilter = null; // Filtre famille actif dans stock
 
 // Adapte les colonnes Supabase → format interne JS
-function openModal(id){const m=document.getElementById(id);if(m){m.style.display='flex';m.classList.add('open');}}
-function closeModal(id){const m=document.getElementById(id);if(m){m.classList.remove('open');m.style.display='none';}}
-function openCmdModal(){
-  editingCmdId=null;cmdItems=[];
-  var selC=document.getElementById('cmd-chantier');
-  var libre=document.getElementById('cmd-chantier-libre');
-  if(CLIENT_MODE){if(selC)selC.style.display='none';if(libre){libre.style.display='';libre.value='';}}
-  else{if(libre)libre.style.display='none';if(selC){selC.style.display='';selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(function(c){var o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});}}
-  ['cmd-nom','cmd-notes','cmd-art-search'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
-  document.getElementById('cmd-urgence').value='normale';
-  renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');
-}
+function openModal(id){const m=document.getElementById(id);if(m){m.classList.add('open');m.style.display='flex';}}
+function closeModal(id){const m=document.getElementById(id);if(m){m.classList.remove('open');m.style.display='';}}
+function openCmdModal(){editingCmdId=null;cmdItems=[];const selC=document.getElementById('cmd-chantier');if(selC){if(CLIENT_MODE){selC.placeholder='Nom de votre entreprise';selC.value='';}else{selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});}}['cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){document.getElementById('art-modal-title').textContent='Ajouter un article';document.getElementById('art-id').value='';document.getElementById('art-id').readOnly=false;document.getElementById('art-id').style.color='';const row=document.getElementById('art-newid-row');if(row)row.style.display='none';document.getElementById('art-fournisseur').value='';document.getElementById('art-diam').value='';document.getElementById('art-stock').value=0;document.getElementById('art-min').value=5;document.getElementById('art-prix').value=0;document.getElementById('art-prix-vente').value=0;populateArtCatSelect();openModal('modal-article');}function adaptArticle(row) {
   return {
     id: row.id,
@@ -887,1101 +854,8 @@ function openNewArticle(){document.getElementById('art-modal-title').textContent
 }
 
 // ==================== INIT SUPABASE ====================
-
-// ════════════════════════════════════════════════════════════
-// FAMILLES & SOUS-FAMILLES
-// ════════════════════════════════════════════════════════════
-
-// ── Utilitaires arbre ─────────────────────────────────────────
-function genId(){return 'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
-
-function findNodeById(tree,id){
-  for(var i=0;i<tree.length;i++){
-    if(tree[i].id===id)return tree[i];
-    if(tree[i].enfants&&tree[i].enfants.length){
-      var found=findNodeById(tree[i].enfants,id);
-      if(found)return found;
-    }
-  }
-  return null;
-}
-
-function findParentOf(tree,id,parent){
-  parent=parent||null;
-  for(var i=0;i<tree.length;i++){
-    if(tree[i].id===id)return parent;
-    if(tree[i].enfants&&tree[i].enfants.length){
-      var found=findParentOf(tree[i].enfants,id,tree[i]);
-      if(found!==undefined)return found;
-    }
-  }
-  return undefined;
-}
-
-function removeNodeById(tree,id){
-  for(var i=0;i<tree.length;i++){
-    if(tree[i].id===id){tree.splice(i,1);return true;}
-    if(tree[i].enfants&&removeNodeById(tree[i].enfants,id))return true;
-  }
-  return false;
-}
-
-function collectAllCats(tree){
-  var cats=[];
-  function walk(nodes){
-    nodes.forEach(function(n){
-      if(n.categories&&n.categories.length)n.categories.forEach(function(c){cats.push(c);});
-      else if(n.categorie)cats.push(n.categorie); // compat ancienne version
-      if(n.enfants)walk(n.enfants);
-    });
-  }
-  walk(tree);
-  return cats;
-}
-
-// ── Rendu de l'arbre ─────────────────────────────────────────
-function renderFamillesPage(){
-  var container=document.getElementById('familles-tree');
-  var empty=document.getElementById('familles-empty');
-  if(!container)return;
-  if(famillesTree.length===0){
-    container.innerHTML='';
-    if(empty)empty.style.display='';
-    return;
-  }
-  if(empty)empty.style.display='none';
-  container.innerHTML=renderTreeNodes(famillesTree,0);
-  attachDragEvents();
-}
-
-function renderTreeNodes(nodes,depth){
-  return nodes.map(function(n){
-    var hasChildren=n.enfants&&n.enfants.length>0;
-    var cats=n.categories||(n.categorie?[n.categorie]:[]);
-    var isFeuille=cats.length>0;
-    var nbArticles=cats.reduce(function(s,c){return s+stock.filter(function(a){return a.categorie===c;}).length;},0);
-    var indent=depth*20;
-    var icon=isFeuille?'&#x1F4C2;':'&#x1F4C1;';
-    var visibleDot=n.visible_client!==false
-      ?'<span title="Visible client" style="width:9px;height:9px;border-radius:50%;background:var(--green);display:inline-block;margin-left:6px;flex-shrink:0;"></span>'
-      :'<span title="Masque client" style="width:9px;height:9px;border-radius:50%;background:var(--text3);display:inline-block;margin-left:6px;flex-shrink:0;"></span>';
-    var catsStr=isFeuille?'<span style="font-size:11px;color:var(--blue);margin-right:6px;">'+cats.join(' &middot; ')+(nbArticles?' ('+nbArticles+' art.)':'')+'</span>':'';
-    var html='<div class="fam-node" id="fn-'+n.id+'" data-id="'+n.id+'" draggable="true" style="margin-left:'+indent+'px;">';
-    html+='<div class="fam-node-row" onclick="editerNoeudFamille(&quot;'+n.id+'&quot;)" ondragover="famDragOver(event,&quot;'+n.id+'&quot;)" ondragleave="famDragLeave(event,&quot;'+n.id+'&quot;)" ondrop="famDrop(event,&quot;'+n.id+'&quot;)">';
-    html+='<span class="fam-drag-handle" ondragstart="famDragStart(event,&quot;'+n.id+'&quot;)" title="Glisser pour deplacer">&#x2807;</span>';
-    html+='<span style="font-size:15px;margin-right:6px;">'+icon+'</span>';
-    html+='<span style="font-weight:600;flex:1;">'+n.nom+'</span>';
-    html+=catsStr;
-    html+=visibleDot;
-    html+='<button class="btn btn-xs" style="margin-left:8px;padding:1px 7px;" onclick="event.stopPropagation();ouvrirModalEnfant(&quot;'+n.id+'&quot;)">&#xFF0B;</button>';
-    html+='</div>';
-    if(hasChildren){
-      html+='<div class="fam-children" id="fch-'+n.id+'">'+renderTreeNodes(n.enfants,depth+1)+'</div>';
-    }
-    html+='<div class="fam-drop-zone" id="fdz-'+n.id+'" data-after="'+n.id+'" ondragover="famDropZoneOver(event,&quot;'+n.id+'&quot;)" ondragleave="famDropZoneLeave(event,&quot;'+n.id+'&quot;)" ondrop="famDropZoneDrop(event,&quot;'+n.id+'&quot;)"></div>';
-    html+='</div>';
-    return html;
-  }).join('');
-}
-
-// ── Drag & Drop ───────────────────────────────────────────────
-function attachDragEvents(){
-  document.querySelectorAll('.fam-drag-handle').forEach(function(h){
-    h.setAttribute('draggable','true');
-  });
-}
-
-function famDragStart(event,id){
-  dragSrcId=id;
-  event.dataTransfer.effectAllowed='move';
-  event.dataTransfer.setData('text/plain',id);
-  var el=document.getElementById('fn-'+id);
-  if(el)setTimeout(function(){el.style.opacity='0.4';},0);
-}
-
-function famDragOver(event,targetId){
-  if(dragSrcId===targetId)return;
-  event.preventDefault();
-  event.dataTransfer.dropEffect='move';
-  var el=document.querySelector('#fn-'+targetId+' > .fam-node-row');
-  if(el)el.style.background='rgba(26,143,102,0.12)';
-}
-
-function famDragLeave(event,targetId){
-  var el=document.querySelector('#fn-'+targetId+' > .fam-node-row');
-  if(el)el.style.background='';
-}
-
-function famDrop(event,targetId){
-  event.preventDefault();
-  event.stopPropagation();
-  var el=document.querySelector('#fn-'+targetId+' > .fam-node-row');
-  if(el)el.style.background='';
-  if(!dragSrcId||dragSrcId===targetId)return;
-  // Empêcher drop dans son propre descendant
-  var srcNode=findNodeById(famillesTree,dragSrcId);
-  if(!srcNode)return;
-  // Retirer source de l'arbre
-  removeNodeById(famillesTree,dragSrcId);
-  // Ajouter comme enfant de target
-  var target=findNodeById(famillesTree,targetId);
-  if(!target){famillesTree.push(srcNode);}
-  else{
-    if(!target.enfants)target.enfants=[];
-    target.enfants.push(srcNode);
-  }
-  var srcEl=document.getElementById('fn-'+dragSrcId);
-  if(srcEl)srcEl.style.opacity='1';
-  dragSrcId=null;
-  renderFamillesPage();
-  showToast('Déplacé — pensez à sauvegarder');
-}
-
-function famDropZoneOver(event,afterId){
-  event.preventDefault();
-  event.dataTransfer.dropEffect='move';
-  var el=document.getElementById('fdz-'+afterId);
-  if(el)el.style.borderTop='2px solid var(--green)';
-}
-function famDropZoneLeave(event,afterId){
-  var el=document.getElementById('fdz-'+afterId);
-  if(el)el.style.borderTop='';
-}
-function famDropZoneDrop(event,afterId){
-  event.preventDefault();event.stopPropagation();
-  var el=document.getElementById('fdz-'+afterId);
-  if(el)el.style.borderTop='';
-  if(!dragSrcId||dragSrcId===afterId)return;
-  var srcNode=findNodeById(famillesTree,dragSrcId);
-  if(!srcNode)return;
-  removeNodeById(famillesTree,dragSrcId);
-  // Insérer après le nœud afterId dans son parent
-  var parent=findParentOf(famillesTree,afterId);
-  var list=parent?parent.enfants:famillesTree;
-  var idx=list.findIndex(function(n){return n.id===afterId;});
-  list.splice(idx+1,0,srcNode);
-  var srcEl=document.getElementById('fn-'+dragSrcId);
-  if(srcEl)srcEl.style.opacity='1';
-  dragSrcId=null;
-  renderFamillesPage();
-  showToast('Réordonné — pensez à sauvegarder');
-}
-
-// ── Modales nœud ─────────────────────────────────────────────
-function peuplerCheckboxCategories(selectedCats){
-  selectedCats=selectedCats||[];
-  var list=document.getElementById('famille-node-cats-list');
-  if(!list)return;
-  var usedCats=collectAllCats(famillesTree);
-  var editingNode=familleNodeEditing?findNodeById(famillesTree,familleNodeEditing):null;
-  var editingCats=editingNode?(editingNode.categories||[]):[]; 
-  var cats=categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort();
-  stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});
-  cats.sort();
-  list.innerHTML=cats.map(function(c){
-    var used=usedCats.indexOf(c)!==-1&&editingCats.indexOf(c)===-1;
-    var checked=selectedCats.indexOf(c)!==-1;
-    return '<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;'+(used?'opacity:0.4;':'')+'">'+
-      '<input type="checkbox" value="'+c+'" '+(checked?'checked':'')+(used?' disabled':'')+' style="width:16px;height:16px;cursor:pointer;">'+
-      '<span style="font-size:13px;">'+c+'</span>'+
-      (used?'<span style="font-size:10px;color:var(--text3);">(deja classee)</span>':'')+
-      '</label>';
-  }).join('');
-}
-function getCheckedCategories(){
-  var list=document.getElementById('famille-node-cats-list');
-  if(!list)return [];
-  return Array.from(list.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
-}
-function peuplerSelectCategories(){peuplerCheckboxCategories([]);}
-
-function ouvrirModalNouvelleRacine(){
-  familleNodeEditing=null;
-  document.getElementById('famille-node-title').textContent='Nouvelle famille racine';
-  document.getElementById('famille-node-id').value='';
-  document.getElementById('famille-node-parent-id').value='';
-  document.getElementById('famille-node-nom').value='';
-  document.getElementById('famille-node-visible').checked=true;
-  document.getElementById('btn-famille-delete').style.display='none';
-  peuplerCheckboxCategories([]);
-  openModal('modal-famille-node');
-  setTimeout(function(){document.getElementById('famille-node-nom').focus();},100);
-}
-
-function ouvrirModalEnfant(parentId){
-  familleNodeEditing=null;
-  document.getElementById('famille-node-title').textContent='Ajouter un nœud';
-  document.getElementById('famille-node-id').value='';
-  document.getElementById('famille-node-parent-id').value=parentId;
-  document.getElementById('famille-node-nom').value='';
-  document.getElementById('famille-node-visible').checked=true;
-  document.getElementById('btn-famille-delete').style.display='none';
-  peuplerCheckboxCategories([]);
-  openModal('modal-famille-node');
-  setTimeout(function(){document.getElementById('famille-node-nom').focus();},100);
-}
-
-function editerNoeudFamille(id){
-  var node=findNodeById(famillesTree,id);if(!node)return;
-  familleNodeEditing=id;
-  document.getElementById('famille-node-title').textContent='Modifier — '+node.nom;
-  document.getElementById('famille-node-id').value=id;
-  document.getElementById('famille-node-parent-id').value='';
-  document.getElementById('famille-node-nom').value=node.nom;
-  document.getElementById('famille-node-visible').checked=node.visible_client!==false;
-  document.getElementById('btn-famille-delete').style.display='';
-  var nodeCats=node.categories||(node.categorie?[node.categorie]:[]);
-  peuplerCheckboxCategories(nodeCats);
-  openModal('modal-famille-node');
-}
-
-function sauvegarderNoeudFamille(){
-  var nom=document.getElementById('famille-node-nom').value.trim();
-  if(!nom){showToast('Saisissez un nom');return;}
-  var checkedCats=getCheckedCategories();
-  var visible=document.getElementById('famille-node-visible').checked;
-  var parentId=document.getElementById('famille-node-parent-id').value;
-  var editId=document.getElementById('famille-node-id').value;
-
-  if(editId){
-    // Modification
-    var node=findNodeById(famillesTree,editId);
-    if(!node){showToast('Nœud introuvable');return;}
-    node.nom=nom;node.categories=checkedCats;node.categorie=null;node.visible_client=visible;
-  } else {
-    // Création
-    var newNode={id:genId(),nom:nom,categories:checkedCats,categorie:null,visible_client:visible,enfants:[]};
-    if(parentId){
-      var parent=findNodeById(famillesTree,parentId);
-      if(!parent){showToast('Parent introuvable');return;}
-      if(!parent.enfants)parent.enfants=[];
-      parent.enfants.push(newNode);
-    } else {
-      famillesTree.push(newNode);
-    }
-  }
-  closeModal('modal-famille-node');
-  renderFamillesPage();
-  showToast('Nœud enregistré — pensez à sauvegarder');
-}
-
-function supprimerNoeudFamille(){
-  var id=document.getElementById('famille-node-id').value;
-  if(!id)return;
-  var node=findNodeById(famillesTree,id);
-  var hasKids=node&&node.enfants&&node.enfants.length>0;
-  var msg=hasKids
-    ?'Supprimer "'+node.nom+'" ET tous ses enfants ('+node.enfants.length+' nœud(s)) ?'
-    :'Supprimer "'+node.nom+'" ?';
-  if(!confirm(msg))return;
-  removeNodeById(famillesTree,id);
-  closeModal('modal-famille-node');
-  renderFamillesPage();
-  showToast('Nœud supprimé — pensez à sauvegarder');
-}
-
-async function saveFamillesTree(){
-  var r=await db.from('config').upsert({key:'familles',value:famillesTree},{onConflict:'key'});
-  if(r.error){showToast('Erreur sauvegarde: '+r.error.message);return;}
-  showToast('Familles sauvegardees ✓');
-  peuplerFamilleSelect();
-  renderDashboard();
-}
-
-// ── Filtre Famille dans Stock ─────────────────────────────────
-function renderStockFamilleFilter(){
-  var container=document.getElementById('stock-famille-filter');
-  if(!container)return;
-  if(famillesTree.length===0){container.innerHTML='';return;}
-
-  function buildPills(nodes,depth){
-    var html='';
-    nodes.forEach(function(n){
-      var cats=[];
-      function collectCats(node){
-        if(node.categories&&node.categories.length)node.categories.forEach(function(c){cats.push(c);});
-        else if(node.categorie)cats.push(node.categorie);
-        if(node.enfants)node.enfants.forEach(collectCats);
-      }
-      collectCats(n);
-      var nbArts=cats.reduce(function(s,c){return s+stock.filter(function(a){return a.categorie===c;}).length;},0);
-      if(nbArts===0&&!n.enfants.length)return;
-      var active=stockFamilleFilter===n.id;
-      html+='<button class="cat-pill'+(active?' active':'')+'" style="margin-left:'+(depth*12)+'px;" onclick="filtrerStockParFamille(\''+n.id+'\')">';
-      html+=(n.categorie?'📂':'📁')+' '+n.nom+' <span style="opacity:0.6;font-size:10px;">('+nbArts+')</span>';
-      html+='</button>';
-      if(n.enfants&&n.enfants.length)html+=buildPills(n.enfants,depth+1);
-    });
-    return html;
-  }
-
-  var html='<div style="margin-bottom:8px;">';
-  html+='<button class="cat-pill'+(stockFamilleFilter===null?' active':'')+'" onclick="filtrerStockParFamille(null)">🗂 Toutes</button>';
-  html+=buildPills(famillesTree,0);
-  html+='</div>';
-  container.innerHTML=html;
-}
-
-function filtrerStockParFamille(familleId){
-  stockFamilleFilter=familleId;
-  // Mettre à jour le style des pills
-  document.querySelectorAll('#stock-famille-filter .cat-pill').forEach(function(p){p.classList.remove('active');});
-  // Récupérer les catégories de cette famille
-  renderStock();
-}
-
-function getCatsFamille(familleId){
-  if(!familleId)return null; // null = toutes
-  if(familleId==='__sans_famille__'){
-    var allC=collectAllCats(famillesTree);
-    return stock.map(function(a){return a.categorie;}).filter(function(c){return allC.indexOf(c)===-1;});
-  }
-  var node=findNodeById(famillesTree,familleId);
-  if(!node)return [];
-  var cats=[];
-  function collect(n){
-    if(n.categories&&n.categories.length)n.categories.forEach(function(c){cats.push(c);});
-    else if(n.categorie)cats.push(n.categorie);
-    if(n.enfants)n.enfants.forEach(collect);
-  }
-  collect(node);
-  return cats;
-}
-
-// ── Mode client : familles visibles ──────────────────────────
-function getVisibleCatsClient(){
-  if(famillesTree.length===0)return null; // pas de filtrage si pas de familles
-  var cats=[];
-  function walk(nodes){
-    nodes.forEach(function(n){
-      if(n.visible_client===false)return; // nœud masqué → tous ses enfants masqués
-      if(n.categories&&n.categories.length)n.categories.forEach(function(c){cats.push(c);});
-      else if(n.categorie)cats.push(n.categorie);
-      if(n.enfants)walk(n.enfants);
-    });
-  }
-  walk(famillesTree);
-  return cats;
-}
-
-// ── CSS familles ───────────────────────────────────────────────
-(function injectFamilleCSS(){
-  var s=document.createElement('style');
-  s.textContent=[
-    '.fam-node{border-radius:8px;margin-bottom:2px;}',
-    '.fam-node-row{display:flex;align-items:center;padding:8px 12px;border-radius:8px;cursor:pointer;background:var(--surface);border:1px solid var(--border);gap:6px;user-select:none;transition:background 0.1s;}',
-    '.fam-node-row:hover{background:var(--surface2);}',
-    '.fam-drag-handle{cursor:grab;color:var(--text3);font-size:16px;padding:0 4px;flex-shrink:0;}',
-    '.fam-drag-handle:active{cursor:grabbing;}',
-    '.fam-children{margin-top:2px;}',
-    '.fam-drop-zone{height:6px;border-radius:4px;margin:2px 0 2px 20px;transition:border 0.1s;}',
-    '.fam-drop-zone:hover{border-top:2px solid var(--green)!important;}',
-  ].join('');
-  document.head.appendChild(s);
-})();
-
-
-// ── Filtre stock par famille (select) ──────────────────────────
-function peuplerFamilleSelect(){
-  var sel=document.getElementById('filter-famille');
-  if(!sel)return;
-  // Vider sauf "Toutes familles"
-  sel.innerHTML='<option value="">Toutes familles</option>';
-  if(!famillesTree||famillesTree.length===0)return;
-  function addOptions(nodes,depth){
-    nodes.forEach(function(n){
-      var opt=document.createElement('option');
-      opt.value=n.id;
-      opt.textContent=('    ').repeat(depth)+(depth===0?'📁 ':'  ↳ ')+n.nom;
-      sel.appendChild(opt);
-      if(n.enfants&&n.enfants.length)addOptions(n.enfants,depth+1);
-    });
-  }
-  addOptions(famillesTree,0);
-  // Option spéciale : sans famille
-  var classedCats=collectAllCats(famillesTree);
-  var hasSans=stock.some(function(a){return classedCats.indexOf(a.categorie)===-1;});
-  if(hasSans){
-    var opt2=document.createElement('option');
-    opt2.value='__sans_famille__';
-    opt2.textContent='📂 Sans famille';
-    sel.appendChild(opt2);
-  }
-}
-
-function filtreStockFamilleSelect(familleId){
-  stockFamilleFilter=familleId||null;
-  renderStock();
-}
-
-// ── Scan : navigation par famille ──────────────────────────────
-function buildScanCatPills(){
-  var pills=document.getElementById('scan-cat-pills');if(!pills)return;
-  var html='';
-  if(famillesTree&&famillesTree.length>0){
-    function addScanPills(nodes,depth){
-      nodes.forEach(function(n){
-        var indent='margin-left:'+(depth*12)+'px;';
-        html+='<div class="cat-pill" style="'+indent+'" onclick="selectScanFamille(&quot;'+n.id+'&quot;,this)">'+(n.categories&&n.categories.length?'📂':'📁')+' '+n.nom+'</div>';
-        if(n.enfants&&n.enfants.length)addScanPills(n.enfants,depth+1);
-      });
-    }
-    addScanPills(famillesTree,0);
-  } else {
-    // Fallback : catégories
-    var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
-    cats.forEach(function(c){html+='<div class="cat-pill" onclick="selectScanCat(&quot;'+c+'&quot;,this)">'+c+'</div>';});
-  }
-  pills.innerHTML=html;
-}
-
-function selectScanFamille(familleId,el){
-  document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
-  if(el)el.classList.add('active');
-  // Récupérer les catégories de cette famille
-  var cats=getCatsFamille(familleId);
-  if(!cats||cats.length===0){
-    // C'est un groupe, montrer ses enfants cliquables plutôt
-    var items=document.getElementById('scan-cat-items');
-    if(items)items.innerHTML='<div style="padding:8px;color:var(--text3);font-size:12px;">Sélectionnez une sous-famille ci-dessus.</div>';
-    return;
-  }
-  var items=document.getElementById('scan-cat-items');if(!items)return;
-  var filtered=stock.filter(function(a){return cats.indexOf(a.categorie)!==-1;});
-  items.innerHTML=filtered.map(function(a){
-    var rel=a.stock===0?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px;">RELIQUAT</span>':'';
-    return '<div onclick="selectScanArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; '+a.categorie+' O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong>'+rel+'</div>';
-  }).join('');
-}
-
-// ── Commandes : navigation par famille ─────────────────────────
-function buildCatPills(){
-  var pills=document.getElementById('cmd-cat-pills');if(!pills)return;
-  var html='';
-  if(famillesTree&&famillesTree.length>0){
-    function addCmdPills(nodes,depth){
-      nodes.forEach(function(n){
-        var indent='margin-left:'+(depth*12)+'px;';
-        html+='<div class="cat-pill" style="'+indent+'" onclick="selectCmdFamille(&quot;'+n.id+'&quot;,this)">'+(n.categories&&n.categories.length?'📂':'📁')+' '+n.nom+'</div>';
-        if(n.enfants&&n.enfants.length)addCmdPills(n.enfants,depth+1);
-      });
-    }
-    addCmdPills(famillesTree,0);
-  } else {
-    var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
-    cats.forEach(function(c){html+='<div class="cat-pill" onclick="selectCmdCat(&quot;'+c+'&quot;,this)">'+c+'</div>';});
-  }
-  pills.innerHTML=html;
-}
-
-function selectCmdFamille(familleId,el){
-  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
-  if(el)el.classList.add('active');
-  var cats=getCatsFamille(familleId);
-  if(!cats||cats.length===0){
-    var items=document.getElementById('cmd-cat-items');
-    if(items)items.innerHTML='<div style="padding:8px;color:var(--text3);font-size:12px;">Sélectionnez une sous-famille ci-dessus.</div>';
-    return;
-  }
-  var items=document.getElementById('cmd-cat-items');if(!items)return;
-  var filtered=stock.filter(function(a){return cats.indexOf(a.categorie)!==-1;});
-  items.innerHTML=filtered.map(function(a){
-    var rel=a.stock===0?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;font-weight:600;">RELIQUAT</span>':'';
-    return '<div onclick="selectCmdArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; '+a.categorie+' O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong>'+rel+'</div>';
-  }).join('');
-}
-
-// ── getCatsFamille : gère __sans_famille__ ──────────────────────
-// ════════════════════════════════════════════════════════════
-// VUE STOCK PAR FAMILLE — renderStockFamilleTree
-// ════════════════════════════════════════════════════════════
-
-function renderStockFamilleTree(){
-  var container=document.getElementById('stock-famille-tree-view');
-  if(!container)return; // page pas encore chargée
-  var empty=document.getElementById('stock-empty');
-  if(!container)return;
-
-  var q=(document.getElementById('search-input')?document.getElementById('search-input').value:'').toLowerCase();
-  var status=document.getElementById('filter-status')?document.getElementById('filter-status').value:'';
-  var selFam=document.getElementById('filter-famille');
-  var famId=selFam?selFam.value:'';
-  var familleFilterCats=getCatsFamille(famId||null);
-
-  // Filtrer le stock
-  var filtered=stock.filter(function(a){
-    var mq=!q||a.id.toLowerCase().indexOf(q)!==-1||a.categorie.toLowerCase().indexOf(q)!==-1||String(a.diametre).toLowerCase().indexOf(q)!==-1;
-    var familleOk=!familleFilterCats||(familleFilterCats.indexOf(a.categorie)!==-1);
-    var statusOk=!status||getStatus(a)===status;
-    return mq&&familleOk&&statusOk;
-  });
-
-  if(filtered.length===0){
-    container.innerHTML='';
-    if(empty)empty.style.display='';
-    return;
-  }
-  if(empty)empty.style.display='none';
-
-  function artRow(a){
-    var s=getStatus(a);
-    var pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
-    var color=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
-    var sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
-    var rel=a.stock===0?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600;">RELIQUAT</span>':'';
-    return '<tr style="font-size:13px;">'+
-      '<td style="padding:7px 10px;"><code style="font-size:12px;">'+a.id+'</code></td>'+
-      '<td style="padding:7px 10px;"><span class="'+sc+'">'+a.stock+'</span>'+rel+
-        '<div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:'+color+';"></div></div></td>'+
-      '<td style="padding:7px 10px;color:var(--text3);">'+a.diametre+'</td>'+
-      '<td style="padding:7px 10px;color:var(--text3);">min. '+a.stockMin+'</td>'+
-      (CLIENT_MODE
-        ?'<td style="padding:7px 10px;color:var(--green);">'+(a.prixVente>0?a.prixVente.toFixed(2)+' \u20ac':'\u2014')+'</td>'
-        :'<td style="padding:7px 10px;">'+(a.prixUnitaire>0?a.prixUnitaire.toFixed(2)+' \u20ac':'\u2014')+'</td>'+
-         '<td style="padding:7px 10px;">'+(a.stock*a.prixUnitaire>0?(a.stock*a.prixUnitaire).toFixed(2)+' \u20ac':'\u2014')+'</td>')+
-      '<td style="padding:7px 10px;text-align:right;white-space:nowrap;">'+
-        (CLIENT_MODE?'':
-          '<button class="btn btn-xs" onclick="openMouvement(\''+a.id+'\')" title="Entrée/Sortie">&#177;</button> '+
-          '<button class="btn btn-xs" onclick="showQR(\''+a.id+'\')" title="QR Code">QR</button> '+
-          '<button class="btn btn-xs" onclick="editArticle(\''+a.id+'\')" title="Modifier">&#9998;</button> '+
-          '<button class="btn btn-xs btn-danger" onclick="deleteArticle(\''+a.id+'\')" title="Supprimer">&#128465;</button>'
-        )+
-      '</td></tr>';
-  }
-
-  function groupHeader(label, depth, nbArts, totalVal, nbCrit){
-    var bg=depth===0?'var(--surface)':'var(--bg)';
-    var fw=depth===0?'700':'600';
-    var fs=depth===0?'14px':'13px';
-    var pl=(10+depth*16)+'px';
-    var icon=depth===0?'&#x1F4C1;':'&#x1F4C2;';
-    return '<tr style="background:'+bg+';border-top:2px solid var(--border);">'+
-      '<td colspan="'+(CLIENT_MODE?5:7)+'" style="padding:'+(depth===0?'10px':'7px')+' 10px '+
-        (depth===0?'10px':'7px')+' '+pl+';font-size:'+fs+';font-weight:'+fw+';">'+
-        icon+' '+label+
-        '<span style="font-weight:400;font-size:11px;color:var(--text3);margin-left:8px;">'+nbArts+' article(s)'+
-        (totalVal>0?' &middot; '+(totalVal).toFixed(0)+' \u20ac':'')+
-        (nbCrit>0?'<span style="color:var(--red);margin-left:6px;">\u25cf '+nbCrit+' alerte(s)</span>':'')+
-        '</span></td>'+
-      '</tr>';
-  }
-
-  function tableHead(){
-    return '<thead><tr style="background:var(--surface2);">'+
-      '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Référence</th>'+
-      '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Stock</th>'+
-      '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Diam.</th>'+
-      '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Min.</th>'+
-      (CLIENT_MODE?'<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Prix vente</th>':
-        '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Prix achat</th>'+
-        '<th style="padding:7px 10px;font-size:11px;color:var(--text3);">Valeur</th>')+
-      '<th></th></tr></thead>';
-  }
-
-  var html='';
-
-  if(famillesTree&&famillesTree.length>0){
-    // Collecter tous les ids pour "sans famille"
-    var classedCats=collectAllCats(famillesTree);
-
-    function renderFamilleSection(nodes, depth){
-      nodes.forEach(function(n){
-        var nodeCats=n.categories||(n.categorie?[n.categorie]:[]);
-        // Toutes les cats de ce nœud et ses descendants
-        var allNodeCats=[];
-        function gatherCats(node){
-          var nc=node.categories||(node.categorie?[node.categorie]:[]);
-          nc.forEach(function(c){if(allNodeCats.indexOf(c)===-1)allNodeCats.push(c);});
-          if(node.enfants)node.enfants.forEach(gatherCats);
-        }
-        gatherCats(n);
-
-        // Articles filtrés pour ce nœud entier
-        var nodeArts=filtered.filter(function(a){return allNodeCats.indexOf(a.categorie)!==-1;});
-        if(nodeArts.length===0&&(!n.enfants||n.enfants.length===0))return;
-
-        // En-tête du groupe
-        var nodeVal=nodeArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-        var nodeCrit=nodeArts.filter(function(a){return getStatus(a)!=='ok';}).length;
-        var groupId='sg-'+n.id;
-        var openState=stockGroupOpen[n.id]!==false; // ouvert par défaut
-
-        html+='<div id="'+groupId+'" style="margin-bottom:4px;">';
-        // Toggle row
-        html+='<div style="display:flex;align-items:center;cursor:pointer;background:'+(depth===0?'var(--surface)':'var(--bg)')+
-              ';border:1px solid var(--border);border-radius:8px;padding:'+(depth===0?'10px 14px':'7px 14px')+
-              ' '+(depth===0?'10px':'7px')+' '+(10+depth*16)+'px;margin-bottom:2px;" onclick="toggleStockGroup(\''+n.id+'\')">';
-        html+='<span id="arr-'+n.id+'" style="margin-right:8px;font-size:12px;color:var(--text3);">'+(openState?'&#9660;':'&#9654;')+'</span>';
-        html+='<span style="font-size:'+(depth===0?'15px':'13px')+';margin-right:6px;">'+(nodeCats.length?'&#x1F4C2;':'&#x1F4C1;')+'</span>';
-        html+='<span style="font-weight:'+(depth===0?700:600)+';flex:1;">'+n.nom+'</span>';
-        html+='<span style="font-size:11px;color:var(--text3);">'+nodeArts.length+' art.'+
-              (nodeVal>0?' &middot; '+nodeVal.toFixed(0)+' \u20ac':'')+
-              (nodeCrit>0?' <span style="color:var(--red);">&#9679; '+nodeCrit+'</span>':'')+
-              '</span></div>';
-
-        // Contenu
-        html+='<div id="body-'+n.id+'" style="'+(openState?'':'display:none;')+'">';
-
-        // Sous-familles d'abord
-        if(n.enfants&&n.enfants.length){
-          renderFamilleSection(n.enfants, depth+1);
-        }
-
-        // Articles directs de ce nœud (seulement les cats directement liées)
-        if(nodeCats.length>0){
-          var directArts=filtered.filter(function(a){return nodeCats.indexOf(a.categorie)!==-1;});
-          if(directArts.length>0){
-            // Grouper par catégorie
-            var catsSorted=[...new Set(directArts.map(function(a){return a.categorie;}))].sort();
-            catsSorted.forEach(function(cat){
-              var catArts=directArts.filter(function(a){return a.categorie===cat;}).sort(function(a,b){return a.id.localeCompare(b.id);});
-              var catVal=catArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-              var catCrit=catArts.filter(function(a){return getStatus(a)!=='ok';}).length;
-              html+='<div style="margin-left:'+(8+depth*16)+'px;margin-bottom:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;">';
-              html+='<table style="width:100%;border-collapse:collapse;">';
-              html+=tableHead();
-              html+='<tbody>';
-              // En-tête catégorie
-              html+=groupHeader(cat, depth+1, catArts.length, catVal, catCrit);
-              catArts.forEach(function(a){html+=artRow(a);});
-              html+='</tbody></table></div>';
-            });
-          }
-        }
-
-        html+='</div></div>';
-      });
-    }
-
-    renderFamilleSection(famillesTree, 0);
-
-    // Articles sans famille
-    var sansFamily=filtered.filter(function(a){return classedCats.indexOf(a.categorie)===-1;});
-    if(sansFamily.length>0){
-      var sfCats=[...new Set(sansFamily.map(function(a){return a.categorie;}))].sort();
-      var sfVal=sansFamily.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-      var sfCrit=sansFamily.filter(function(a){return getStatus(a)!=='ok';}).length;
-      var sfOpen=stockGroupOpen['__sf']!==false;
-      html+='<div style="margin-bottom:4px;">';
-      html+='<div style="display:flex;align-items:center;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;opacity:0.8;" onclick="toggleStockGroup(\'__sf\')">';
-      html+='<span id="arr-__sf" style="margin-right:8px;font-size:12px;color:var(--text3);">'+(sfOpen?'&#9660;':'&#9654;')+'</span>';
-      html+='<span style="font-size:15px;margin-right:6px;">&#x1F4C2;</span>';
-      html+='<span style="font-weight:600;flex:1;font-style:italic;">Sans famille ('+sansFamily.length+' articles)</span>';
-      html+='<span style="font-size:11px;color:var(--text3);">'+(sfVal>0?sfVal.toFixed(0)+' \u20ac':'')+
-            (sfCrit>0?' <span style="color:var(--red);">&#9679; '+sfCrit+'</span>':'')+
-            '</span></div>';
-      html+='<div id="body-__sf" style="'+(sfOpen?'':'display:none;')+'">';
-      sfCats.forEach(function(cat){
-        var catArts=sansFamily.filter(function(a){return a.categorie===cat;}).sort(function(a,b){return a.id.localeCompare(b.id);});
-        var catVal=catArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-        var catCrit=catArts.filter(function(a){return getStatus(a)!=='ok';}).length;
-        html+='<div style="margin-left:8px;margin-bottom:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;">';
-        html+='<table style="width:100%;border-collapse:collapse;">'+tableHead()+'<tbody>';
-        html+=groupHeader(cat, 1, catArts.length, catVal, catCrit);
-        catArts.forEach(function(a){html+=artRow(a);});
-        html+='</tbody></table></div>';
-      });
-      html+='</div></div>';
-    }
-
-  } else {
-    // Fallback par catégorie si pas de familles
-    var cats=Array.from(new Set(filtered.map(function(a){return a.categorie;}))).sort();
-    cats.forEach(function(cat){
-      var catArts=filtered.filter(function(a){return a.categorie===cat;}).sort(function(a,b){return a.id.localeCompare(b.id);});
-      var catVal=catArts.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-      var catCrit=catArts.filter(function(a){return getStatus(a)!=='ok';}).length;
-      var catOpen=stockGroupOpen[cat]!==false;
-      html+='<div style="margin-bottom:4px;">';
-      html+='<div style="display:flex;align-items:center;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;" onclick="toggleStockGroup(\''+cat+'\')">';
-      html+='<span id="arr-'+cat.replace(/[^a-z0-9]/gi,'_')+'" style="margin-right:8px;font-size:12px;color:var(--text3);">'+(catOpen?'&#9660;':'&#9654;')+'</span>';
-      html+='<span style="font-size:15px;margin-right:6px;">&#x1F4C2;</span>';
-      html+='<span style="font-weight:700;flex:1;">'+cat+'</span>';
-      html+='<span style="font-size:11px;color:var(--text3);">'+catArts.length+' art.'+(catVal>0?' &middot; '+catVal.toFixed(0)+' \u20ac':'')+
-            (catCrit>0?' <span style="color:var(--red);">&#9679; '+catCrit+'</span>':'')+
-            '</span></div>';
-      html+='<div id="body-'+cat.replace(/[^a-z0-9]/gi,'_')+'" style="'+(catOpen?'':'display:none;')+'">';
-      html+='<div style="margin-left:8px;border:1px solid var(--border);border-radius:6px;overflow:hidden;">';
-      html+='<table style="width:100%;border-collapse:collapse;">'+tableHead()+'<tbody>';
-      catArts.forEach(function(a){html+=artRow(a);});
-      html+='</tbody></table></div></div></div>';
-    });
-  }
-
-  container.innerHTML=html;
-}
-
-// État ouvert/fermé des groupes
-var stockGroupOpen={};
-function toggleStockGroup(id){
-  var body=document.getElementById('body-'+id);
-  var arr=document.getElementById('arr-'+id);
-  if(!body)return;
-  var isOpen=body.style.display!=='none';
-  body.style.display=isOpen?'none':'';
-  if(arr)arr.innerHTML=isOpen?'&#9654;':'&#9660;';
-  stockGroupOpen[id]=!isOpen;
-}
-
-// ══════ FONCTIONS MANQUANTES — injectees avant initApp ══════
-
-function populateArtCatSelect(){
-  var sel=document.getElementById('art-cat');if(!sel)return;
-  var cats=categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort();
-  if(cats.indexOf('Flexible')===-1)cats.push('Flexible');
-  sel.innerHTML=cats.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
-}
-
-async function saveArticle(){
-  var id=document.getElementById('art-id').value.trim();
-  var cat=document.getElementById('art-cat').value;
-  var diam=document.getElementById('art-diam').value.trim();
-  var fourn=document.getElementById('art-fournisseur').value.trim();
-  var sv=parseInt(document.getElementById('art-stock').value)||0;
-  var sm=parseInt(document.getElementById('art-min').value)||5;
-  var prix=parseFloat(document.getElementById('art-prix').value)||0;
-  var prixV=parseFloat(document.getElementById('art-prix-vente').value)||0;
-  if(!id||!cat||!diam){showToast('Reference, categorie et diametre requis');return;}
-  var isEdit=document.getElementById('art-id').readOnly;
-  if(isEdit){
-    var r=await db.from('stock').update({categorie:cat,diametre:diam,fournisseur:fourn,stock:sv,stock_min:sm,prix_unitaire:prix,prix_vente:prixV}).eq('id',id);
-    if(r.error){showToast('Erreur: '+r.error.message);return;}
-  }else{
-    var r2=await db.from('stock').insert({id:id,categorie:cat,diametre:diam,fournisseur:fourn,stock:sv,stock_min:sm,prix_unitaire:prix,prix_vente:prixV});
-    if(r2.error){showToast('Erreur: '+r2.error.message);return;}
-  }
-  closeModal('modal-article');
-  var rd=await db.from('stock').select('*').order('categorie').order('id');
-  if(rd.data)stock=rd.data.map(adaptArticle);
-  renderStock();renderStockFamilleFilter();
-  renderDashboard();updateBadges();showToast('Article enregistre');
-}
-
-async function deleteArticle(id){
-  if(!confirm('Supprimer cet article ? Cette action est irréversible.'))return;
-  var r=await db.from('stock').delete().eq('id',id);
-  if(r.error){showToast('Erreur: '+r.error.message);return;}
-  var rd=await db.from('stock').select('*').order('categorie').order('id');
-  if(rd.data)stock=rd.data.map(adaptArticle);
-  renderStock();renderDashboard();updateBadges();showToast('Article supprimé');
-}
-
-async function editArticle(id){
-  var art=stock.find(function(a){return a.id===id;});if(!art)return;
-  document.getElementById('art-modal-title').textContent='Modifier - '+id;
-  document.getElementById('art-id').value=id;
-  document.getElementById('art-id').readOnly=true;
-  document.getElementById('art-id').style.color='var(--text3)';
-  var row=document.getElementById('art-newid-row');if(row)row.style.display='';
-  var ni=document.getElementById('art-newid');if(ni)ni.value='';
-  document.getElementById('art-fournisseur').value=art.fournisseur||'';
-  document.getElementById('art-diam').value=art.diametre||'';
-  document.getElementById('art-stock').value=art.stock||0;
-  document.getElementById('art-min').value=art.stockMin||5;
-  document.getElementById('art-prix').value=art.prixUnitaire||0;
-  document.getElementById('art-prix-vente').value=art.prixVente||0;
-  populateArtCatSelect();
-  document.getElementById('art-cat').value=art.categorie;
-  openModal('modal-article');
-}
-
-var scanSelectedArt=null;
-function switchScanManualMode(mode,btn){
-  document.querySelectorAll('#scan-tab-manual .tab-sw-btn').forEach(function(b){b.classList.remove('active');});
-  if(btn)btn.classList.add('active');
-  var r=document.getElementById('scan-manual-ref');
-  var cc=document.getElementById('scan-manual-cat');
-  if(r)r.style.display=mode==='ref'?'':'none';
-  if(cc)cc.style.display=mode==='cat'?'':'none';
-  if(mode==='cat')buildScanCatPills();
-}
-// buildScanCatPills: voir version famille ci-dessus
-function selectScanCat(cat,el){
-  document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(function(p){p.classList.remove('active');});
-  if(el)el.classList.add('active');
-  var items=document.getElementById('scan-cat-items');if(!items)return;
-  items.innerHTML=stock.filter(function(a){return a.categorie===cat;}).map(function(a){
-    return '<div onclick="selectScanArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; O'+a.diametre+' &middot; Stock: <strong>'+a.stock+'</strong></div>';
-  }).join('');
-}
-function selectScanArt(id,el){
-  scanSelectedArt=stock.find(function(a){return a.id===id;});
-  document.querySelectorAll('#scan-cat-items div').forEach(function(d){d.style.background='';});
-  if(el)el.style.background='var(--green-bg)';
-  var e2=document.getElementById('scan-selected-art');if(e2&&scanSelectedArt)e2.textContent='Selectionne: '+scanSelectedArt.id;
-  var ref=document.getElementById('manual-ref');if(ref&&scanSelectedArt)ref.value=scanSelectedArt.id;
-}
-
-var editingCmdId=null;var pendingCmdArt=null;
-function renderCmdItems(){
-  var list=document.getElementById('cmd-items-list');
-  var empty=document.getElementById('cmd-items-empty');
-  if(!list)return;
-  if(cmdItems.length===0){list.innerHTML='';if(empty)empty.style.display='';return;}
-  if(empty)empty.style.display='none';
-  list.innerHTML=cmdItems.map(function(item,i){
-    var art=stock.find(function(a){return a.id===item.id;});
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--green-bg);border-radius:8px;margin-bottom:6px;">'+
-      '<div><strong>'+item.id+'</strong>'+(art?' &middot; '+art.categorie+' O'+art.diametre:'')+'</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:700;">x '+item.qty+'</span>'+
-      '<button class="btn btn-xs btn-danger" onclick="removeCmdItem('+i+')">x</button></div></div>';
-  }).join('');
-}
-function removeCmdItem(i){cmdItems.splice(i,1);renderCmdItems();}
-function switchAddMode(mode){
-  ['search','cat','qr'].forEach(function(m){
-    var el=document.getElementById('add-mode-'+m);if(el)el.style.display=m===mode?'':'none';
-  });
-}
-// buildCatPills remplacée par version famille ci-dessus
-// selectCmdCat remplacée — utiliser selectCmdFamille
-function selectCmdArt(id,el){
-  pendingCmdArt=stock.find(function(a){return a.id===id;});if(!pendingCmdArt)return;
-  document.querySelectorAll('#cmd-cat-items div').forEach(function(d){d.style.background='';});
-  if(el)el.style.background='var(--green-bg)';
-  showCmdQtyPicker(pendingCmdArt);
-}
-function showCmdQtyPicker(art){
-  var picker=document.getElementById('cmd-qty-picker');if(!picker)return;
-  document.getElementById('cmd-qty-picker-id').textContent=art.id;
-  var relTxt=art.stock===0?' — ⚠ RELIQUAT (stock épuisé, commande en attente de réappro)':'';
-  document.getElementById('cmd-qty-picker-desc').textContent=art.categorie+' O'+art.diametre+' · Stock: '+art.stock+relTxt;
-  document.getElementById('cmd-qty-picker-input').value=1;
-  picker.style.display='flex';
-}
-function cancelCmdItem(){var picker=document.getElementById('cmd-qty-picker');if(picker)picker.style.display='none';pendingCmdArt=null;}
-function confirmCmdItem(){
-  if(!pendingCmdArt)return;
-  var qty=parseInt(document.getElementById('cmd-qty-picker-input').value)||1;
-  var ex=cmdItems.findIndex(function(i){return i.id===pendingCmdArt.id;});
-  if(ex>-1)cmdItems[ex].qty+=qty;else cmdItems.push({id:pendingCmdArt.id,qty:qty});
-  var picker=document.getElementById('cmd-qty-picker');if(picker)picker.style.display='none';
-  pendingCmdArt=null;renderCmdItems();showToast('Article ajoute');
-}
-function searchCmdArt(val){
-  var res=document.getElementById('cmd-search-results');if(!res)return;
-  if(!val||val.length<2){res.innerHTML='';return;}
-  res.innerHTML=stock.filter(function(a){
-    return a.id.toLowerCase().indexOf(val.toLowerCase())!==-1||a.categorie.toLowerCase().indexOf(val.toLowerCase())!==-1;
-  }).slice(0,10).map(function(a){
-    var rel=a.stock===0?' <span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;font-weight:600;">RELIQUAT</span>':'';
-    return '<div onclick="selectCmdSearchArt(&quot;'+a.id+'&quot;,this)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;"><strong>'+a.id+'</strong> &middot; '+a.categorie+' O'+a.diametre+' &middot; Stock: '+a.stock+rel+'</div>';
-  }).join('');
-}
-function selectCmdSearchArt(id,el){
-  pendingCmdArt=stock.find(function(a){return a.id===id;});if(!pendingCmdArt)return;
-  document.querySelectorAll('#cmd-search-results div').forEach(function(d){d.style.background='';});
-  if(el)el.style.background='var(--green-bg)';
-  var inp=document.getElementById('cmd-art-search');if(inp)inp.value=pendingCmdArt.id;
-  showCmdQtyPicker(pendingCmdArt);
-}
-function stopCmdQR(){
-  var btn1=document.getElementById('btn-cmd-qr-start');
-  var btn2=document.getElementById('btn-cmd-qr-stop');
-  if(btn1)btn1.style.display='';
-  if(btn2)btn2.style.display='none';
-  if(cmdHtml5QrCode){
-    try{cmdHtml5QrCode.stop().then(function(){cmdHtml5QrCode.clear();var z=document.getElementById('cmd-qr-zone');if(z)z.innerHTML='';}).catch(function(){});}catch(e){}
-    cmdHtml5QrCode=null;
-  }
-}
-
-async function startCmdQR(){
-  var btn1=document.getElementById('btn-cmd-qr-start');
-  var btn2=document.getElementById('btn-cmd-qr-stop');
-  if(btn1)btn1.style.display='none';
-  if(btn2)btn2.style.display='';
-  var zone=document.getElementById('cmd-qr-zone');
-  if(!zone)return;
-  zone.innerHTML='<div id="cmd-qr-reader" style="width:100%;"></div>';
-  if(!window.Html5Qrcode){showToast('Librairie QR non chargée');return;}
-  cmdHtml5QrCode=new Html5Qrcode('cmd-qr-reader');
-  try{
-    await cmdHtml5QrCode.start(
-      {facingMode:'environment'},
-      {fps:10,qrbox:220},
-      function(text){
-        stopCmdQR();
-        var art=stock.find(function(a){return a.id===text;});
-        if(art){
-          showToast('Article trouvé: '+art.id);
-          pendingCmdArt=art;
-          showCmdQtyPicker(art);
-          switchAddMode('search');
-        } else {
-          showToast('Référence inconnue: '+text);
-        }
-      },
-      function(){}
-    );
-  }catch(e){showToast('Caméra inaccessible: '+e);stopCmdQR();}
-}
-
-async function saveCommande(){
-  var libre=document.getElementById('cmd-chantier-libre');
-  var selC=document.getElementById('cmd-chantier');
-  var chantier=CLIENT_MODE?(libre?libre.value.trim()||'Client':'Client'):(selC?selC.value:'');
-  if(!CLIENT_MODE&&!chantier){showToast('Selectionnez un chantier');return;}
-  if(cmdItems.length===0){showToast('Ajoutez au moins un article');return;}
-  var nom=document.getElementById('cmd-nom').value.trim();
-  var urgence=document.getElementById('cmd-urgence').value;
-  var notes=document.getElementById('cmd-notes').value.trim();
-  var num=cmdCounter||(commandes.length+1);
-  var src=CLIENT_MODE?'client':'admin';
-  // Marquer les articles en reliquat (stock=0)
-  var itemsAvecReliquat=cmdItems.map(function(i){
-    var art=stock.find(function(a){return a.id===i.id;});
-    return Object.assign({},i,{reliquat:art&&art.stock===0});
-  });
-  var r=await db.from('commandes').insert({num:num,chantier:chantier,nom:nom,urgence:urgence,notes:notes,items:itemsAvecReliquat,statut:'en_attente',source:src});
-  if(r.error){showToast('Erreur: '+r.error.message);return;}
-  cmdCounter=num+1;
-  await db.from('config').upsert({key:'cmd_counter',value:cmdCounter},{onConflict:'key'});
-  closeModal('modal-commande');
-  var r2=await db.from('commandes').select('*').order('created_at',{ascending:false});
-  if(r2.data)commandes=r2.data;
-  renderCommandes();updateBadges();showToast('Commande #'+String(num).padStart(3,'0')+' soumise');
-  if(CLIENT_MODE)showPage('commandes',document.querySelector('[data-page="commandes"]'));
-}
-
-async function editCmd(id){
-  var c=commandes.find(function(x){return x.id===id;});if(!c)return;
-  editingCmdId=id;cmdItems=JSON.parse(JSON.stringify(c.items||[]));
-  document.getElementById('cmd-modal-title').textContent='Modifier commande #'+String(c.num).padStart(3,'0');
-  var selC=document.getElementById('cmd-chantier');
-  if(selC){selC.innerHTML='<option value="">Selectionner</option>';chantiers.forEach(function(ch){var o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom;if(ch.nom===c.chantier)o.selected=true;selC.appendChild(o);});}
-  var libre=document.getElementById('cmd-chantier-libre');if(libre)libre.value=c.chantier||'';
-  document.getElementById('cmd-nom').value=c.nom||'';
-  document.getElementById('cmd-notes').value=c.notes||'';
-  document.getElementById('cmd-urgence').value=c.urgence||'normale';
-  renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');
-}
-
-function printCmd(id){
-  var c=commandes.find(function(x){return x.id===id;});if(!c)return;
-  var w=window.open('','_blank');
-  var date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
-  var statLabel={en_attente:'En attente',approuvee:'Approuvee',refusee:'Refusee'}[c.statut]||c.statut;
-  var total=0;
-  var prixTh=CLIENT_MODE?'<th>Prix unit. HT</th><th>Total HT</th>':'';
-  var rows=(c.items||[]).map(function(i){
-    var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',prixVente:0};
-    if(CLIENT_MODE){var pv=art.prixVente||0;var tt=pv*i.qty;total+=tt;
-      return '<tr><td>'+i.id+'</td><td>'+art.categorie+' O'+art.diametre+'</td><td style="text-align:center;">'+i.qty+'</td><td>'+(pv>0?pv.toFixed(2)+' EUR':'-')+'</td><td>'+(tt>0?tt.toFixed(2)+' EUR':'-')+'</td></tr>';}
-    return '<tr><td>'+i.id+'</td><td>'+art.categorie+' O'+art.diametre+'</td><td style="text-align:center;">'+i.qty+'</td></tr>';
-  }).join('');
-  var totalRow=(CLIENT_MODE&&total>0)?'<tr style="font-weight:700;"><td colspan="4" style="text-align:right;padding:8px;">Total HT</td><td style="padding:8px;">'+total.toFixed(2)+' EUR</td></tr>':'';
-  var html='<!DOCTYPE html><html><head><title>Commande #'+String(c.num).padStart(3,'0')+'</title>'+
-    '<style>body{font-family:sans-serif;padding:24px;}table{width:100%;border-collapse:collapse;font-size:13px;}'+
-    'th{background:#f5f4f0;border:1px solid #ccc;padding:8px;text-align:left;}td{border:1px solid #ddd;padding:8px;}'+
-    '.footer{margin-top:20px;font-size:11px;color:#999;text-align:center;}</style></head><body>'+
-    '<h2>Bon de commande - AIR2S</h2><h3 style="color:#1a8c66;">Commande #'+String(c.num).padStart(3,'0')+'</h3>'+
-    '<p style="font-size:13px;color:#555;margin-bottom:16px;line-height:1.8;">Chantier/Societe: <strong>'+c.chantier+'</strong><br>'+
-    'Demandeur: '+(c.nom||'-')+'<br>Date: '+date+'<br>Urgence: '+(c.urgence||'-')+' | Statut: '+statLabel+(c.notes?'<br>Notes: '+c.notes:'')+'</p>'+
-    '<table><thead><tr><th>Reference</th><th>Article</th><th>Quantite</th>'+prixTh+'</tr></thead>'+
-    '<tbody>'+rows+totalRow+'</tbody></table>'+
-    '<div class="footer">StockPro AIR2S - '+new Date().toLocaleString('fr-FR')+'</div>'+
-    '<scr'+'ipt>window.print();<'+'/script></body></html>';
-  w.document.write(html);w.document.close();
-}
-
-function renderStockClient(){
-  peuplerFamilleSelect();
-  // Mode client : vue tableau simple (pas d'arbre)
-  var tw=document.getElementById('stock-table-wrap');
-  var ftv=document.getElementById('stock-famille-tree-view');
-  if(tw)tw.style.display='';
-  if(ftv)ftv.style.display='none';
-  var q=(document.getElementById('search-input')?document.getElementById('search-input').value:'').toLowerCase();
-  var cat=document.getElementById('filter-cat')?document.getElementById('filter-cat').value:'';
-  var status=document.getElementById('filter-status')?document.getElementById('filter-status').value:'';
-  var filtered=stock.filter(function(a){
-    var mq=!q||a.id.toLowerCase().indexOf(q)!==-1||a.categorie.toLowerCase().indexOf(q)!==-1||String(a.diametre).toLowerCase().indexOf(q)!==-1;
-    var familleOk=!familleFilterCats||(familleFilterCats.indexOf(a.categorie)!==-1);
-    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status)&&familleOk;
-  });
-  var thPrix=document.getElementById('stock-th-prix');var thV=document.getElementById('stock-th-valeur');var thF=document.getElementById('stock-th-fourn');
-  if(thPrix)thPrix.textContent='Prix vente HT';if(thV)thV.style.display='none';if(thF)thF.style.display='none';
-  document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
-  document.getElementById('stock-table').innerHTML=filtered.map(function(a){
-    var s=getStatus(a);var pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
-    var color=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
-    var sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
-    var rel=a.stock===0?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;font-weight:600;margin-left:4px;">RELIQUAT</span>':'';
-    return '<tr><td><code>'+a.id+'</code></td><td>'+a.categorie+'</td><td>'+a.diametre+'</td>'+
-      '<td><span class="'+sc+'">'+a.stock+'</span>'+rel+'<div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:'+color+';"></div></div></td>'+
-      '<td>'+a.stockMin+'</td><td>'+(a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—')+'</td>'+
-      '<td>'+statusLabel(s)+'</td><td></td></tr>';
-  }).join('');
-}
-
-function applyClientMode(){
-  ['pareto','etiquettes','scan','chantiers','alertes','historique','categories','parametres','dashboard'].forEach(function(p){
-    document.querySelectorAll('[data-page="'+p+'"]').forEach(function(b){b.style.display='none';});
-  });
-  document.querySelectorAll('.sb-section').forEach(function(s){if(s.textContent.trim()==='Admin')s.style.display='none';});
-  document.querySelectorAll('.nav-btn').forEach(function(b){if(b.textContent.indexOf('Exporter')!==-1)b.style.display='none';});
-  var tb=document.getElementById('topbar-action');if(tb)tb.style.display='none';
-  var banner=document.createElement('div');
-  banner.style.cssText='background:#e8f0fb;border-bottom:2px solid #1a5fa8;padding:7px 16px;font-size:12px;color:#1a5fa8;text-align:center;font-weight:600;flex-shrink:0;';
-  banner.textContent='Acces client AIR2S - Consultation stock & demandes de materiel';
-  var mainDiv=document.getElementById('main');if(mainDiv)mainDiv.insertBefore(banner,mainDiv.firstChild);
-  showPage('commandes',document.querySelector('[data-page="commandes"]'));
-}
-
-function saveParams(){
-  var email=document.getElementById('param-email').value.trim();
-  var company=document.getElementById('param-company').value.trim();
-  db.from('config').upsert({key:'email',value:email},{onConflict:'key'});
-  db.from('config').upsert({key:'company',value:company},{onConflict:'key'});
-  params={email:email,company:company};showToast('Parametres enregistres');
-}
-async function saveCat(){
-  var name=document.getElementById('newcat-name').value.trim();if(!name)return;
-  if(editingCat){var idx=categories.indexOf(editingCat);if(idx>-1)categories[idx]=name;editingCat=null;}
-  else{if(categories.indexOf(name)===-1)categories.push(name);}
-  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
-  closeModal('modal-newcat');renderCategories();showToast('Categorie enregistree');
-}
-function editCat(name){editingCat=name;document.getElementById('cat-modal-title').textContent='Modifier';document.getElementById('newcat-name').value=name;openModal('modal-newcat');}
-async function deleteCat(name){
-  if(!confirm('Supprimer "'+name+'" ?'))return;
-  categories=categories.filter(function(c){return c!==name&&c.indexOf(name+' > ')!==0;});
-  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});renderCategories();showToast('Supprimee');
-}
-async function openNewSubCat(){
-  var sel=document.getElementById('subcat-parent');
-  if(sel)sel.innerHTML=categories.filter(function(c){return c.indexOf(' > ')===-1;}).sort().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
-  document.getElementById('subcat-name').value='';openModal('modal-newsubcat');
-}
-async function saveSubCat(){
-  var parent=document.getElementById('subcat-parent').value;
-  var name=document.getElementById('subcat-name').value.trim();if(!parent||!name)return;
-  var full=parent+' > '+name;if(categories.indexOf(full)===-1)categories.push(full);
-  await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
-  closeModal('modal-newsubcat');renderCategories();showToast('Sous-categorie enregistree');
-}
-function exportChantiers(){showToast('Export non disponible');}
-function resetData(){if(!confirm('Reinitialiser TOUTES les donnees ?'))return;showToast('Non disponible.');}
-function exportExcel(){
-  if(!window.XLSX){showToast('Chargement...');return;}
-  var wb=window.XLSX.utils.book_new();
-  var sd=[['Reference','Categorie','Diametre','Stock','Stock min','Prix achat','Prix vente','Fournisseur','Valeur']];
-  stock.forEach(function(a){sd.push([a.id,a.categorie,a.diametre,a.stock,a.stockMin,a.prixUnitaire,a.prixVente,a.fournisseur,(a.stock*a.prixUnitaire).toFixed(2)]);});
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sd),'Stock');
-  var hd=[['Date','Type','Reference','Categorie','Diametre','Qte','Nouveau stock','Equipe','Note']];
-  historique.forEach(function(h){hd.push([new Date(h.ts).toLocaleString('fr-FR'),h.type,h.id,h.categorie,h.diametre,h.qty,h.newStock,h.equipe,h.note]);});
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(hd),'Historique');
-  var cd=[['N','Date','Chantier','Demandeur','Urgence','Statut','Articles']];
-  commandes.forEach(function(c){cd.push([c.num,c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'',c.chantier,c.nom,c.urgence,c.statut,(c.items||[]).map(function(i){return i.id+'x'+i.qty;}).join(', ')]);});
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cd),'Commandes');
-  XLSX.writeFile(wb,'StockPro_'+new Date().toISOString().slice(0,10)+'.xlsx');showToast('Export telecharge');
-}
-
-// ════════════════════════════════════════════════════════════
 async function initApp() {
   try {
-    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     // Vérifier si la table stock existe, sinon la créer et la peupler
     const { data: existingStock, error: stockErr } = await db.from('stock').select('id').limit(1);
 
@@ -2063,8 +937,8 @@ async function loadAllData() {
     configRes.data.forEach(row => {
       if (row.key === 'categories') categories = row.value;
       if (row.key === 'chantiers') chantiers = Array.isArray(row.value)?row.value:[];
-      if (row.key === 'cmd_counter') cmdCounter = row.value;
       if (row.key === 'familles') famillesTree = Array.isArray(row.value)?row.value:[];
+      if (row.key === 'cmd_counter') cmdCounter = row.value;
       if (row.key === 'email') params.email = row.value;
       if (row.key === 'company') params.company = row.value;
     });
@@ -2100,7 +974,6 @@ function subscribeRealtime() {
         if (row.key === 'categories') { categories = row.value; renderCategories(); }
         if (row.key === 'chantiers') { chantiers = Array.isArray(row.value)?row.value:[]; renderChantiers(); }
         if (row.key === 'cmd_counter') cmdCounter = row.value;
-      if (row.key === 'familles') famillesTree = Array.isArray(row.value)?row.value:[];
       });
     })
     .subscribe((status) => {
@@ -2149,43 +1022,44 @@ function showToast(msg, duration=3500) {
 
 // ==================== NAVIGATION ====================
 function showPage(page,el){
-  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
-  var activePage=document.getElementById('page-'+page);
-  if(!activePage){
-    console.error('Page introuvable:',page);
-    return;
-  }
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const activePage=document.getElementById('page-'+page);
   activePage.classList.add('active');
-  document.querySelectorAll('.nav-btn,.mob-btn').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('.nav-btn,.mob-btn').forEach(b=>b.classList.remove('active'));
   if(el)el.classList.add('active');
-  document.querySelectorAll('[data-page="'+page+'"]').forEach(function(b){b.classList.add('active');});
+  document.querySelectorAll('[data-page="'+page+'"]').forEach(b=>b.classList.add('active'));
   // Remonter en haut
-  var ct=document.getElementById('content');
-  var mn=document.getElementById('main');
-  if(ct)ct.scrollTop=0;
-  if(mn)mn.scrollTop=0;
+  const ct=document.getElementById('content');
+  if(ct){
+    ct.scrollTop=0;
+    // Sur mobile, scrollIntoView sur la page active
+    setTimeout(()=>{
+      activePage.scrollIntoView({block:'start',behavior:'instant'});
+      ct.scrollTop=0;
+    },10);
+  }
+  const mn=document.getElementById('main');if(mn)mn.scrollTop=0;
   window.scrollTo(0,0);
+  // Scroller jusqu'à la page active
+  setTimeout(()=>{
+    const pg=document.getElementById('page-'+page);
+    if(pg)pg.scrollIntoView({block:'start'});
+    if(ct)ct.scrollTop=0;
+    if(mn)mn.scrollTop=0;
+  },10);
   const titles={dashboard:'Tableau de bord',stock:'Articles & Stock',pareto:'Analyse Pareto (80/20)',
     scan:'Scanner QR',commandes:'Commandes chantiers',alertes:'Alertes de stock',
-    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres'};
+    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres',familles:'Familles & Sous-familles'};
   document.getElementById('topbar-title').textContent=titles[page]||page;
   const ab=document.getElementById('topbar-action');
   if(page==='stock'){ab.style.display='none';}
   else if(page==='commandes'){ab.style.display='none';}
-  else if(page==='categories'){ab.style.display='';ab.textContent='+ Categorie';ab.onclick=function(){openModal('modal-newcat');}}
+  else if(page==='categories'){ab.style.display='';ab.textContent='+ Catégorie';ab.onclick=()=>openModal('modal-newcat');}
   else ab.style.display='none';
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
     commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
-    chantiers:renderChantiers,categories:renderCategories,parametres:renderParams,familles:renderFamillesPage};
-  if(renders[page]){
-    try{renders[page]();}
-    catch(e){
-      console.error('Erreur render '+page+':',e);
-      var pg2=document.getElementById('page-'+page);
-      if(pg2)pg2.innerHTML='<div style="padding:20px;background:#fff0f0;color:red;border-radius:8px;margin:16px;">'+
-        '<strong>Erreur de rendu ('+page+') :</strong><br>'+e.message+'<br><small>'+e.stack+'</small></div>';
-    }
-  }
+    categories:renderCategories,parametres:renderParams,familles:renderFamillesPage};
+  if(renders[page])renders[page]();
   if(page!=='scan'){stopQRScan();stopCmdQR();}
 }
 
@@ -2195,7 +1069,7 @@ function renderDashboard(){
   const totalVal=stock.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
   document.getElementById('kpi-grid').innerHTML=`
     <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div></div>
-    <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;" onclick="showPage('commandes',document.querySelector('[data-page=\"commandes\"]'))"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
+    <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
   const alertDiv=document.getElementById('dashboard-alerts');
   const top5=alerts.slice(0,5);
   alertDiv.innerHTML=top5.length===0?'<div style="font-size:13px;color:var(--green);padding:10px 0;">✅ Tous les stocks sont OK</div>'
@@ -2208,65 +1082,56 @@ function renderDashboard(){
     :recent.map(c=>`<tr><td>${c.chantier}</td><td style="font-size:11px;">${c.items?c.items.length+' article(s)':'—'}</td><td>${cmdBadge(c.statut)}</td></tr>`).join('');
   const totalArticles=stock.length;
   const totalValeur=totalVal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f');
-  // Rendu par famille/sous-famille ou par catégorie si pas de familles
-  var dashRows='';
-  function dashFamilleRows(nodes,depth){
-    nodes.forEach(function(n){
-      var cats=n.categories||(n.categorie?[n.categorie]:[]);
-      var allCats=[];
-      function collectDashCats(node){
-        var nc=node.categories||(node.categorie?[node.categorie]:[]);
-        nc.forEach(function(c){allCats.push(c);});
-        if(node.enfants)node.enfants.forEach(collectDashCats);
-      }
-      collectDashCats(n);
-      var items=stock.filter(function(a){return allCats.indexOf(a.categorie)!==-1;});
-      var val=items.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-      var critiques=items.filter(function(a){return getStatus(a)!=='ok';}).length;
-      var indent='  '.repeat(depth);
-      var icon=cats.length>0?'📂':'📁';
-      dashRows+='<tr style="'+(depth===0?'background:var(--surface);font-weight:700;':'font-size:13px;')+'">'+
-        '<td style="padding-left:'+(8+depth*16)+'px;">'+icon+' '+n.nom+'</td>'+
-        '<td>'+(items.length>0?items.length:'—')+'</td>'+
-        '<td>'+(val>0?val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+' €':'—')+'</td>'+
-        '<td class="'+(critiques>0?'stock-danger':'')+'">'+(critiques>0?critiques+' art.':'—')+'</td>'+
-        '<td>'+(items.length===0?'':''+critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>')+'</td></tr>';
-      if(n.enfants&&n.enfants.length)dashFamilleRows(n.enfants,depth+1);
-    });
-  }
-  if(famillesTree&&famillesTree.length>0){
-    dashFamilleRows(famillesTree,0);
-    // Articles sans famille
-    var classedCats=collectAllCats(famillesTree);
-    var sansFamily=stock.filter(function(a){return classedCats.indexOf(a.categorie)===-1;});
-    if(sansFamily.length>0){
-      var sfVal=sansFamily.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-      var sfCrit=sansFamily.filter(function(a){return getStatus(a)!=='ok';}).length;
-      dashRows+='<tr style="opacity:0.6;font-style:italic;">'+
-        '<td style="padding-left:8px;">📂 Sans famille ('+[...new Set(sansFamily.map(function(a){return a.categorie;}))].join(', ')+')</td>'+
-        '<td>'+sansFamily.length+'</td>'+
-        '<td>'+(sfVal>0?sfVal.toFixed(0)+' €':'—')+'</td>'+
-        '<td class="'+(sfCrit>0?'stock-danger':'')+'">'+(sfCrit>0?sfCrit+' art.':'—')+'</td>'+
-        '<td>'+(sfCrit===0?'<span class="badge badge-ok">OK</span>':'<span class="badge badge-warn">Attention</span>')+'</td></tr>';
-    }
-  } else {
-    // Fallback : par catégorie si pas de familles définies
-    var cats=Array.from(new Set(stock.map(function(a){return a.categorie;}))).sort();
-    cats.forEach(function(cat){
-      var items=stock.filter(function(a){return a.categorie===cat;});
-      var val=items.reduce(function(s,a){return s+a.stock*a.prixUnitaire;},0);
-      var critiques=items.filter(function(a){return getStatus(a)!=='ok';}).length;
-      dashRows+='<tr><td><strong>'+cat+'</strong></td><td>'+items.length+'</td>'+
-        '<td>'+(val>0?val.toFixed(0)+' €':'—')+'</td>'+
-        '<td class="'+(critiques>0?'stock-danger':'')+'">'+(critiques>0?critiques+' art.':'—')+'</td>'+
-        '<td>'+(critiques===0?'<span class="badge badge-ok">OK</span>':critiques===items.length?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>')+'</td></tr>';
-    });
-  }
-  document.getElementById('dash-categories').innerHTML=dashRows+
-    '<tr style="background:#fafaf8;border-top:2px solid var(--border);font-size:12px;color:var(--text3);">'+
-    '<td colspan="2" style="padding:6px 12px;">Total : <strong>'+totalArticles+'</strong> articles</td>'+
-    '<td colspan="3" style="padding:6px 12px;">Valeur : <strong>'+totalValeur+' €</strong></td></tr>';
+  document.getElementById('dash-categories').innerHTML=renderDashFamilles();
   updateBadges();
+}
+
+function renderDashFamilles(){
+  const fmt=v=>v>0?v.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+' €':'—';
+  const stateBadge=(crit,total)=>crit===0?'<span class="badge badge-ok">OK</span>':crit===total?'<span class="badge badge-danger">Critique</span>':'<span class="badge badge-warn">Attention</span>';
+  let rows='';
+  const rendered=new Set();
+  if(famillesTree.length>0){
+    famillesTree.forEach(f=>{
+      // Ligne famille
+      const famCats=[];
+      (f.categories||[]).forEach(c=>famCats.push(c));
+      (f.enfants||[]).forEach(sf=>(sf.categories||[]).forEach(c=>famCats.push(c)));
+      const famArts=stock.filter(a=>famCats.includes(a.categorie));
+      famArts.forEach(a=>rendered.add(a.id));
+      const famVal=famArts.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
+      const famCrit=famArts.filter(a=>getStatus(a)!=='ok').length;
+      rows+=`<tr style="background:var(--bg2);"><td style="padding-left:8px;font-weight:700;">📁 ${f.nom}</td><td>${famArts.length}</td><td>${fmt(famVal)}</td><td class="${famCrit>0?'stock-danger':''}">${famCrit>0?famCrit+' art.':'—'}</td><td>${stateBadge(famCrit,famArts.length)}</td></tr>`;
+      // Lignes sous-familles
+      (f.enfants||[]).forEach(sf=>{
+        const sfArts=stock.filter(a=>(sf.categories||[]).includes(a.categorie));
+        if(!sfArts.length)return;
+        const sfVal=sfArts.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
+        const sfCrit=sfArts.filter(a=>getStatus(a)!=='ok').length;
+        rows+=`<tr><td style="padding-left:28px;color:var(--text2);font-size:12px;">↳ ${sf.nom}</td><td style="font-size:12px;">${sfArts.length}</td><td style="font-size:12px;">${fmt(sfVal)}</td><td class="${sfCrit>0?'stock-danger':''}" style="font-size:12px;">${sfCrit>0?sfCrit+' art.':'—'}</td><td>${stateBadge(sfCrit,sfArts.length)}</td></tr>`;
+      });
+    });
+  }
+  // Non classés ou fallback sans familles
+  const unclassed=stock.filter(a=>!rendered.has(a.id));
+  if(unclassed.length&&famillesTree.length>0){
+    const uVal=unclassed.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
+    const uCrit=unclassed.filter(a=>getStatus(a)!=='ok').length;
+    rows+=`<tr style="background:var(--bg);"><td style="padding-left:8px;color:var(--text3);font-style:italic;">— Non classés</td><td>${unclassed.length}</td><td>${fmt(uVal)}</td><td class="${uCrit>0?'stock-danger':''}">${uCrit>0?uCrit+' art.':'—'}</td><td>${stateBadge(uCrit,unclassed.length)}</td></tr>`;
+  }
+  if(!rows){
+    // Fallback par catégorie si aucune famille définie
+    const cats=[...new Set(stock.map(a=>a.categorie))].sort();
+    cats.forEach(cat=>{
+      const items=stock.filter(a=>a.categorie===cat);
+      const val=items.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
+      const crit=items.filter(a=>getStatus(a)!=='ok').length;
+      rows+=`<tr><td><strong>${cat}</strong></td><td>${items.length}</td><td>${fmt(val)}</td><td class="${crit>0?'stock-danger':''}">${crit>0?crit+' art.':'—'}</td><td>${stateBadge(crit,items.length)}</td></tr>`;
+    });
+  }
+  const totalArticles=stock.length;
+  const totalValeur=stock.reduce((s,a)=>s+a.stock*a.prixUnitaire,0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f');
+  return rows+`<tr style="background:#fafaf8;border-top:2px solid var(--border);font-size:12px;color:var(--text3);"><td colspan="2" style="padding:6px 12px;">Total : <strong>${totalArticles}</strong> articles</td><td colspan="3" style="padding:6px 12px;">Valeur : <strong>${totalValeur} €</strong></td></tr>`;
 }
 
 // ==================== STOCK ====================
@@ -2274,47 +1139,39 @@ function renderDashboard(){
 
 
 function populateCatFilter(){
-  peuplerFamilleSelect();
+  const sel=document.getElementById('filter-cat');
+  if(sel&&sel.options.length<=1){
+    const parents=categories.filter(c=>!c.includes(' > ')).sort();
+    parents.forEach(p=>{
+      const o=document.createElement('option');o.value=p;o.textContent=p;sel.appendChild(o);
+      categories.filter(c=>c.startsWith(p+' > ')).sort().forEach(sc=>{
+        const o2=document.createElement('option');o2.value=sc;o2.textContent='  ↳ '+sc.split(' > ')[1];sel.appendChild(o2);
+      });
+    });
+  }
 }
 function renderStock(){
-  if(CLIENT_MODE){renderStockClient();return;}
-  peuplerFamilleSelect();
-  // Mode admin : vue arbre famille
-  try{
-    renderStockFamilleTree();
-  }catch(e){
-    console.error('renderStockFamilleTree error:',e);
-    // Fallback minimal
-    var c2=document.getElementById('stock-famille-tree-view');
-    if(c2)c2.innerHTML='<div style="padding:20px;color:red;">Erreur affichage: '+e.message+'</div>';
-  }
-  return;
+  // Adapter les colonnes selon le mode
+  const thPrix=document.getElementById('stock-th-prix');
+  const thValeur=document.getElementById('stock-th-valeur');
+  const thFourn=document.getElementById('stock-th-fourn');
+  if(thPrix) thPrix.textContent=CLIENT_MODE?'Prix HT':'Prix achat';
+  if(thValeur) { thValeur.style.display=CLIENT_MODE?'none':''; }
+  if(thFourn) { thFourn.style.display=CLIENT_MODE?'none':''; }
+  if(famillesTree.length>0)peuplerFamilleSelect();else populateCatFilter();
+  const q=(document.getElementById('search-input')?.value||'').toLowerCase();
+  const cat=document.getElementById('filter-cat')?.value||'';
+  const status=document.getElementById('filter-status')?.value||'';
+  const filtered=stock.filter(a=>{
+    const mq=!q||a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).toLowerCase().includes(q);
+    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
+  });
   document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
-  document.getElementById('stock-table').innerHTML=filtered.map(a=>{
-    const s=getStatus(a),val=a.stock*a.prixUnitaire;
-    const pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
-    const color=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
-    const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
-    const reliquat=a.stock===0?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600;">RELIQUAT</span>':'';
-    return`<tr>
-      <td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
-      <td><span class="${sc}">${a.stock}</span>${reliquat}<div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${color};"></div></div></td>
-      <td>${a.stockMin}</td>
-      ${CLIENT_MODE
-        ? `<td>${a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—'}</td>`
-        : `<td>${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</td>
-           <td>${val>0?val.toFixed(2).replace('.',',')+' €':'—'}</td>
-           <td style="font-size:12px;color:var(--text3);">${a.fournisseur||'—'}</td>`
-      }
-      <td>${statusLabel(s)}</td>
-      <td>${CLIENT_MODE
-        ? ''
-        : `<button class="btn btn-xs" onclick="openMouvement('${a.id}')">±</button>
-           <button class="btn btn-xs" style="margin-left:3px;" onclick="showQR('${a.id}')">QR</button>
-           <button class="btn btn-xs" style="margin-left:3px;" onclick="editArticle('${a.id}')">✏</button>
-           <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteArticle('${a.id}')">🗑</button>`
-      }</td></tr>`;
-  }).join('');
+  if(famillesTree.length>0&&!document.getElementById('filter-cat')?.value&&!(document.getElementById('search-input')?.value||'')){
+    renderStockFamilleTree();
+  } else {
+    renderStockTable(filtered);
+  }
 }
 
 // ==================== PARETO ====================
@@ -2563,85 +1420,46 @@ function printQR(){
 }
 // ==================== RENDER COMMANDES ====================
 function renderCommandes(){
-  const tbody=document.getElementById('commandes-table');if(!tbody)return;
+  const tbody=document.getElementById('cmd-table');if(!tbody)return;
   const filtered=commandes.filter(c=>{
     const s=document.getElementById('cmd-filter-statut')?.value||'';
-    const statutOk=!s||c.statut===s;
-    const sourceOk=!CLIENT_MODE||(c.source==='client'||!c.source);
-    return statutOk&&sourceOk;
+    return !s||c.statut===s;
   });
   if(filtered.length===0){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;">Aucune commande.</td></tr>';return;}
-  tbody.innerHTML=filtered.sort(function(a,b){return b.num-a.num;}).map(function(c){
-    var urgColor=c.urgence==='critique'?'var(--red)':c.urgence==='urgent'?'var(--amber)':'var(--green)';
-    var statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
-    var statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
-    var date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
-    var nbArt=(c.items||[]).length;
-    var q="'";
-    var btns='<button class="btn btn-xs" onclick="viewCmd('+q+c.id+q+')">Detail</button>';
-    btns+=' <button class="btn btn-xs" style="margin-left:3px;" onclick="printCmd('+q+c.id+q+')">&#128438;</button>';
-    if(c.statut==='en_attente'){
-      btns+=' <button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('+q+c.id+q+')">&#9998; Modifier</button>';
-    }
-    if(!CLIENT_MODE){
-      if(c.statut==='en_attente'){
-        btns+=' <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('+q+c.id+q+')">&#10003;</button>';
-        btns+=' <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('+q+c.id+q+')">&#10005;</button>';
-      }
-      btns+=' <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('+q+c.id+q+')">&#128465;</button>';
-    }
-    var hasReliquat=(c.items||[]).some(function(i){return i.reliquat;});
-    var relBadge=hasReliquat?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;font-weight:600;margin-left:4px;">RELIQUAT</span>':'';
-    return '<tr>'+
-      '<td><strong>#'+String(c.num).padStart(3,'0')+'</strong></td>'+
-      '<td>'+date+'</td><td><strong>'+(c.chantier||'')+'</strong></td>'+
-      '<td>'+(c.nom||'')+'</td>'+
-      '<td><span style="color:'+urgColor+';font-weight:600;">'+(c.urgence||'')+'</span></td>'+
-      '<td>'+nbArt+' article(s)'+relBadge+'</td>'+
-      '<td><span style="color:'+statColor+';font-weight:600;">'+statLabel+'</span></td>'+
-      '<td style="text-align:right;white-space:nowrap;">'+btns+'</td></tr>';
+  tbody.innerHTML=filtered.sort((a,b)=>b.num-a.num).map(c=>{
+    const urgColor=c.urgence==='critique'?'var(--red)':c.urgence==='urgent'?'var(--amber)':'var(--green)';
+    const statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
+    const statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
+    const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
+    const nbArt=(c.items||[]).length;
+    return`<tr>
+      <td><strong>#${String(c.num).padStart(3,'0')}</strong></td>
+      <td>${date}</td><td><strong>${c.chantier||''}</strong></td>
+      <td>${c.nom||''}</td>
+      <td><span style="color:${urgColor};font-weight:600;">${c.urgence||''}</span></td>
+      <td>${nbArt} article(s)</td>
+      <td><span style="color:${statColor};font-weight:600;">${statLabel}</span></td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Detail</button>
+        ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">pencil</button>
+        <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">v</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">x</button>`:''}
+        <button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;">print</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">del</button>
+      </td></tr>`;
   }).join('');
 }
 function viewCmd(id){
-  var c=commandes.find(function(x){return x.id===id;});if(!c)return;
-  var date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
-  var statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
-  var statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  const date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
+  const statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
   document.getElementById('cmd-detail-title').textContent='Commande #'+String(c.num).padStart(3,'0')+' - '+c.chantier;
-  var prixTh=CLIENT_MODE?'<th>Prix unit. HT</th><th>Total HT</th>':'<th>Stock</th>';
-  var total=0;
-  var rows=(c.items||[]).map(function(i){
-    var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',stock:'?',prixVente:0};
-    var relBadge=i.reliquat?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;font-weight:600;margin-left:4px;">RELIQUAT</span>':'';
-    if(CLIENT_MODE){var pv=art.prixVente||0;var tt=pv*i.qty;total+=tt;
-      return '<tr><td><code>'+i.id+'</code>'+relBadge+'</td><td>'+art.categorie+' O'+art.diametre+'</td><td style="text-align:center;font-weight:700;">'+i.qty+'</td><td>'+(pv>0?pv.toFixed(2)+' EUR':'-')+'</td><td>'+(tt>0?tt.toFixed(2)+' EUR':'-')+'</td></tr>';}
-    return '<tr><td><code>'+i.id+'</code>'+relBadge+'</td><td>'+art.categorie+' O'+art.diametre+'</td><td style="text-align:center;">'+i.qty+'</td><td>'+art.stock+'</td></tr>';
-  }).join('');
-  var totalRow=(CLIENT_MODE&&total>0)?'<tr style="font-weight:700;background:#f5f4f0;"><td colspan="4" style="text-align:right;padding:8px 12px;">Total HT</td><td style="padding:8px 12px;">'+total.toFixed(2)+' EUR</td></tr>':'';
-  document.getElementById('cmd-detail-body').innerHTML=
-    '<div style="font-size:13px;margin-bottom:12px;padding:10px;background:var(--bg);border-radius:8px;">'+
-    '<strong>Date:</strong> '+date+' | <strong>Demandeur:</strong> '+(c.nom||'-')+'<br>'+
-    '<strong>Urgence:</strong> '+(c.urgence||'-')+' | <strong>Statut:</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'+
-    (c.notes?'<br><strong>Notes:</strong> '+c.notes:'')+'</div>'+
-    '<table style="width:100%;font-size:13px;border-collapse:collapse;"><thead><tr style="background:#fafaf8;">'+
-    '<th style="padding:7px 10px;">Ref</th><th style="padding:7px 10px;">Article</th><th style="padding:7px 10px;text-align:center;">Qte</th>'+prixTh+
-    '</tr></thead><tbody>'+rows+totalRow+'</tbody></table>';
-  var cid=c.id;var isP=c.statut==='en_attente';
-  var mq='"';
-  var footer='<button class="btn" onclick="closeModal('+mq+'modal-cmd-detail'+mq+')">Fermer</button>';
-  footer+=' <button class="btn" onclick="printCmd('+mq+cid+mq+')">&#128438; Imprimer</button>';
-  if(isP){
-    footer+=' <button class="btn btn-sm" onclick="editCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">&#9998; Modifier</button>';
-  }
-  if(!CLIENT_MODE){
-    if(isP){
-      footer+=' <button class="btn btn-danger btn-sm" onclick="refuserCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Refuser</button>';
-      footer+=' <button class="btn btn-primary btn-sm" onclick="approuverCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Approuver</button>';
-    }else{
-      footer+=' <button class="btn btn-danger btn-sm" onclick="deleteCmd('+mq+cid+mq+');closeModal('+mq+'modal-cmd-detail'+mq+');">Supprimer</button>';
-    }
-  }
-  document.getElementById('cmd-detail-footer').innerHTML=footer;
+  document.getElementById('cmd-detail-body').innerHTML='<div style="font-size:13px;margin-bottom:12px;"><strong>Date:</strong> '+date+' | <strong>Demandeur:</strong> '+(c.nom||'')+'<br><strong>Urgence:</strong> '+(c.urgence||'')+' | <strong>Statut:</strong> '+statLabel+(c.notes?'<br><strong>Notes:</strong> '+c.notes:'')+'</div><table style="width:100%;font-size:13px;"><thead><tr><th>Ref</th><th>Article</th><th>Qte</th><th>Stock</th></tr></thead><tbody>'+(c.items||[]).map(i=>{const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:'?'};return'<tr><td><code>'+i.id+'</code></td><td>'+art.categorie+' '+art.diametre+'</td><td>'+i.qty+'</td><td>'+art.stock+'</td></tr>';}).join('')+'</tbody></table>';
+  const cid=c.id,isP=c.statut==='en_attente';
+  document.getElementById('cmd-detail-footer').innerHTML=
+    `<button class="btn" onclick="closeModal('modal-cmd-detail')">Fermer</button>`+
+    (isP?`<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">Modifier</button><button class="btn btn-danger btn-sm" onclick="refuserCmd('${cid}');closeModal('modal-cmd-detail');">Refuser</button><button class="btn btn-primary btn-sm" onclick="approuverCmd('${cid}');closeModal('modal-cmd-detail');">Approuver</button>`:
+    `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">Supprimer</button>`);
   openModal('modal-cmd-detail');
 }
 async function approuverCmd(id){
@@ -2665,229 +1483,71 @@ async function deleteCmd(id){
   renderCommandes();updateBadges();showToast('Commande supprimee');
 }
 function renderChantiers(){
-  var cards=document.getElementById('chantiers-cards');
-  if(!cards)return;
-  cards.innerHTML=chantiers.map(function(c){
-    var cmdsChantier=commandes.filter(function(x){return x.chantier===c.nom;});
-    var nbCmds=cmdsChantier.length;
-    var totalAchat=cmdsChantier.reduce(function(s,cmd){
-      return s+(cmd.items||[]).reduce(function(ss,i){
-        var art=stock.find(function(a){return a.id===i.id;})||{prixUnitaire:0};
-        return ss+(art.prixUnitaire||0)*i.qty;
-      },0);
-    },0);
-    var totalStr=totalAchat>0?totalAchat.toFixed(2)+' EUR':'0 EUR';
-    var hasAttente=cmdsChantier.some(function(x){return x.statut==='en_attente';});
-    var borderColor=hasAttente?'var(--amber)':'var(--border)';
-    var mq2='"';return '<div onclick='+mq2+'showChantierDetail(&quot;'+c.nom+'&quot;)'+mq2+' style='+mq2+'cursor:pointer;background:var(--surface);border:2px solid '+borderColor+';border-radius:var(--radius);padding:14px 16px;min-width:180px;flex:1;max-width:240px;'+mq2+'>'+
-      '<div style="font-weight:700;font-size:14px;margin-bottom:4px;">'+c.nom+'</div>'+
-      '<div style="font-size:12px;color:var(--text2);margin-bottom:2px;">'+nbCmds+' commande'+(nbCmds!==1?'s':'')+'</div>'+
-      '<div style="font-size:13px;font-weight:600;color:var(--green);">'+totalStr+'</div>'+
-      (hasAttente?'<div style="font-size:11px;color:var(--amber);margin-top:4px;">&#9203; En attente</div>':'')+
-      '<div style="font-size:11px;color:var(--blue);margin-top:6px;">Voir d&eacute;tail &#8594;</div></div>';
-  }).join('');
-  // Boutons admin edit/delete
-  var adminBtns=document.getElementById('chantiers-admin-btns');
-  if(adminBtns&&!CLIENT_MODE){
-    adminBtns.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">'+
-      chantiers.map(function(c){
-        return '<span style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 8px;display:inline-flex;align-items:center;gap:4px;">'+c.nom+
-          ' <button class="btn btn-xs" style="padding:1px 5px;" onclick="editChantier(&quot;'+c.nom+'&quot;)">&#9998;</button>'+
-          '<button class="btn btn-xs btn-danger" style="padding:1px 5px;" onclick="deleteChantier(&quot;'+c.nom+'&quot;)">&#128465;</button></span>';
-      }).join('')+'</div>';
-  }
+  const cards=document.getElementById('chantiers-cards');
+  const tbody=document.getElementById('chantiers-table');
+  if(cards){cards.innerHTML=chantiers.map(c=>{
+    const mvts=historique.filter(h=>h.chantier===c.nom&&h.type==='out');
+    const cmds=commandes.filter(x=>x.chantier===c.nom&&x.statut==='approuvee');
+    const q=mvts.reduce((s,h)=>s+h.qty,0)+cmds.reduce((s,x)=>(x.items||[]).reduce((a,i)=>a+i.qty,0)+s,0);
+    return '<div onclick="showChantierDetail(\''+c.nom+'\')" style="cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-width:160px;flex:1;max-width:220px;"><div style="font-weight:700;">'+c.nom+'</div><div style="font-size:12px;color:var(--text2);">'+q+' unites</div><div style="font-size:11px;color:var(--blue);">Voir detail</div></div>';
+  }).join('');}
+  if(tbody){tbody.innerHTML=chantiers.map(c=>'<tr><td>'+c.nom+'</td><td>0</td><td>0</td><td>0</td><td><button class="btn btn-xs" onclick="editChantier(\''+c.nom+'\')">edit</button><button class="btn btn-xs btn-danger" onclick="deleteChantier(\''+c.nom+'\')">del</button></td></tr>').join('');}
 }
 function showChantierDetail(nom){
-  currentChantierDetail=nom;
-  var d=document.getElementById('chantier-detail');
+  const d=document.getElementById('chantier-detail');
   if(!d)return;
-  document.getElementById('chantier-detail-title').textContent='Chantier : '+nom;
+  document.getElementById('chantier-detail-title').textContent='Detail - '+nom;
   d.style.display='';
-
-  var cmdsChantier=commandes.filter(function(c){return c.chantier===nom;});
-  var tbody=document.getElementById('chantier-detail-table');
-  var thead=document.getElementById('chantier-detail-thead');
-  if(!tbody)return;
-
-  if(cmdsChantier.length===0){
-    if(thead)thead.innerHTML='';
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">Aucune commande pour ce chantier</td></tr>';
-    return;
-  }
-
-  // Regrouper tous les articles de toutes les commandes par référence
-  var articlesMap={};
-  cmdsChantier.forEach(function(c){
-    var statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
-    (c.items||[]).forEach(function(i){
-      var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',prixUnitaire:0,prixVente:0};
-      var key=i.id;
-      if(!articlesMap[key]){
-        articlesMap[key]={id:i.id,categorie:art.categorie,diametre:art.diametre,
-          prixUnitaire:art.prixUnitaire||0,prixVente:art.prixVente||0,
-          qtyTotal:0,reliquat:false,commandes:[]};
-      }
-      articlesMap[key].qtyTotal+=i.qty;
-      if(i.reliquat)articlesMap[key].reliquat=true;
-      articlesMap[key].commandes.push('#'+String(c.num).padStart(3,'0')+' ('+statLabel+')');
-    });
-  });
-
-  // Trier par référence
-  var articles=Object.values(articlesMap).sort(function(a,b){return a.id.localeCompare(b.id);});
-
-  // Regrouper par famille/catégorie
-  var familles={};
-  articles.forEach(function(a){
-    if(!familles[a.categorie])familles[a.categorie]={articles:[],totalAchat:0,totalVente:0};
-    familles[a.categorie].articles.push(a);
-    familles[a.categorie].totalAchat+=a.prixUnitaire*a.qtyTotal;
-    familles[a.categorie].totalVente+=a.prixVente*a.qtyTotal;
-  });
-
-  // En-têtes
-  if(thead){
-    thead.innerHTML='<tr>'+
-      '<th style="padding:7px 10px;">Référence</th>'+
-      '<th style="padding:7px 10px;">Désignation</th>'+
-      '<th style="padding:7px 10px;text-align:center;">Qté totale</th>'+
-      '<th style="padding:7px 10px;">Prix achat</th>'+
-      '<th style="padding:7px 10px;">Total achat</th>'+
-      '<th style="padding:7px 10px;">Prix vente</th>'+
-      '<th style="padding:7px 10px;">Commandes</th>'+
-      '</tr>';
-  }
-
-  // Construire les lignes par famille
-  var totalGlobalAchat=0;var totalGlobalVente=0;
-  var rows='';
-  Object.keys(familles).sort().forEach(function(fam){
-    var f=familles[fam];
-    totalGlobalAchat+=f.totalAchat;totalGlobalVente+=f.totalVente;
-    // En-tête famille
-    rows+='<tr style="background:var(--surface2);font-weight:700;">'+
-      '<td colspan="2" style="padding:8px 10px;font-size:13px;color:var(--blue);">&#128230; '+fam+'</td>'+
-      '<td style="padding:8px 10px;text-align:center;">'+f.articles.reduce(function(s,a){return s+a.qtyTotal;},0)+'</td>'+
-      '<td></td>'+
-      '<td style="padding:8px 10px;font-weight:700;color:var(--green);">'+(f.totalAchat>0?f.totalAchat.toFixed(2)+' EUR':'—')+'</td>'+
-      '<td style="padding:8px 10px;color:var(--text2);">'+(f.totalVente>0?f.totalVente.toFixed(2)+' EUR':'—')+'</td>'+
-      '<td></td></tr>';
-    // Articles de la famille
-    f.articles.forEach(function(a){
-      var rel=a.reliquat?'<span style="font-size:10px;background:var(--amber);color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px;">RELIQUAT</span>':'';
-      rows+='<tr style="background:var(--bg);">'+
-        '<td style="padding:6px 10px 6px 20px;font-size:12px;"><code>'+a.id+'</code>'+rel+'</td>'+
-        '<td style="padding:6px 10px;font-size:12px;">'+a.categorie+' O'+a.diametre+'</td>'+
-        '<td style="padding:6px 10px;text-align:center;font-weight:600;">'+a.qtyTotal+'</td>'+
-        '<td style="padding:6px 10px;font-size:12px;">'+(a.prixUnitaire>0?a.prixUnitaire.toFixed(2)+' EUR':'—')+'</td>'+
-        '<td style="padding:6px 10px;font-size:12px;font-weight:600;">'+(a.prixUnitaire>0?(a.prixUnitaire*a.qtyTotal).toFixed(2)+' EUR':'—')+'</td>'+
-        '<td style="padding:6px 10px;font-size:12px;color:var(--green);">'+(a.prixVente>0?a.prixVente.toFixed(2)+' EUR':'—')+'</td>'+
-        '<td style="padding:6px 10px;font-size:11px;color:var(--text3);">'+a.commandes.join(', ')+'</td>'+
-        '</tr>';
-    });
-  });
-
-  // Ligne total global
-  rows+='<tr style="background:var(--surface2);font-weight:700;border-top:3px solid var(--border2);">'+
-    '<td colspan="2" style="padding:10px;font-size:14px;">&#127381; TOTAL CHANTIER</td>'+
-    '<td></td><td></td>'+
-    '<td style="padding:10px;font-size:14px;color:var(--green);">'+(totalGlobalAchat>0?totalGlobalAchat.toFixed(2)+' EUR':'—')+'</td>'+
-    '<td style="padding:10px;font-size:13px;color:var(--text2);">'+(totalGlobalVente>0?totalGlobalVente.toFixed(2)+' EUR':'—')+'</td>'+
-    '<td style="padding:10px;font-size:11px;color:var(--text3);">'+cmdsChantier.length+' commande(s)</td></tr>';
-
-  tbody.innerHTML=rows;
 }
-
-// Variable pour mémoriser le chantier courant (export/print)
-var currentChantierDetail='';
-
-function exportChantierExcel(){
-  if(!currentChantierDetail||!window.XLSX){showToast('Aucun chantier sélectionné ou XLSX non chargé');return;}
-  var nom=currentChantierDetail;
-  var cmdsChantier=commandes.filter(function(c){return c.chantier===nom;});
-  var wb=window.XLSX.utils.book_new();
-  var rows=[['Reference','Categorie','Diametre','Qte totale','Prix achat','Total achat','Prix vente','Total vente','Commandes','Reliquat']];
-  var articlesMap={};
-  cmdsChantier.forEach(function(c){
-    var statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
-    (c.items||[]).forEach(function(i){
-      var art=stock.find(function(a){return a.id===i.id;})||{categorie:'?',diametre:'?',prixUnitaire:0,prixVente:0};
-      if(!articlesMap[i.id])articlesMap[i.id]={id:i.id,cat:art.categorie,diam:art.diametre,pu:art.prixUnitaire||0,pv:art.prixVente||0,qty:0,rel:false,cmds:[]};
-      articlesMap[i.id].qty+=i.qty;
-      if(i.reliquat)articlesMap[i.id].rel=true;
-      articlesMap[i.id].cmds.push('#'+String(c.num).padStart(3,'0'));
-    });
-  });
-  Object.values(articlesMap).sort(function(a,b){return a.id.localeCompare(b.id);}).forEach(function(a){
-    rows.push([a.id,a.cat,a.diam,a.qty,a.pu,(a.pu*a.qty).toFixed(2),a.pv,(a.pv*a.qty).toFixed(2),a.cmds.join(', '),a.rel?'OUI':'']);
-  });
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Chantier_'+nom.replace(/[^a-z0-9]/gi,'_'));
-  XLSX.writeFile(wb,'Chantier_'+nom+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  showToast('Export Excel téléchargé');
-}
-
-function printChantierDetail(){
-  if(!currentChantierDetail)return;
-  var nom=currentChantierDetail;
-  var table=document.getElementById('chantier-detail-table-wrap');
-  if(!table)return;
-  var w=window.open('','_blank');
-  w.document.write('<!DOCTYPE html><html><head><title>Chantier '+nom+'</title>'+
-    '<style>body{font-family:sans-serif;padding:20px;font-size:12px;}h2{font-size:16px;margin-bottom:4px;}'+
-    'table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;}'+
-    'th{background:#f5f4f0;font-weight:600;}tr:nth-child(even){background:#fafaf8;}'+
-    '.total{font-weight:700;background:#e6f5ef;}'+
-    '@media print{body{padding:10px;}}</style></head><body>'+
-    '<h2>Chantier : '+nom+'</h2>'+
-    '<p style="color:#777;margin-bottom:12px;font-size:11px;">Imprimé le '+new Date().toLocaleString('fr-FR')+'</p>'+
-    table.outerHTML+
-    '<scr'+'ipt>window.print();<'+'/script></body></html>');
-  w.document.close();
-}
-
 function renderEtiquettes(){
-  var pills=document.getElementById('etiq-cat-pills');if(!pills)return;
-  var cats=[];stock.forEach(function(a){if(cats.indexOf(a.categorie)===-1)cats.push(a.categorie);});cats.sort();
-  var parents=['Toutes'].concat(cats);
-  pills.innerHTML=parents.map(function(c){
-    var active=(c==='Toutes'&&etiqSelectedCat==='')||c===etiqSelectedCat;
-    var cv=c==='Toutes'?'':c;
-    return '<div class="cat-pill '+(active?'active':'')+'" onclick="selectEtiqParent(this,&quot;'+cv+'&quot;)">'+c+'</div>';
-  }).join('');
+  const pills=document.getElementById('etiq-cat-pills');
+  if(!pills)return;
+  let html='<div class="cat-pill active" onclick="selectEtiqParent(this,\'\',[])">Toutes</div>';
+  if(famillesTree.length>0){
+    famillesTree.forEach(f=>{
+      const fCats=(f.categories||[]);
+      if((f.enfants||[]).length){
+        f.enfants.forEach(sf=>{
+          if((sf.categories||[]).length){
+            const sc=JSON.stringify(sf.categories||[]).replace(/"/g,'&quot;');
+            html+=`<div class="cat-pill" onclick="selectEtiqParent(this,'${sf.nom.replace(/'/g,"\'")}',${JSON.stringify(sf.categories||[])})">📁 ${sf.nom}</div>`;
+          }
+        });
+        if(fCats.length) html+=`<div class="cat-pill" onclick="selectEtiqParent(this,'${f.nom.replace(/'/g,"\'")}',${JSON.stringify(fCats)})">📁 ${f.nom}</div>`;
+      } else if(fCats.length){
+        html+=`<div class="cat-pill" onclick="selectEtiqParent(this,'${f.nom.replace(/'/g,"\'")}',${JSON.stringify(fCats)})">📁 ${f.nom}</div>`;
+      }
+    });
+  } else {
+    const parents=['Toutes',...categories.filter(c=>!c.includes(' > ')).sort()];
+    html=parents.map(c=>`<div class="cat-pill ${(c==='Toutes'&&etiqSelectedCat==='')||c===etiqSelectedCat?'active':''}" onclick="selectEtiqParent(this,'${c==='Toutes'?'':c}',[])">${c}</div>`).join('');
+  }
+  pills.innerHTML=html;
   renderEtiqGrid();
 }
-function selectEtiqParent(el,cat){
+let etiqSelectedCats=[];
+function selectEtiqParent(el,key,cats){
   document.querySelectorAll('#etiq-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
   if(el)el.classList.add('active');
-  etiqSelectedCat=cat;
+  etiqSelectedCat=key;
+  etiqSelectedCats=cats||[];
   renderEtiqGrid();
 }
 function renderEtiqGrid(){
   const grid=document.getElementById('etiq-grid');if(!grid)return;
-  const filtered=etiqSelectedCat===''?stock:stock.filter(a=>a.categorie===etiqSelectedCat);
+  let filtered;
+  if(!etiqSelectedCat){filtered=stock;}
+  else if(etiqSelectedCats.length){filtered=stock.filter(a=>etiqSelectedCats.includes(a.categorie));}
+  else{filtered=stock.filter(a=>a.categorie===etiqSelectedCat);}
   grid.innerHTML=filtered.map(a=>{const checked=etiqSelected.has(a.id);return `<div onclick="toggleEtiq('${a.id}',this)" style="border:2px solid ${checked?'var(--green)':'var(--border)'};border-radius:10px;padding:10px;cursor:pointer;text-align:center;background:${checked?'#e6f5ef':'var(--surface)'}"><div style="font-size:10px;font-weight:600;">${a.categorie}</div><div style="font-weight:700;font-size:13px;">${a.id}</div><div style="font-size:11px;">O ${a.diametre}</div><div>${checked?'OK':' '}</div></div>`;}).join('');
   const el=document.getElementById('etiq-count');if(el)el.textContent=etiqSelected.size+' selectionne(s)';
 }
 function toggleEtiq(id,el){if(etiqSelected.has(id)){etiqSelected.delete(id);}else{etiqSelected.add(id);}renderEtiqGrid();}
 function selectAllEtiquettes(val){const f=etiqSelectedCat===''?stock:stock.filter(a=>a.categorie===etiqSelectedCat);f.forEach(a=>{if(val)etiqSelected.add(a.id);else etiqSelected.delete(a.id);});renderEtiqGrid();}
 function updateEtiqCount(){const el=document.getElementById('etiq-count');if(el)el.textContent=etiqSelected.size+' selectionne(s)';}
-function printEtiquettes(){
-  if(etiqSelected.size===0){showToast('Selectionnez au moins un article');return;}
-  var arts=stock.filter(function(a){return etiqSelected.has(a.id);});
-  var style='<style>body{font-family:sans-serif;margin:0}.grid{display:flex;flex-wrap:wrap;gap:8px;padding:16px}.label{border:2px solid #333;border-radius:8px;padding:12px;width:160px;text-align:center;page-break-inside:avoid}.ref{font-size:13px;font-weight:800;margin:2px 0}.cat{font-size:11px;color:#555}.diam{font-size:10px;color:#777}@media print{body{margin:0}}</style>';
-  var qrSrc='<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><'+'/script>';
-  var labels='';var qrInits='';
-  arts.forEach(function(a){
-    var sid=a.id.replace(/[^a-z0-9]/gi,'_');
-    labels+='<div class="label"><div class="cat">'+a.categorie+'</div><div class="ref">'+a.id+'</div><div class="diam">O '+a.diametre+'</div><div id="qr_'+sid+'" style="margin:6px auto;width:130px;height:130px;"></div></div>';
-    qrInits+='new QRCode(document.getElementById("qr_'+sid+'"),{text:"'+a.id+'",width:130,height:130,colorDark:"#000",colorLight:"#fff"});';
-  });
-  var initS='<scr'+'ipt>window.onload=function(){'+qrInits+'setTimeout(function(){window.print();},800);};<'+'/script>';
-  var html='<!DOCTYPE html><html><head><title>Etiquettes QR</title>'+style+qrSrc+'</head><body><div class="grid">'+labels+'</div>'+initS+'</body></html>';
-  var w=window.open('','_blank');w.document.write(html);w.document.close();
-}
+function printEtiquettes(){showToast('Impression non disponible - utilisez le bouton QR individuel');}
 function downloadEtiquettes(){showToast('Telechargement non disponible');}
-// exportChantiers: voir ci-dessus
+function exportChantiers(){showToast('Export non disponible');}
 function openNewChantier(){openModal('modal-chantier');}
 function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';openModal('modal-chantier');}
 async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1)l[i]={nom,desc};else l.push({nom,desc});await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistre');}
@@ -2924,11 +1584,582 @@ function renderParams(){
   const c=document.getElementById('param-company');if(c)c.value=params.company||'';
 }
 
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',initApp);}else{initApp();}
+// ==================== FAMILLES TREE ====================
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+
+async function saveFamillesTree(){
+  await db.from('config').upsert({key:'familles',value:famillesTree},{onConflict:'key'});
+}
+
+function renderFamillesPage(){
+  const el=document.getElementById('familles-tree');
+  if(!el)return;
+  cancelEditFamille();
+  if(famillesTree.length===0){
+    el.innerHTML='<div style="color:var(--text3);text-align:center;padding:30px;background:var(--surface);border:1px dashed var(--border);border-radius:var(--radius);">Aucune famille. Cliquez <strong>+ Nouvelle famille</strong> pour commencer.</div>';
+    return;
+  }
+  el.innerHTML=famillesTree.map((f,fi)=>renderFamilleNodeHTML(f,fi)).join('');
+}
+
+function renderFamilleNodeHTML(f,fi){
+  const sfHTML=(f.enfants||[]).map((sf,si)=>renderSFNodeHTML(f,fi,sf,si)).join('');
+  return`<div class="fam-node" id="fnode-${f.id}">
+    <div class="fam-node-header">
+      <span class="fam-icon">📁</span>
+      <span class="fam-nom" onclick="startEditFamille(${fi},'fam')">${escH(f.nom)}</span>
+      <span class="badge badge-blue" style="font-size:10px;">Famille</span>
+      <label style="font-size:11px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:3px;">
+        <input type="checkbox" ${f.visible_client!==false?'checked':''} onchange="toggleFamilleVis(${fi},-1,this.checked)"> Client
+      </label>
+      <div style="display:flex;gap:4px;margin-left:auto;">
+        <button class="btn btn-xs" onclick="startEditFamille(${fi},'sf')">+ Sous-famille</button>
+        <button class="btn btn-xs btn-danger" onclick="deleteFamille(${fi})">🗑</button>
+      </div>
+    </div>
+    <div class="fam-cats">${renderCatCheckboxes(f,fi,-1)}</div>
+    ${sfHTML?'<div class="fam-children">'+sfHTML+'</div>':''}
+  </div>`;
+}
+
+function renderSFNodeHTML(f,fi,sf,si){
+  return`<div class="fam-sf-node" id="sfnode-${sf.id}">
+    <div class="fam-sf-header">
+      <span class="fam-icon" style="font-size:14px;">📁</span>
+      <span class="fam-nom" style="font-size:13px;" onclick="startEditFamille(${fi},'rename-sf',${si})">${escH(sf.nom)}</span>
+      <label style="font-size:11px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:3px;">
+        <input type="checkbox" ${sf.visible_client!==false?'checked':''} onchange="toggleFamilleVis(${fi},${si},this.checked)"> Client
+      </label>
+      <button class="btn btn-xs btn-danger" style="margin-left:auto;" onclick="deleteSousFamille(${fi},${si})">🗑</button>
+    </div>
+    <div class="fam-cats">${renderCatCheckboxes(sf,fi,si)}</div>
+  </div>`;
+}
+
+function renderCatCheckboxes(node,fi,si){
+  if(categories.length===0)return'<span style="font-size:11px;color:var(--text3);">Aucune catégorie disponible</span>';
+  const nodeCats=node.categories||[];
+  return categories.sort().map(cat=>{
+    const active=nodeCats.includes(cat);
+    const key=cat.replace(/[^a-zA-Z0-9]/g,'_');
+    return`<span class="fam-cat-pill${active?' active':''}" onclick="toggleCatInNode(${fi},${si},'${cat.replace(/'/g,"\\'")}',this)">${active?'☑':'☐'} ${escH(cat)}</span>`;
+  }).join('');
+}
+
+function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// Ouvrir le panneau d'édition inline pour ajouter une famille
+function openAddFamille(){
+  editingFamilleIdx=null;
+  editingSFIdx=null;
+  const zone=document.getElementById('fam-edit-zone');
+  const inp=document.getElementById('fam-edit-input');
+  const cl=document.getElementById('fam-edit-client');
+  if(!zone||!inp)return;
+  inp.value='';
+  if(cl)cl.checked=true;
+  inp.placeholder='Nom de la nouvelle famille…';
+  zone.dataset.mode='add-fam';
+  zone.classList.add('visible');
+  zone.scrollIntoView({behavior:'smooth',block:'nearest'});
+  inp.focus();
+}
+
+// Ouvrir édition pour renommer ou ajouter une sous-famille
+function startEditFamille(fi,mode,si){
+  const f=famillesTree[fi];if(!f)return;
+  const zone=document.getElementById('fam-edit-zone');
+  const inp=document.getElementById('fam-edit-input');
+  const cl=document.getElementById('fam-edit-client');
+  if(!zone||!inp)return;
+  editingFamilleIdx=fi;
+  editingSFIdx=(si!=null)?si:null;
+  zone.dataset.mode=mode;
+  if(mode==='fam'){
+    inp.value=f.nom;
+    if(cl)cl.checked=f.visible_client!==false;
+    inp.placeholder='Nom de la famille…';
+  } else if(mode==='sf'){
+    inp.value='';
+    if(cl)cl.checked=true;
+    inp.placeholder='Nom de la nouvelle sous-famille…';
+  } else if(mode==='rename-sf'){
+    const sf=(f.enfants||[])[si];
+    inp.value=sf?sf.nom:'';
+    if(cl)cl.checked=sf?(sf.visible_client!==false):true;
+    inp.placeholder='Nom de la sous-famille…';
+  }
+  zone.classList.add('visible');
+  zone.scrollIntoView({behavior:'smooth',block:'nearest'});
+  inp.focus();
+}
+
+async function confirmEditFamille(){
+  const zone=document.getElementById('fam-edit-zone');
+  const inp=document.getElementById('fam-edit-input');
+  const cl=document.getElementById('fam-edit-client');
+  const nom=(inp?inp.value.trim():'');
+  const vis=cl?cl.checked:true;
+  const mode=zone?zone.dataset.mode:'';
+  if(!nom){showToast('⚠ Nom requis');inp.focus();return;}
+  if(mode==='add-fam'){
+    famillesTree.push({id:genId(),nom,visible_client:vis,categories:[],enfants:[]});
+  } else if(mode==='fam'){
+    if(editingFamilleIdx!=null){famillesTree[editingFamilleIdx].nom=nom;famillesTree[editingFamilleIdx].visible_client=vis;}
+  } else if(mode==='sf'){
+    if(editingFamilleIdx!=null){
+      if(!famillesTree[editingFamilleIdx].enfants)famillesTree[editingFamilleIdx].enfants=[];
+      famillesTree[editingFamilleIdx].enfants.push({id:genId(),nom,visible_client:vis,categories:[]});
+    }
+  } else if(mode==='rename-sf'){
+    if(editingFamilleIdx!=null&&editingSFIdx!=null){
+      const sf=famillesTree[editingFamilleIdx].enfants[editingSFIdx];
+      if(sf){sf.nom=nom;sf.visible_client=vis;}
+    }
+  }
+  await saveFamillesTree();
+  cancelEditFamille();
+  renderFamillesPage();
+  showToast('✅ Sauvegardé');
+}
+
+function cancelEditFamille(){
+  const zone=document.getElementById('fam-edit-zone');
+  if(zone)zone.classList.remove('visible');
+  editingFamilleIdx=null;editingSFIdx=null;
+}
+
+async function deleteFamille(fi){
+  if(!confirm('Supprimer cette famille ?'))return;
+  famillesTree.splice(fi,1);
+  await saveFamillesTree();
+  renderFamillesPage();
+  showToast('Famille supprimée');
+}
+
+async function deleteSousFamille(fi,si){
+  if(!confirm('Supprimer cette sous-famille ?'))return;
+  famillesTree[fi].enfants.splice(si,1);
+  await saveFamillesTree();
+  renderFamillesPage();
+  showToast('Sous-famille supprimée');
+}
+
+async function toggleFamilleVis(fi,si,val){
+  if(si<0){famillesTree[fi].visible_client=val;}
+  else{if(famillesTree[fi].enfants[si])famillesTree[fi].enfants[si].visible_client=val;}
+  await saveFamillesTree();
+}
+
+async function toggleCatInNode(fi,si,cat,el){
+  const node=si<0?famillesTree[fi]:(famillesTree[fi]?.enfants||[])[si];
+  if(!node)return;
+  if(!node.categories)node.categories=[];
+  const idx=node.categories.indexOf(cat);
+  if(idx>-1){node.categories.splice(idx,1);el.classList.remove('active');el.textContent='☐ '+cat;}
+  else{node.categories.push(cat);el.classList.add('active');el.textContent='☑ '+cat;}
+  await saveFamillesTree();
+}
+
+// ==================== STOCK PAR FAMILLE ====================
+function peuplerFamilleSelect(){
+  // Remplace populateCatFilter quand famillesTree existe
+  const sel=document.getElementById('filter-cat');
+  if(!sel)return;
+  if(famillesTree.length===0){populateCatFilter();return;}
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Toutes familles</option>';
+  famillesTree.forEach(f=>{
+    const grp=document.createElement('optgroup');
+    grp.label='📁 '+f.nom;
+    (f.categories||[]).forEach(cat=>{
+      const o=document.createElement('option');
+      o.value=cat;o.textContent=cat;
+      if(cat===cur)o.selected=true;
+      grp.appendChild(o);
+    });
+    (f.enfants||[]).forEach(sf=>{
+      const sg=document.createElement('optgroup');
+      sg.label='  📁 '+sf.nom;
+      (sf.categories||[]).forEach(cat=>{
+        const o=document.createElement('option');
+        o.value=cat;o.textContent=cat;
+        if(cat===cur)o.selected=true;
+        sg.appendChild(o);
+      });
+      if(sg.children.length)sel.appendChild(sg);
+    });
+    if(grp.children.length)sel.appendChild(grp);
+  });
+  // Catégories non classées
+  const allCatsInTree=[];
+  famillesTree.forEach(f=>{
+    (f.categories||[]).forEach(c=>allCatsInTree.push(c));
+    (f.enfants||[]).forEach(sf=>(sf.categories||[]).forEach(c=>allCatsInTree.push(c)));
+  });
+  const unclassed=categories.filter(c=>!allCatsInTree.includes(c));
+  if(unclassed.length){
+    const sg=document.createElement('optgroup');sg.label='— Non classées';
+    unclassed.sort().forEach(cat=>{const o=document.createElement('option');o.value=cat;o.textContent=cat;if(cat===cur)o.selected=true;sg.appendChild(o);});
+    sel.appendChild(sg);
+  }
+}
+
+function renderStockFamilleTree(){
+  const q=(document.getElementById('search-input')?.value||'').toLowerCase();
+  const cat=document.getElementById('filter-cat')?.value||'';
+  const status=document.getElementById('filter-status')?.value||'';
+  const filtered=stock.filter(a=>{
+    const mq=!q||a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).toLowerCase().includes(q);
+    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
+  });
+  document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
+  // Si aucune famille ou filtre catégorie simple, rendu tabulaire normal
+  if(famillesTree.length===0||cat||q){
+    renderStockTable(filtered);return;
+  }
+  // Rendu arbre par famille
+  const tbody=document.getElementById('stock-table');
+  if(!tbody)return;
+  let html='';
+  const rendered=new Set();
+  famillesTree.forEach(f=>{
+    const famArts=[];
+    const sfGroups=[];
+    (f.categories||[]).forEach(c=>{
+      const arts=filtered.filter(a=>a.categorie===c&&!rendered.has(a.id));
+      if(arts.length){famArts.push(...arts);arts.forEach(a=>rendered.add(a.id));}
+    });
+    (f.enfants||[]).forEach(sf=>{
+      const sfArts=[];
+      (sf.categories||[]).forEach(c=>{
+        const arts=filtered.filter(a=>a.categorie===c&&!rendered.has(a.id));
+        if(arts.length){sfArts.push(...arts);arts.forEach(a=>rendered.add(a.id));}
+      });
+      if(sfArts.length)sfGroups.push({sf,arts:sfArts});
+    });
+    if(famArts.length||sfGroups.length){
+      html+=`<tr><td colspan="9" style="background:var(--bg2);font-weight:700;font-size:13px;padding:8px 12px;border-top:2px solid var(--border2);">📁 ${escH(f.nom)}</td></tr>`;
+      famArts.forEach(a=>{html+=stockRow(a);});
+      sfGroups.forEach(({sf,arts})=>{
+        html+=`<tr><td colspan="9" style="background:var(--bg);font-weight:600;font-size:12px;padding:6px 12px 6px 28px;color:var(--text2);">📁 ${escH(sf.nom)}</td></tr>`;
+        arts.forEach(a=>{html+=stockRow(a);});
+      });
+    }
+  });
+  // Articles non classés
+  const unclassed=filtered.filter(a=>!rendered.has(a.id));
+  if(unclassed.length){
+    html+=`<tr><td colspan="9" style="background:var(--bg2);font-weight:600;font-size:12px;padding:6px 12px;color:var(--text3);">— Non classés</td></tr>`;
+    unclassed.forEach(a=>{html+=stockRow(a);});
+  }
+  tbody.innerHTML=html||'';
+}
+
+function renderStockTable(filtered){
+  const tbody=document.getElementById('stock-table');
+  if(!tbody)return;
+  tbody.innerHTML=filtered.map(a=>stockRow(a)).join('');
+}
+
+function stockRow(a){
+  const s=getStatus(a),val=a.stock*a.prixUnitaire;
+  const pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
+  const color=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
+  const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
+  return`<tr>
+    <td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
+    <td><span class="${sc}">${a.stock}</span><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${color};"></div></div></td>
+    <td>${a.stockMin}</td>
+    ${CLIENT_MODE
+      ? `<td>${a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—'}</td>`
+      : `<td>${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</td>
+         <td>${val>0?val.toFixed(2).replace('.',',')+' €':'—'}</td>
+         <td style="font-size:12px;color:var(--text3);">${a.fournisseur||'—'}</td>`
+    }
+    <td>${statusLabel(s)}</td>
+    <td>${CLIENT_MODE?'':`<button class="btn btn-xs" onclick="openMouvement('${a.id}')">±</button>
+       <button class="btn btn-xs" style="margin-left:3px;" onclick="showQR('${a.id}')">QR</button>
+       <button class="btn btn-xs" style="margin-left:3px;" onclick="editArticle('${a.id}')">✏</button>`
+    }</td></tr>`;
+}
+
+// ==================== COMMANDES — FONCTIONS MANQUANTES ====================
+function switchAddMode(mode){
+  ['search','cat','qr'].forEach(m=>{
+    const el=document.getElementById('add-mode-'+m);
+    if(el)el.style.display=m===mode?'':'none';
+  });
+  if(mode==='cat')buildCatPills();
+  if(mode==='qr'){startCmdQR();}else{stopCmdQR();}
+}
+
+function buildCatPills(){
+  const el=document.getElementById('cmd-cat-pills');
+  if(!el)return;
+  let pills='<span class="cat-pill active" onclick="filterCmdCat(this,\'\')">Toutes</span>';
+  if(famillesTree.length>0){
+    famillesTree.forEach(f=>{
+      if(f.enfants&&f.enfants.length){
+        f.enfants.forEach(sf=>{
+          if((sf.categories||[]).length){
+            pills+=`<span class="cat-pill" onclick="filterCmdCat(this,'${sf.nom.replace(/'/g,"\\'")}')" data-cats='${JSON.stringify(sf.categories||[])}'>${escH(sf.nom)}</span>`;
+          }
+        });
+      } else {
+        const cats=f.categories||[];
+        if(cats.length) pills+=`<span class="cat-pill" onclick="filterCmdCat(this,'${f.nom.replace(/'/g,"\\'")}')" data-cats='${JSON.stringify(cats)}'>${escH(f.nom)}</span>`;
+      }
+    });
+  } else {
+    const parents=categories.filter(c=>!c.includes(' > ')).sort();
+    parents.forEach(p=>{pills+=`<span class="cat-pill" onclick="filterCmdCat(this,'${p.replace(/'/g,"\\'")}')">  ${p}</span>`;});
+  }
+  el.innerHTML=pills;
+  filterCmdCat(null,'');
+}
+
+let _cmdCatFilter='';
+function filterCmdCat(el,val){
+  _cmdCatFilter=val;
+  document.querySelectorAll('#cmd-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  renderCmdCatItems();
+}
+
+function renderCmdCatItems(){
+  const el=document.getElementById('cmd-cat-items');if(!el)return;
+  let arts=stock;
+  if(_cmdCatFilter){
+    // Chercher d'abord par data-cats (familles), sinon par categorie
+    const activePill=document.querySelector('#cmd-cat-pills .cat-pill.active');
+    let cats=null;
+    if(activePill&&activePill.dataset.cats){try{cats=JSON.parse(activePill.dataset.cats);}catch(e){}}
+    if(cats){arts=stock.filter(a=>cats.includes(a.categorie));}
+    else{arts=stock.filter(a=>a.categorie===_cmdCatFilter||a.categorie.startsWith(_cmdCatFilter+' > '));}
+  }
+  if(!arts.length){el.innerHTML='<div style="text-align:center;color:var(--text3);padding:12px;">Aucun article.</div>';return;}
+  el.innerHTML=arts.map(a=>{
+    const s=getStatus(a);const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
+    return`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="addCmdItem('${a.id}')">
+      <code style="font-size:12px;flex:1;">${a.id}</code>
+      <span style="font-size:11px;color:var(--text2);">${a.categorie} ${a.diametre}</span>
+      <span class="${sc}" style="font-size:11px;">${a.stock}</span>
+      <span style="font-size:12px;color:var(--blue);">+</span>
+    </div>`;
+  }).join('');
+}
+
+function buildScanCatPills(){
+  const el=document.getElementById('scan-cat-pills');if(!el)return;
+  let pills='<span class="cat-pill active" onclick="filterScanCat(this,\'\')">Toutes</span>';
+  if(famillesTree.length>0){
+    famillesTree.forEach(f=>{
+      const cats=(f.categories||[]).concat(...(f.enfants||[]).map(sf=>sf.categories||[]));
+      if(cats.length) pills+=`<span class="cat-pill" onclick="filterScanCat(this,'${f.nom.replace(/'/g,"\\'")}')" data-cats='${JSON.stringify(cats)}'>${escH(f.nom)}</span>`;
+    });
+  } else {
+    categories.filter(c=>!c.includes(' > ')).sort().forEach(c=>{
+      pills+=`<span class="cat-pill" onclick="filterScanCat(this,'${c.replace(/'/g,"\\'")}')">  ${c}</span>`;
+    });
+  }
+  el.innerHTML=pills;
+}
+
+function filterScanCat(el,val){
+  document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+}
+
+function filterCmdSearch(val){
+  const dd=document.getElementById('cmd-search-dropdown');if(!dd)return;
+  const v=val.toLowerCase().trim();
+  if(!v){dd.style.display='none';return;}
+  const res=stock.filter(a=>a.id.toLowerCase().includes(v)||a.categorie.toLowerCase().includes(v)||String(a.diametre).includes(v)).slice(0,12);
+  if(!res.length){dd.style.display='none';return;}
+  dd.innerHTML=res.map(a=>{
+    const s=getStatus(a);const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
+    return`<div onclick="addCmdItem('${a.id}')" style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
+      <code style="flex:1;font-size:12px;">${a.id}</code>
+      <span style="font-size:11px;color:var(--text2);">${a.categorie} ${a.diametre}</span>
+      <span class="${sc}" style="font-size:11px;">${a.stock}</span>
+    </div>`;
+  }).join('');
+  dd.style.display='';
+}
+
+let _cmdPendingItem=null;
+function addCmdItem(id){
+  const art=stock.find(a=>a.id===id);if(!art)return;
+  _cmdPendingItem=art;
+  document.getElementById('cmd-search-dropdown').style.display='none';
+  const dd=document.getElementById('cmd-art-search');if(dd)dd.value='';
+  document.getElementById('cmd-qty-picker-id').textContent=art.id;
+  document.getElementById('cmd-qty-picker-desc').textContent=art.categorie+' — Ø'+art.diametre+' | Stock: '+art.stock;
+  document.getElementById('cmd-qty-picker-input').value=1;
+  const pk=document.getElementById('cmd-qty-picker');if(pk){pk.style.display='flex';}
+  document.getElementById('cmd-qty-picker-input').focus();
+}
+
+function confirmCmdItem(){
+  if(!_cmdPendingItem)return;
+  const qty=parseInt(document.getElementById('cmd-qty-picker-input')?.value)||1;
+  const existing=cmdItems.findIndex(x=>x.id===_cmdPendingItem.id);
+  if(existing>-1)cmdItems[existing].qty+=qty;
+  else cmdItems.push({id:_cmdPendingItem.id,qty});
+  _cmdPendingItem=null;
+  document.getElementById('cmd-qty-picker').style.display='none';
+  renderCmdItems();
+  showToast('Article ajouté');
+}
+
+function cancelCmdItem(){
+  _cmdPendingItem=null;
+  const pk=document.getElementById('cmd-qty-picker');if(pk)pk.style.display='none';
+}
+
+function renderCmdItems(){
+  const el=document.getElementById('cmd-items-list');
+  const empty=document.getElementById('cmd-items-empty');
+  if(!el)return;
+  if(empty)empty.style.display=cmdItems.length?'none':'';
+  el.innerHTML=cmdItems.map((item,i)=>{
+    const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:'?'};
+    return`<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:4px;">
+      <code style="flex:1;font-size:12px;">${item.id}</code>
+      <span style="font-size:11px;color:var(--text2);">${art.categorie} ${art.diametre}</span>
+      <button onclick="changeCmdItemQty(${i},-1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">−</button>
+      <strong style="min-width:24px;text-align:center;">${item.qty}</strong>
+      <button onclick="changeCmdItemQty(${i},1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">+</button>
+      <button onclick="removeCmdItem(${i})" style="color:var(--red);border:none;background:none;cursor:pointer;font-size:16px;">×</button>
+    </div>`;
+  }).join('');
+}
+
+function changeCmdItemQty(i,delta){
+  cmdItems[i].qty=Math.max(1,(cmdItems[i].qty||1)+delta);renderCmdItems();
+}
+function removeCmdItem(i){cmdItems.splice(i,1);renderCmdItems();}
+
+async function saveCommande(){
+  const chantier=document.getElementById('cmd-chantier')?.value?.trim()||'';
+  const nom=document.getElementById('cmd-nom')?.value?.trim()||'';
+  const urgence=document.getElementById('cmd-urgence')?.value||'normale';
+  const notes=document.getElementById('cmd-notes')?.value?.trim()||'';
+  if(!chantier){showToast('⚠ Renseignez le chantier');return;}
+  if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
+  const num=(cmdCounter||0)+1;
+  const source=CLIENT_MODE?'client':'admin';
+  const payload={num,chantier,nom,urgence,notes,items:cmdItems,statut:'en_attente',source};
+  let result;
+  if(editingCmdId){
+    result=await db.from('commandes').update(payload).eq('id',editingCmdId);
+  } else {
+    result=await db.from('commandes').insert(payload);
+    if(!result.error){
+      cmdCounter=num;
+      await db.from('config').upsert({key:'cmd_counter',value:num},{onConflict:'key'});
+    }
+  }
+  if(result.error){showToast('❌ Erreur: '+result.error.message);return;}
+  editingCmdId=null;
+  closeModal('modal-commande');
+  const {data}=await db.from('commandes').select('*').order('created_at',{ascending:false});
+  if(data)commandes=data;
+  renderCommandes();updateBadges();
+  showToast(editingCmdId?'Commande modifiée':'✅ Commande soumise #'+String(num).padStart(3,'0'));
+}
+
+function editCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  editingCmdId=id;
+  cmdItems=[...(c.items||[])];
+  const title=document.getElementById('cmd-modal-title');if(title)title.textContent='Modifier commande #'+String(c.num).padStart(3,'0');
+  const selC=document.getElementById('cmd-chantier');
+  if(selC){if(CLIENT_MODE){selC.value=c.chantier||'';}else{selC.innerHTML='<option value="">Sélectionner</option>';chantiers.forEach(ch=>{const o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom;selC.appendChild(o);});selC.value=c.chantier||'';}}
+  const nom=document.getElementById('cmd-nom');if(nom)nom.value=c.nom||'';
+  const notes=document.getElementById('cmd-notes');if(notes)notes.value=c.notes||'';
+  const urg=document.getElementById('cmd-urgence');if(urg)urg.value=c.urgence||'normale';
+  renderCmdItems();
+  switchAddMode('search');
+  buildCatPills();
+  openModal('modal-commande');
+}
+
+// QR dans modale commande (placeholders - fonctionnalité complète via startQRScan)
+let cmdQrScanner=null;
+function startCmdQR(){
+  const zone=document.getElementById('cmd-qr-zone');if(!zone)return;
+  zone.innerHTML='<div style="text-align:center;color:var(--text2);padding:20px;font-size:13px;">📷 Scanner QR non disponible ici — utilisez la page <strong>Scanner QR</strong> pour ajouter des articles.</div>';
+  document.getElementById('btn-cmd-qr-start').style.display='none';
+}
+function stopCmdQR(){
+  const zone=document.getElementById('cmd-qr-zone');
+  if(zone)zone.innerHTML='';
+  const s=document.getElementById('btn-cmd-qr-start');if(s)s.style.display='';
+  const st=document.getElementById('btn-cmd-qr-stop');if(st)st.style.display='none';
+}
+
+// ==================== CLIENT MODE ====================
+function applyClientMode(){
+  document.querySelectorAll('.admin-only').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.nav-btn[data-page="categories"]').forEach(b=>b.style.display='none');
+  document.querySelectorAll('.nav-btn[data-page="parametres"]').forEach(b=>b.style.display='none');
+  document.querySelectorAll('.nav-btn[data-page="familles"]').forEach(b=>b.style.display='none');
+  document.querySelectorAll('.nav-btn[data-page="historique"]').forEach(b=>b.style.display='none');
+  document.querySelectorAll('.nav-btn[data-page="pareto"]').forEach(b=>b.style.display='none');
+  document.querySelectorAll('.nav-btn[data-page="alertes"]').forEach(b=>b.style.display='none');
+  document.querySelectorAll('.nav-btn[data-page="etiquettes"]').forEach(b=>b.style.display='none');
+}
+
+function switchScanManualMode(mode, btn){
+  document.querySelectorAll('.tab-sw-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  document.getElementById('scan-manual-ref').style.display=mode==='ref'?'':'none';
+  document.getElementById('scan-manual-cat').style.display=mode==='cat'?'':'none';
+  if(mode==='cat'){
+    buildScanCatPills();
+    renderScanCatItems('');
+  }
+}
+
+function renderScanCatItems(filterKey){
+  const el=document.getElementById('scan-cat-items');if(!el)return;
+  let arts=[];
+  if(!filterKey){arts=[...stock];}
+  else if(famillesTree.length>0){
+    // filterKey est l'id d'un nœud famille ou sous-famille
+    famillesTree.forEach(f=>{
+      if(f.id===filterKey){arts=stock.filter(a=>(f.categories||[]).includes(a.categorie));}
+      (f.enfants||[]).forEach(sf=>{if(sf.id===filterKey)arts=stock.filter(a=>(sf.categories||[]).includes(a.categorie));});
+    });
+  } else {
+    arts=stock.filter(a=>a.categorie===filterKey||a.categorie.startsWith(filterKey+' > '));
+  }
+  if(!arts.length){el.innerHTML='<div style="text-align:center;color:var(--text3);padding:12px;font-size:12px;">Aucun article.</div>';return;}
+  el.innerHTML=arts.map(a=>{
+    const s=getStatus(a);const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
+    return`<div onclick="selectScanArt('${a.id}')" style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
+      <code style="flex:1;font-size:12px;">${a.id}</code>
+      <span style="font-size:11px;color:var(--text2);">${a.categorie} Ø${a.diametre}</span>
+      <span class="${sc}" style="font-size:11px;font-weight:700;">${a.stock}</span>
+    </div>`;
+  }).join('');
+}
+
+function selectScanArt(id){
+  scanSelectedArt=stock.find(a=>a.id===id)||null;
+  const el=document.getElementById('scan-selected-art');
+  if(el&&scanSelectedArt)el.innerHTML='✅ <strong>'+scanSelectedArt.id+'</strong> — '+scanSelectedArt.categorie+' Ø'+scanSelectedArt.diametre+' · Stock : <strong>'+scanSelectedArt.stock+'</strong>';
+  document.getElementById('manual-ref').value=id;
+}
+
+initApp();
 
 </script>
 </body>
 </html>
+
 
 
 
