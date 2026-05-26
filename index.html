@@ -221,6 +221,21 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .chip-art{background:var(--blue-bg);color:var(--blue);font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px;}
 .chip-warn{background:var(--amber-bg);color:var(--amber);font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px;}
 .chip-crit{background:var(--red-bg);color:var(--red);font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px;}
+
+/* ===== CHANTIER CARDS ===== */
+.chantier-card{cursor:pointer;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px 16px;min-width:170px;flex:1;max-width:240px;transition:border-color .15s,box-shadow .15s;}
+.chantier-card:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(0,0,0,.08);}
+.chantier-card.active{border-color:var(--green);background:#f0fbf5;}
+.cc-nom{font-weight:700;font-size:14px;margin-bottom:6px;}
+.cc-kpis{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+.cc-kpi{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:2px 8px;white-space:nowrap;}
+.cc-val{font-size:12px;color:var(--blue);font-weight:700;}
+
+.chantier-card.archived{opacity:.55;border-style:dashed;background:var(--bg);}
+.badge-archived{background:#e5e3dc;color:#888;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;}
+.archives-section{margin-top:20px;border-top:1px solid var(--border);padding-top:14px;}
+.archives-toggle{cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;user-select:none;margin-bottom:10px;}
+.archives-toggle:hover{color:var(--blue);}
 </style>
 </head>
 <body>
@@ -370,8 +385,13 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
           <div id="lookup-result" style="font-size:12px;min-height:18px;margin-bottom:10px;"></div>
         </div>
         <div id="scan-manual-cat" style="display:none;">
-          <div class="cat-pills" id="scan-cat-pills" style="margin-bottom:8px;"></div>
-          <div id="scan-cat-items" style="max-height:200px;overflow-y:auto;margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 0;"></div>
+          <div class="cat-pills" id="scan-cat-pills" style="margin-bottom:0;"></div>
+          <div id="scan-sf-pills-wrap" style="display:none;border-top:1px dashed var(--border);padding-top:5px;margin-top:4px;">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;padding-left:2px;">Sous-famille</div>
+            <div class="cat-pills" id="scan-sf-pills" style="margin-bottom:0;"></div>
+          </div>
+          <div id="scan-cat-hint" style="text-align:center;color:var(--text3);font-size:12px;padding:12px 0;">Sélectionnez une famille</div>
+          <div id="scan-cat-items" style="display:none;max-height:200px;overflow-y:auto;margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-sm);"></div>
           <div id="scan-selected-art" style="font-size:13px;color:var(--green);font-weight:600;min-height:18px;margin-bottom:6px;"></div>
         </div>
         <div class="form-grid col2">
@@ -493,15 +513,24 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       <button class="btn btn-primary btn-sm" onclick="openNewChantier()">+ Nouveau chantier</button>
     </div>
   </div>
-  <!-- Cartes chantiers IMMEDIATEMENT visibles -->
+  <!-- Cartes chantiers actifs -->
   <div id="chantiers-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;"></div>
+  <!-- Section archives -->
+  <div class="archives-section" id="archives-section" style="display:none;">
+    <div class="archives-toggle" onclick="toggleArchivesView()">
+      <span id="archives-toggle-icon">▶</span>
+      <span>Chantiers archivés</span>
+      <span id="archives-count" class="badge-archived"></span>
+    </div>
+    <div id="archives-cards" style="display:none;flex-wrap:wrap;gap:10px;"></div>
+  </div>
   <!-- Détail chantier sélectionné (affiché ici, avant le tableau) -->
   <!-- Tableau récapitulatif -->
   <div class="section-header" style="margin-top:4px;">
     <div class="section-title" style="font-size:13px;color:var(--text2);">Récapitulatif</div>
   </div>
   <div class="table-wrap" style="margin-bottom:16px;">
-    <table><thead><tr><th>Chantier</th><th>Commandes</th><th>Mouvements</th><th>Articles sortis</th><th>Coût total</th><th></th></tr></thead>
+    <table><thead><tr><th>Chantier</th><th>Commandes</th><th>Mouvements</th><th>Articles sortis</th><th>Heures</th><th>Valeur achat</th><th></th></tr></thead>
     <tbody id="chantiers-table"></tbody></table>
   </div>
   <!-- Détail chantier -->
@@ -510,10 +539,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
       <div class="section-title" id="chantier-detail-title">Détail chantier</div>
       <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
     </div>
-    <div class="table-wrap">
-      <table><thead><tr><th>Date</th><th>Type</th><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Qté</th><th>Source</th></tr></thead>
-      <tbody id="chantier-detail-table"></tbody></table>
-    </div>
+    <div id="chantier-detail-body"></div>
   </div>
 </div>
 
@@ -746,6 +772,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Nom du chantier</label><input type="text" id="chantier-name" placeholder="ex: Résidence Les Pins, Site A…"></div>
       <div class="form-row"><label class="form-label">Description (optionnel)</label><input type="text" id="chantier-desc" placeholder="Adresse, responsable…"></div>
+      <div class="form-row"><label class="form-label">Heures chantier</label><input type="number" id="chantier-heures" min="0" step="0.5" placeholder="ex: 12.5"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-chantier')">Annuler</button>
@@ -1602,22 +1629,246 @@ async function deleteCmd(id){
   commandes=commandes.filter(c=>c.id!==id);
   renderCommandes();updateBadges();showToast('Commande supprimee');
 }
-function renderChantiers(){
-  const cards=document.getElementById('chantiers-cards');
-  const tbody=document.getElementById('chantiers-table');
-  if(cards){cards.innerHTML=chantiers.map(c=>{
-    const mvts=historique.filter(h=>h.chantier===c.nom&&h.type==='out');
-    const cmds=commandes.filter(x=>x.chantier===c.nom&&x.statut==='approuvee');
-    const q=mvts.reduce((s,h)=>s+h.qty,0)+cmds.reduce((s,x)=>(x.items||[]).reduce((a,i)=>a+i.qty,0)+s,0);
-    return '<div onclick="showChantierDetail(\''+c.nom+'\')" style="cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-width:160px;flex:1;max-width:220px;"><div style="font-weight:700;">'+c.nom+'</div><div style="font-size:12px;color:var(--text2);">'+q+' unites</div><div style="font-size:11px;color:var(--blue);">Voir detail</div></div>';
-  }).join('');}
-  if(tbody){tbody.innerHTML=chantiers.map(c=>'<tr><td>'+c.nom+'</td><td>0</td><td>0</td><td>0</td><td><button class="btn btn-xs" onclick="editChantier(\''+c.nom+'\')">edit</button><button class="btn btn-xs btn-danger" onclick="deleteChantier(\''+c.nom+'\')">del</button></td></tr>').join('');}
+function getChantierData(nom){
+  const cmdsApprouv=commandes.filter(x=>x.chantier===nom&&x.statut==='approuvee');
+  const mvtsOut=historique.filter(h=>h.chantier===nom&&h.type==='out');
+  // Articles depuis commandes approuvées
+  const lignesCmd=[];
+  cmdsApprouv.forEach(c=>{
+    (c.items||[]).forEach(item=>{
+      const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',prixVente:0,prixUnitaire:0};
+      const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
+      lignesCmd.push({date,type:'commande',num:'#'+String(c.num).padStart(3,'0'),id:item.id,categorie:art.categorie,diametre:art.diametre,qty:item.qty,prixU:art.prixUnitaire||0,prixV:art.prixVente||0});
+    });
+  });
+  // Mouvements historique
+  const lignesMvt=mvtsOut.map(h=>{
+    const art=stock.find(a=>a.id===h.categorie)||{categorie:h.categorie,diametre:h.diametre||'',prixVente:0,prixUnitaire:0};
+    const date=h.ts?new Date(h.ts).toLocaleDateString('fr-FR'):'';
+    return{date,type:'mouvement',num:'',id:h.categorie,categorie:art.categorie||h.categorie,diametre:h.diametre||'',qty:h.qty,prixU:art.prixUnitaire||0,prixV:art.prixVente||0};
+  });
+  const lignes=[...lignesCmd,...lignesMvt];
+  const qtyTot=lignes.reduce((s,l)=>s+l.qty,0);
+  const valAchat=lignes.reduce((s,l)=>s+l.qty*l.prixU,0);
+  const valVente=lignes.reduce((s,l)=>s+l.qty*l.prixV,0);
+  return{cmdsApprouv,mvtsOut,lignes,qtyTot,valAchat,valVente};
 }
+
+function chantierCardHTML(c,archived){
+  const d=getChantierData(c.nom);
+  const valStr=d.valAchat>0?d.valAchat.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f\u20ac':'—';
+  const ne=c.nom.replace(/'/g,"\\'");
+  return`<div class="chantier-card${archived?' archived':''}" onclick="showChantierDetail('${ne}')">
+    <div class="cc-nom">${archived?'📦':'🏗'} ${escH(c.nom)}${archived?' <span class="badge-archived">Archivé</span>':''}</div>
+    <div class="cc-kpis"><span class="cc-kpi">📦 ${d.qtyTot} unités</span><span class="cc-kpi">📋 ${d.cmdsApprouv.length} cmd</span>${c.heures?`<span class="cc-kpi">⏱ ${c.heures}h</span>`:''}</div>
+    <div class="cc-val">${valStr}</div>
+    <div style="font-size:11px;color:${archived?'var(--text3)':'var(--blue)'};margin-top:4px;">${archived?'Consulter →':'Voir détail →'}</div>
+  </div>`;
+}
+function renderChantiers(){
+  const actifs=chantiers.filter(c=>!c.archived);
+  const archives=chantiers.filter(c=>c.archived);
+  const cards=document.getElementById('chantiers-cards');
+  const arcCards=document.getElementById('archives-cards');
+  const arcSection=document.getElementById('archives-section');
+  const arcCount=document.getElementById('archives-count');
+  if(cards)cards.innerHTML=actifs.length?actifs.map(c=>chantierCardHTML(c,false)).join(''):'<div style="color:var(--text3);font-size:13px;padding:12px;">Aucun chantier actif.</div>';
+  if(arcSection)arcSection.style.display=archives.length?'':'none';
+  if(arcCount)arcCount.textContent=archives.length+' chantier(s)';
+  if(arcCards)arcCards.innerHTML=archives.map(c=>chantierCardHTML(c,true)).join('');
+  const tbody=document.getElementById('chantiers-table');
+  if(tbody){
+    const fmtV=v=>v>0?v.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f€':'—';
+    tbody.innerHTML=[...actifs,...archives].map(c=>{
+      const d=getChantierData(c.nom);const ne=c.nom.replace(/'/g,"\\'");
+      return`<tr style="${c.archived?'opacity:.6;':''}">
+        <td><strong>${escH(c.nom)}</strong>${c.archived?' <span class="badge-archived">Archivé</span>':''}</td>
+        <td>${d.cmdsApprouv.length}</td><td>${d.mvtsOut.length}</td><td>${d.qtyTot}</td><td>${c.heures?c.heures+'h':'—'}</td><td>${fmtV(d.valAchat)}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-xs" onclick="showChantierDetail('${ne}')">Détail</button>
+          <button class="btn btn-xs" onclick="exportChantierExcel('${ne}')">📥</button>
+          ${c.archived
+            ?`<button class="btn btn-xs" style="margin-left:3px;color:var(--green);border-color:var(--green);" onclick="desarchiverChantier('${ne}')">↩ Réactiver</button>`
+            :`<button class="btn btn-xs" style="margin-left:3px;" onclick="archiverChantier('${ne}')">📦 Archiver</button>`}
+          <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteChantier('${ne}')">🗑</button>
+        </td></tr>`;
+    }).join('');
+  }
+}
+
 function showChantierDetail(nom){
-  const d=document.getElementById('chantier-detail');
-  if(!d)return;
-  document.getElementById('chantier-detail-title').textContent='Detail - '+nom;
-  d.style.display='';
+  const d_el=document.getElementById('chantier-detail');if(!d_el)return;
+  document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
+  // Marquer carte active
+  document.querySelectorAll('.chantier-card').forEach(c=>c.classList.remove('active'));
+  const d=getChantierData(nom);
+  const fmt=v=>v>0?v.toFixed(2).replace('.',',')+'€':'—';
+  const fmtBig=v=>v>0?v.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f€':'—';
+
+  // Grouper par famille
+  const famRows=buildChantierFamRows(d.lignes);
+
+  // KPI bar
+  const kpi=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
+      <div style="font-size:22px;font-weight:700;">${d.qtyTot}</div>
+      <div style="font-size:11px;color:var(--text2);">Unités sorties</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
+      <div style="font-size:22px;font-weight:700;">${d.cmdsApprouv.length}</div>
+      <div style="font-size:11px;color:var(--text2);">Commandes validées</div>
+    </div>
+    ${(()=>{const ch=chantiers.find(x=>x.nom===nom);return ch&&ch.heures?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;"><div style="font-size:22px;font-weight:700;">${ch.heures}h</div><div style="font-size:11px;color:var(--text2);">Heures chantier</div></div>`:''})()}
+    <div style="background:var(--blue-bg,#e8f0fe);border:1px solid var(--blue);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
+      <div style="font-size:20px;font-weight:700;color:var(--blue);">${fmtBig(d.valAchat)}</div>
+      <div style="font-size:11px;color:var(--text2);">Valeur achat</div>
+    </div>
+  </div>`;
+
+  // Tableau par famille
+  let tableHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">📦 Détail par famille</div>';
+  tableHtml+='<div class="table-wrap" style="margin-bottom:14px;"><table><thead><tr><th>Famille / Article</th><th>Réf.</th><th>Ø</th><th style="text-align:center;">Qté</th><th>P.U. achat</th><th>Total achat</th></tr></thead><tbody>';
+  tableHtml+=famRows;
+  tableHtml+='</tbody></table></div>';
+
+  // Tableau chronologique
+  tableHtml+='<div style="font-weight:700;font-size:13px;margin-bottom:8px;margin-top:10px;">📋 Historique des mouvements</div>';
+  tableHtml+='<div class="table-wrap"><table><thead><tr><th>Date</th><th>Source</th><th>Réf.</th><th>Catégorie</th><th>Ø</th><th style="text-align:center;">Qté</th><th>Valeur achat</th></tr></thead><tbody>';
+  if(!d.lignes.length){
+    tableHtml+='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">Aucun mouvement.</td></tr>';
+  } else {
+    d.lignes.sort((a,b)=>a.date>b.date?-1:1).forEach(l=>{
+      const tvente=l.qty*l.prixU;
+      tableHtml+=`<tr>
+        <td>${l.date}</td>
+        <td>${l.type==='commande'?`<span class="badge badge-blue">${l.num}</span>`:'<span style="font-size:11px;color:var(--text2);">Mvt.</span>'}</td>
+        <td><code>${l.id}</code></td>
+        <td>${l.categorie}</td>
+        <td>${l.diametre}</td>
+        <td style="text-align:center;font-weight:700;">${l.qty}</td>
+        <td>${tvente>0?tvente.toFixed(2).replace('.',',')+' €':'—'}</td>
+      </tr>`;
+    });
+  }
+  tableHtml+='</tbody></table></div>';
+
+  const exportBtn=(()=>{
+    const ch=chantiers.find(x=>x.nom===nom);
+    const isArc=ch&&ch.archived;
+    const ne=nom.replace(/'/g,"\'");
+    return`<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+      ${isArc?`<button class="btn btn-sm" style="color:var(--green);border-color:var(--green);" onclick="desarchiverChantier('${ne}')">↩ Réactiver</button>`
+             :`<button class="btn btn-sm" onclick="archiverChantier('${ne}')">📦 Archiver ce chantier</button>`}
+      <button class="btn btn-sm" onclick="exportChantierExcel('${ne}')">📥 Export Excel</button>
+    </div>`;
+  })()
+
+  document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
+  // Reconstruire le contenu du detail
+  const detail_body=document.getElementById('chantier-detail-body');
+  if(detail_body) detail_body.innerHTML=kpi+tableHtml+exportBtn;
+  d_el.style.display='';
+  d_el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function buildChantierFamRows(lignes){
+  if(!lignes.length)return'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">Aucun article.</td></tr>';
+  const fmt=v=>v>0?v.toFixed(2).replace('.',',')+' €':'—';
+  let html='';
+  // Grouper par famille
+  const rendered=new Set();
+  const famSource=famillesTree.length>0?famillesTree:[];
+  famSource.forEach(f=>{
+    const famCats=[...(f.categories||[]),...(f.enfants||[]).flatMap(sf=>sf.categories||[])];
+    const famLignes=lignes.filter(l=>famCats.includes(l.categorie));
+    if(!famLignes.length)return;
+    const famQty=famLignes.reduce((s,l)=>s+l.qty,0);
+    const famVente=famLignes.reduce((s,l)=>s+l.qty*l.prixV,0);
+    html+=`<tr style="background:var(--bg2);font-weight:700;">
+      <td colspan="3">📁 ${escH(f.nom)}</td>
+      <td style="text-align:center;">${famQty}</td>
+      <td colspan="2">—</td>
+      <td>${fmt(famVente)}</td>
+    </tr>`;
+    (f.enfants||[]).forEach(sf=>{
+      const sfLignes=lignes.filter(l=>(sf.categories||[]).includes(l.categorie));
+      if(!sfLignes.length)return;
+      const sfQty=sfLignes.reduce((s,l)=>s+l.qty,0);
+      const sfVente=sfLignes.reduce((s,l)=>s+l.qty*l.prixV,0);
+      html+=`<tr style="background:var(--bg);"><td colspan="3" style="padding-left:20px;font-weight:600;color:var(--text2);">↳ ${escH(sf.nom)}</td><td style="text-align:center;">${sfQty}</td><td colspan="2">—</td><td>${fmt(sfVente)}</td></tr>`;
+      sfLignes.forEach(l=>{rendered.add(l.id+'|'+l.date);html+=chantierArtRow(l,fmt,true);});
+    });
+    // Articles directs de la famille (pas dans SF)
+    lignes.filter(l=>(f.categories||[]).includes(l.categorie)&&!rendered.has(l.id+'|'+l.date)).forEach(l=>{rendered.add(l.id+'|'+l.date);html+=chantierArtRow(l,fmt,false);});
+  });
+  // Non classés
+  lignes.filter(l=>!rendered.has(l.id+'|'+l.date)).forEach(l=>{html+=chantierArtRow(l,fmt,false);});
+  return html;
+}
+
+function chantierArtRow(l,fmt,indent){
+  return`<tr>
+    <td style="padding-left:${indent?40:24}px;">${escH(l.categorie)}</td>
+    <td><code>${l.id}</code></td>
+    <td>${l.diametre}</td>
+    <td style="text-align:center;font-weight:700;">${l.qty}</td>
+    <td>${fmt(l.prixU)}</td>
+    <td>${fmt(l.prixV)}</td>
+    <td>${fmt(l.qty*l.prixU)}</td>
+  </tr>`;
+}
+
+// ============================================================
+// EXPORT EXCEL CHANTIER
+// ============================================================
+async function exportChantierExcel(nom){
+  const d=getChantierData(nom);
+  const rows=[];
+  rows.push([nom+' — Export Stock','','','','','','']);
+  rows.push(['Généré le '+new Date().toLocaleString('fr-FR'),'','','','','','']);
+  rows.push(['']);
+  rows.push(['KPIs','Unités sorties','Commandes validées','Valeur achat (€)','','']);
+  rows.push(['',d.qtyTot,d.cmdsApprouv.length,d.valAchat.toFixed(2),'','']);
+  rows.push(['']);
+  rows.push(['DÉTAIL PAR FAMILLE','','','','','','']);
+  rows.push(['Famille / Article','Référence','Ø','Qté','P.U. achat','','Total achat']);
+
+  const addedRows=new Set();
+  famillesTree.forEach(f=>{
+    const famCats=[...(f.categories||[]),...(f.enfants||[]).flatMap(sf=>sf.categories||[])];
+    const famLignes=d.lignes.filter(l=>famCats.includes(l.categorie));
+    if(!famLignes.length)return;
+    const famQty=famLignes.reduce((s,l)=>s+l.qty,0);
+    const famV=famLignes.reduce((s,l)=>s+l.qty*l.prixU,0);
+    rows.push(['📁 '+f.nom,'','',famQty,'','',famV.toFixed(2)]);
+    (f.enfants||[]).forEach(sf=>{
+      const sfL=famLignes.filter(l=>(sf.categories||[]).includes(l.categorie));
+      if(!sfL.length)return;
+      const sfQty=sfL.reduce((s,l)=>s+l.qty,0);
+      const sfV=sfL.reduce((s,l)=>s+l.qty*l.prixU,0);
+      rows.push(['  ↳ '+sf.nom,'','',sfQty,'','',sfV.toFixed(2)]);
+      sfL.forEach(l=>{addedRows.add(l.id+'|'+l.date);rows.push(['    '+l.categorie,l.id,l.diametre,l.qty,l.prixU.toFixed(2),(l.qty*l.prixU).toFixed(2),'']);});
+    });
+    famLignes.filter(l=>(f.categories||[]).includes(l.categorie)&&!addedRows.has(l.id+'|'+l.date)).forEach(l=>{addedRows.add(l.id+'|'+l.date);rows.push(['  '+l.categorie,l.id,l.diametre,l.qty,l.prixU.toFixed(2),l.prixV.toFixed(2),(l.qty*l.prixV).toFixed(2)]);});
+  });
+  d.lignes.filter(l=>!addedRows.has(l.id+'|'+l.date)).forEach(l=>{rows.push([l.categorie,l.id,l.diametre,l.qty,l.prixU.toFixed(2),(l.qty*l.prixU).toFixed(2),'']);});
+
+  rows.push(['']);
+  rows.push(['TOTAL','','',d.qtyTot,'','',(d.valAchat).toFixed(2)]);
+  rows.push(['']);
+  rows.push(['HISTORIQUE CHRONOLOGIQUE','','','','','','']);
+  rows.push(['Date','Source','Référence','Catégorie','Ø','Qté','Valeur vente']);
+  d.lignes.sort((a,b)=>a.date>b.date?-1:1).forEach(l=>rows.push([l.date,l.type==='commande'?l.num:'Mvt.',l.id,l.categorie,l.diametre,l.qty,(l.qty*l.prixU).toFixed(2)]));
+
+  // Générer CSV encodé en UTF-8 BOM
+  const BOM='\uFEFF';
+  const csv=BOM+rows.map(r=>r.map(v=>'"'+(String(v||'').replace(/"/g,'""'))+'"').join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='Chantier_'+nom.replace(/[^a-zA-Z0-9]/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();URL.revokeObjectURL(url);
+  showToast('📥 Export Excel généré');
 }
 function renderEtiquettes(){
   const pills=document.getElementById('etiq-cat-pills');
@@ -1669,8 +1920,8 @@ function printEtiquettes(){showToast('Impression non disponible - utilisez le bo
 function downloadEtiquettes(){showToast('Telechargement non disponible');}
 function exportChantiers(){showToast('Export non disponible');}
 function openNewChantier(){openModal('modal-chantier');}
-function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';openModal('modal-chantier');}
-async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1)l[i]={nom,desc};else l.push({nom,desc});await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistre');}
+function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';document.getElementById('chantier-heures').value=c.heures||'';openModal('modal-chantier');}
+async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();const heures=parseFloat(document.getElementById('chantier-heures').value)||0;if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1){l[i]={...l[i],nom,desc,heures};}else{l.push({nom,desc,heures});}await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistré');}
 async function deleteChantier(nom){if(!confirm('Supprimer?'))return;const l=chantiers.filter(c=>c.nom!==nom);await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;renderChantiers();showToast('Supprime');}
 let etiqSelectedCat='';let etiqSelected=new Set();function renderAlertes(){
   const alerts=getAlerts();
@@ -2264,18 +2515,19 @@ function renderCmdCatItems(){renderCmdArtList(_cmdFamFilter,_cmdSFFilter);}
 
 function buildScanCatPills(){
   const el=document.getElementById('scan-cat-pills');if(!el)return;
-  let pills='<span class="cat-pill active" onclick="filterScanCat(this,\'\')">Toutes</span>';
+  let pills='<span class="cat-pill active" onclick="scanSelectFam(this,null)">Toutes</span>';
   if(famillesTree.length>0){
     famillesTree.forEach(f=>{
-      const cats=(f.categories||[]).concat(...(f.enfants||[]).map(sf=>sf.categories||[]));
-      if(cats.length) pills+=`<span class="cat-pill" onclick="filterScanCat(this,'${f.nom.replace(/'/g,"\\'")}')" data-cats='${JSON.stringify(cats)}'>${escH(f.nom)}</span>`;
+      const hasCats=(f.categories||[]).length||(f.enfants||[]).some(sf=>(sf.categories||[]).length);
+      if(hasCats) pills+=`<span class="cat-pill" onclick="scanSelectFam(this,'${f.id}')">${escH(f.nom)}</span>`;
     });
   } else {
     categories.filter(c=>!c.includes(' > ')).sort().forEach(c=>{
-      pills+=`<span class="cat-pill" onclick="filterScanCat(this,'${c.replace(/'/g,"\\'")}')">  ${c}</span>`;
+      pills+=`<span class="cat-pill" onclick="scanSelectFam(this,'__cat__${c.replace(/'/g,"\\'")}')">  ${c}</span>`;
     });
   }
   el.innerHTML=pills;
+  scanShowHint('Sélectionnez une famille');
 }
 
 function filterScanCat(el,val){
@@ -2440,22 +2692,28 @@ function switchScanManualMode(mode, btn){
 function renderScanCatItems(filterKey){
   const el=document.getElementById('scan-cat-items');if(!el)return;
   let arts=[];
-  if(!filterKey){arts=[...stock];}
-  else if(famillesTree.length>0){
-    // filterKey est l'id d'un nœud famille ou sous-famille
-    famillesTree.forEach(f=>{
-      if(f.id===filterKey){arts=stock.filter(a=>(f.categories||[]).includes(a.categorie));}
-      (f.enfants||[]).forEach(sf=>{if(sf.id===filterKey)arts=stock.filter(a=>(sf.categories||[]).includes(a.categorie));});
-    });
+  if(!filterKey){
+    arts=[...stock];
+  } else if(filterKey.startsWith('__cat__')){
+    arts=stock.filter(a=>a.categorie===filterKey.slice(7));
+  } else if(famillesTree.length>0){
+    let found=false;
+    for(const f of famillesTree){
+      if(f.id===filterKey){arts=stock.filter(a=>(f.categories||[]).includes(a.categorie));found=true;break;}
+      for(const sf of (f.enfants||[])){
+        if(sf.id===filterKey){arts=stock.filter(a=>(sf.categories||[]).includes(a.categorie));found=true;break;}
+      }
+      if(found)break;
+    }
   } else {
-    arts=stock.filter(a=>a.categorie===filterKey||a.categorie.startsWith(filterKey+' > '));
+    arts=stock.filter(a=>a.categorie===filterKey);
   }
   if(!arts.length){el.innerHTML='<div style="text-align:center;color:var(--text3);padding:12px;font-size:12px;">Aucun article.</div>';return;}
   el.innerHTML=arts.map(a=>{
     const s=getStatus(a);const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
-    return`<div onclick="selectScanArt('${a.id}')" style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
-      <code style="flex:1;font-size:12px;">${a.id}</code>
-      <span style="font-size:11px;color:var(--text2);">${a.categorie} Ø${a.diametre}</span>
+    return`<div onclick="selectScanArt('${a.id}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
+      <code style="font-size:12px;font-weight:700;flex:1;">${a.id}</code>
+      <span style="font-size:11px;color:var(--text2);">Ø ${a.diametre}</span>
       <span class="${sc}" style="font-size:11px;font-weight:700;">${a.stock}</span>
     </div>`;
   }).join('');
@@ -2627,6 +2885,68 @@ function openNewSubCat(){
   }
   document.getElementById('subcat-name').value='';
   openModal('modal-newsubcat');
+}
+
+function scanShowHint(msg){
+  const h=document.getElementById('scan-cat-hint');const el=document.getElementById('scan-cat-items');
+  if(h){h.textContent=msg;h.style.display='';}
+  if(el)el.style.display='none';
+}
+function scanHideHint(){
+  const h=document.getElementById('scan-cat-hint');const el=document.getElementById('scan-cat-items');
+  if(h)h.style.display='none';
+  if(el)el.style.display='';
+}
+function scanSelectFam(el,famId){
+  document.querySelectorAll('#scan-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  scanSelectedArt=null;
+  const sa=document.getElementById('scan-selected-art');if(sa)sa.innerHTML='';
+  document.getElementById('manual-ref').value='';
+  const sfWrap=document.getElementById('scan-sf-pills-wrap');
+  const sfEl=document.getElementById('scan-sf-pills');
+  if(!famId){if(sfWrap)sfWrap.style.display='none';scanHideHint();renderScanCatItems('');return;}
+  if(famId.startsWith('__cat__')){if(sfWrap)sfWrap.style.display='none';scanHideHint();renderScanCatItems(famId);return;}
+  const f=famillesTree.find(x=>x.id===famId);if(!f)return;
+  const sfList=(f.enfants||[]).filter(sf=>(sf.categories||[]).length);
+  const hasDirect=(f.categories||[]).length;
+  if(!sfList.length){if(sfWrap)sfWrap.style.display='none';scanHideHint();renderScanCatItems(famId);return;}
+  if(sfWrap)sfWrap.style.display='';
+  let sfPills='';
+  if(hasDirect)sfPills+=`<span class="cat-pill" onclick="scanSelectSF(this,'${f.id}','__direct__')">— Général</span>`;
+  sfList.forEach(sf=>{sfPills+=`<span class="cat-pill" onclick="scanSelectSF(this,'${f.id}','${sf.id}')">${escH(sf.nom)}</span>`;});
+  if(sfEl)sfEl.innerHTML=sfPills;
+  scanShowHint('Sélectionnez une sous-famille');
+}
+function scanSelectSF(el,famId,sfId){
+  document.querySelectorAll('#scan-sf-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  scanHideHint();
+  renderScanCatItems(sfId==='__direct__'?famId:sfId);
+}
+
+let _archivesOpen=false;
+function toggleArchivesView(){
+  _archivesOpen=!_archivesOpen;
+  const el=document.getElementById('archives-cards');
+  const icon=document.getElementById('archives-toggle-icon');
+  if(el)el.style.display=_archivesOpen?'flex':'none';
+  if(icon)icon.textContent=_archivesOpen?'▼':'▶';
+}
+async function archiverChantier(nom){
+  const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  c.archived=true;c.archived_at=new Date().toISOString();
+  await db.from('config').upsert({key:'chantiers',value:chantiers},{onConflict:'key'});
+  renderChantiers();
+  const d=document.getElementById('chantier-detail');if(d)d.style.display='none';
+  showToast('📦 Chantier archivé');
+}
+async function desarchiverChantier(nom){
+  const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  c.archived=false;delete c.archived_at;
+  await db.from('config').upsert({key:'chantiers',value:chantiers},{onConflict:'key'});
+  renderChantiers();showChantierDetail(nom);
+  showToast('✅ Chantier réactivé');
 }
 
 initApp();
