@@ -1542,18 +1542,45 @@ function viewCmd(id){
   // Tableau articles : masquer colonne Stock en mode client
   const thStock=CLIENT_MODE?'':'<th>Stock</th>';
   const tdStock=CLIENT_MODE?'':(art)=>'<td>'+art.stock+'</td>';
+  const prixKey=CLIENT_MODE?'prixVente':'prixUnitaire';
+  const prixLabel=CLIENT_MODE?'P.U. vente HT':'P.U. achat';
+  let total=0;
   const rows=(c.items||[]).map(i=>{
-    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:'?'};
-    return'<tr><td><code>'+i.id+'</code></td><td>'+art.categorie+' Ø'+art.diametre+'</td><td style="text-align:center;font-weight:700;">'+i.qty+'</td>'+(CLIENT_MODE?'':'<td>'+art.stock+'</td>')+'</tr>';
+    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:'?',prixVente:0,prixUnitaire:0};
+    const pu=art[prixKey]||0;
+    const ligne=i.qty*pu;
+    total+=ligne;
+    const puStr=pu>0?pu.toFixed(2).replace('.',',')+' €':'—';
+    const ligneStr=ligne>0?ligne.toFixed(2).replace('.',',')+' €':'—';
+    return'<tr>'
+      +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);"><code>'+i.id+'</code></td>'
+      +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);">'+art.categorie+' Ø'+art.diametre+'</td>'
+      +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:center;font-weight:700;">'+i.qty+'</td>'
+      +(CLIENT_MODE?'':'<td style="padding:5px 10px;border-bottom:1px solid var(--border);">'+art.stock+'</td>')
+      +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;color:var(--text2);">'+puStr+'</td>'
+      +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:700;">'+ligneStr+'</td>'
+      +'</tr>';
   }).join('');
+  const totalStr=total>0?total.toFixed(2).replace('.',',')+' €':'—';
+  const totalRow='<tr style="background:var(--bg2);">'
+    +'<td colspan="'+(CLIENT_MODE?4:5)+'" style="padding:8px 10px;font-weight:700;text-align:right;">TOTAL</td>'
+    +'<td style="padding:8px 10px;font-weight:700;text-align:right;font-size:15px;color:var(--blue);">'+totalStr+'</td>'
+    +'</tr>';
   document.getElementById('cmd-detail-body').innerHTML=
-    '<div style="font-size:13px;margin-bottom:14px;line-height:1.7;">'+
-    '<strong>Date :</strong> '+date+' &nbsp;|&nbsp; <strong>Demandeur :</strong> '+(c.nom||'—')+'<br>'+
-    '<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'+
-    (c.notes?'<br><strong>Notes :</strong> '+c.notes:'')+'</div>'+
-    '<table style="width:100%;font-size:13px;border-collapse:collapse;">'+
-    '<thead><tr style="background:var(--bg2);"><th style="padding:6px 10px;text-align:left;">Réf.</th><th style="padding:6px 10px;text-align:left;">Article</th><th style="padding:6px 10px;text-align:center;">Qté</th>'+(CLIENT_MODE?'':'<th style="padding:6px 10px;">Stock</th>')+'</tr></thead>'+
-    '<tbody>'+rows+'</tbody></table>';
+    '<div style="font-size:13px;margin-bottom:14px;line-height:1.7;">'
+    +'<strong>Date :</strong> '+date+' &nbsp;|&nbsp; <strong>Demandeur :</strong> '+(c.nom||'—')+'<br>'
+    +'<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'
+    +(c.notes?'<br><strong>Notes :</strong> '+c.notes:'')+'</div>'
+    +'<table style="width:100%;font-size:13px;border-collapse:collapse;">'
+    +'<thead><tr style="background:var(--bg2);">'
+    +'<th style="padding:6px 10px;text-align:left;">Réf.</th>'
+    +'<th style="padding:6px 10px;text-align:left;">Article</th>'
+    +'<th style="padding:6px 10px;text-align:center;">Qté</th>'
+    +(CLIENT_MODE?'':'<th style="padding:6px 10px;">Stock</th>')
+    +'<th style="padding:6px 10px;text-align:right;">'+prixLabel+'</th>'
+    +'<th style="padding:6px 10px;text-align:right;">Total</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+totalRow+'</tbody></table>';
   const cid=c.id,isP=c.statut==='en_attente';
   const btnFermer=`<button class="btn" onclick="closeModal('modal-cmd-detail')">Fermer</button>`;
   const btnImprimer=`<button class="btn btn-sm" onclick="printCmd('${cid}')" style="gap:4px;">🖨 Imprimer</button>`;
@@ -1577,10 +1604,17 @@ function printCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
   const date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
   const statLabel={'en_attente':'En attente','approuvee':'Approuvée','refusee':'Refusée'}[c.statut]||c.statut;
+  const pKey=CLIENT_MODE?'prixVente':'prixUnitaire';
+  const pLabel=CLIENT_MODE?'P.U. vente HT':'P.U. achat';
+  let printTotal=0;
   const rows=(c.items||[]).map(i=>{
-    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?'};
-    return`<tr><td style="padding:6px 10px;border-bottom:1px solid #ddd;"><code>${i.id}</code></td><td style="padding:6px 10px;border-bottom:1px solid #ddd;">${art.categorie} Ø${art.diametre}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700;">${i.qty}</td></tr>`;
+    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',prixVente:0,prixUnitaire:0};
+    const pu=art[pKey]||0;const ligne=i.qty*pu;printTotal+=ligne;
+    const puStr=pu>0?pu.toFixed(2).replace('.',',')+' €':'—';
+    const ligneStr=ligne>0?ligne.toFixed(2).replace('.',',')+' €':'—';
+    return`<tr><td style="padding:6px 10px;border-bottom:1px solid #ddd;"><code>${i.id}</code></td><td style="padding:6px 10px;border-bottom:1px solid #ddd;">${art.categorie} Ø${art.diametre}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700;">${i.qty}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;color:#555;">${puStr}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;font-weight:700;">${ligneStr}</td></tr>`;
   }).join('');
+  const printTotalStr=printTotal>0?printTotal.toFixed(2).replace('.',',')+' €':'—';
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Commande #${String(c.num).padStart(3,'0')}</title>
   <style>
@@ -1601,8 +1635,8 @@ function printCmd(id){
     ${c.notes?'<br><strong>Notes :</strong> '+c.notes:''}
   </div>
   <table>
-    <thead><tr><th>Référence</th><th>Article</th><th style="text-align:center;">Quantité</th></tr></thead>
-    <tbody>${rows}</tbody>
+    <thead><tr><th>Référence</th><th>Article</th><th style="text-align:center;">Quantité</th><th style="text-align:right;">${pLabel}</th><th style="text-align:right;">Total</th></tr></thead>
+    <tbody>${rows}<tr style="background:#f5f4f0;"><td colspan="3" style="padding:8px 10px;font-weight:700;text-align:right;">TOTAL</td><td></td><td style="padding:8px 10px;font-weight:700;text-align:right;font-size:15px;">${printTotalStr}</td></tr></tbody>
   </table>
   <div class="footer">StockPro AIR2S — Imprimé le ${new Date().toLocaleString('fr-FR')}</div>
   <script>window.onload=()=>{window.print();}<\/script>
