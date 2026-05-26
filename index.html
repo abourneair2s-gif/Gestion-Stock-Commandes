@@ -182,6 +182,45 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .fam-cat-pill:hover{border-color:var(--blue);color:var(--blue);}
 .fam-inline-edit{display:none;align-items:center;gap:6px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);}
 .fam-inline-edit.visible{display:flex;}
+
+/* ===== STOCK ACCORDÉON ===== */
+.stock-fam-block{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;}
+.stock-fam-header{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--bg);cursor:pointer;user-select:none;transition:background .15s;flex-wrap:wrap;}
+.stock-fam-header:hover{background:#eceae4;}
+.sfh-toggle{font-size:11px;color:var(--text3);transition:transform .2s;flex-shrink:0;}
+.sfh-toggle.open{transform:rotate(90deg);}
+.sfh-nom{font-weight:700;font-size:14px;flex:1;min-width:120px;}
+.sfh-chips{display:flex;gap:5px;align-items:center;flex-wrap:wrap;}
+.sfh-total{font-size:12px;color:var(--text2);margin-left:auto;white-space:nowrap;}
+.stock-fam-body{display:none;border-top:1px solid var(--border);}
+.stock-fam-body.open{display:block;}
+/* Sous-familles */
+.stock-sf-block{border-bottom:1px solid var(--border);}
+.stock-sf-block:last-child{border-bottom:none;}
+.stock-sf-header{display:flex;align-items:center;gap:8px;padding:9px 16px 9px 28px;background:#fafaf8;cursor:pointer;user-select:none;border-bottom:1px dashed var(--border);font-weight:600;font-size:13px;color:var(--text2);transition:background .15s;}
+.stock-sf-header:hover{background:#f0ede7;}
+.stock-sf-body{display:none;}
+.stock-sf-body.open{display:block;}
+/* Lignes article */
+.stock-art-row{display:flex;align-items:center;gap:10px;padding:9px 16px 9px 32px;border-bottom:1px solid var(--border);transition:background .1s;flex-wrap:wrap;}
+.stock-art-row:last-child{border-bottom:none;}
+.stock-art-row:hover{background:#f9f8f5;}
+.stock-art-row.indent-sf{padding-left:44px;}
+.sar-ref{min-width:100px;flex-shrink:0;}
+.sar-ref code{font-size:12px;font-weight:700;}
+.sar-cat{font-size:11px;color:var(--text3);flex:1;min-width:80px;}
+.sar-diam{font-size:12px;color:var(--text2);min-width:48px;text-align:center;}
+.sar-stock{min-width:80px;flex-shrink:0;}
+.sar-min{font-size:11px;color:var(--text3);min-width:48px;}
+.sar-prix{font-size:12px;color:var(--text2);min-width:64px;}
+.sar-statut{min-width:60px;}
+.sar-actions{display:flex;gap:4px;margin-left:auto;flex-shrink:0;}
+/* Ligne "non classés" */
+.stock-unclassed-header{padding:9px 16px;background:var(--bg);font-size:12px;color:var(--text3);font-style:italic;cursor:pointer;border-top:1px solid var(--border);}
+/* Chips résumé */
+.chip-art{background:var(--blue-bg);color:var(--blue);font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px;}
+.chip-warn{background:var(--amber-bg);color:var(--amber);font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px;}
+.chip-crit{background:var(--red-bg);color:var(--red);font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px;}
 </style>
 </head>
 <body>
@@ -277,12 +316,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         </select>
         <button class="btn btn-primary btn-sm" onclick="openNewArticle()">+ Nouvel article</button>
       </div>
-      <div class="table-wrap">
-        <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Diamètre</th><th>Stock</th><th>Min.</th>
-          <th id="stock-th-prix">Prix unit.</th><th id="stock-th-valeur">Valeur</th><th id="stock-th-fourn">Fournisseur</th>
-          <th>Statut</th><th></th></tr></thead>
-        <tbody id="stock-table"></tbody></table>
-      </div>
+      <div id="stock-accordion"></div>
       <div id="stock-empty" class="empty-state" style="display:none;">Aucun article trouvé.</div>
     </div>
 
@@ -1151,13 +1185,6 @@ function populateCatFilter(){
   }
 }
 function renderStock(){
-  // Adapter les colonnes selon le mode
-  const thPrix=document.getElementById('stock-th-prix');
-  const thValeur=document.getElementById('stock-th-valeur');
-  const thFourn=document.getElementById('stock-th-fourn');
-  if(thPrix) thPrix.textContent=CLIENT_MODE?'Prix HT':'Prix achat';
-  if(thValeur) { thValeur.style.display=CLIENT_MODE?'none':''; }
-  if(thFourn) { thFourn.style.display=CLIENT_MODE?'none':''; }
   if(famillesTree.length>0)peuplerFamilleSelect();else populateCatFilter();
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
   const cat=document.getElementById('filter-cat')?.value||'';
@@ -1167,11 +1194,7 @@ function renderStock(){
     return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
   });
   document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
-  if(famillesTree.length>0&&!document.getElementById('filter-cat')?.value&&!(document.getElementById('search-input')?.value||'')){
-    renderStockFamilleTree();
-  } else {
-    renderStockTable(filtered);
-  }
+  renderStockAccordion(filtered,!!(q||cat||status));
 }
 
 // ==================== PARETO ====================
@@ -1805,83 +1828,165 @@ function peuplerFamilleSelect(){
   }
 }
 
-function renderStockFamilleTree(){
-  const q=(document.getElementById('search-input')?.value||'').toLowerCase();
-  const cat=document.getElementById('filter-cat')?.value||'';
-  const status=document.getElementById('filter-status')?.value||'';
-  const filtered=stock.filter(a=>{
-    const mq=!q||a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).toLowerCase().includes(q);
-    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
-  });
-  document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
-  // Si aucune famille ou filtre catégorie simple, rendu tabulaire normal
-  if(famillesTree.length===0||cat||q){
-    renderStockTable(filtered);return;
+// État expand/collapse accordéon (Set des IDs ouverts)
+const _stockOpen=new Set();
+
+function renderStockAccordion(filtered,isFiltered){
+  const el=document.getElementById('stock-accordion');
+  if(!el)return;
+  // Si recherche/filtre actif ou pas de familles → liste plate
+  if(isFiltered||famillesTree.length===0){
+    el.innerHTML=renderStockFlatList(filtered);return;
   }
-  // Rendu arbre par famille
-  const tbody=document.getElementById('stock-table');
-  if(!tbody)return;
-  let html='';
   const rendered=new Set();
+  let html='';
   famillesTree.forEach(f=>{
-    const famArts=[];
-    const sfGroups=[];
+    // Collecter articles directs
+    const famDirect=[];
     (f.categories||[]).forEach(c=>{
-      const arts=filtered.filter(a=>a.categorie===c&&!rendered.has(a.id));
-      if(arts.length){famArts.push(...arts);arts.forEach(a=>rendered.add(a.id));}
+      filtered.filter(a=>a.categorie===c&&!rendered.has(a.id)).forEach(a=>{famDirect.push(a);rendered.add(a.id);});
     });
+    // Collecter par sous-famille
+    const sfGroups=[];
     (f.enfants||[]).forEach(sf=>{
       const sfArts=[];
       (sf.categories||[]).forEach(c=>{
-        const arts=filtered.filter(a=>a.categorie===c&&!rendered.has(a.id));
-        if(arts.length){sfArts.push(...arts);arts.forEach(a=>rendered.add(a.id));}
+        filtered.filter(a=>a.categorie===c&&!rendered.has(a.id)).forEach(a=>{sfArts.push(a);rendered.add(a.id);});
       });
       if(sfArts.length)sfGroups.push({sf,arts:sfArts});
     });
-    if(famArts.length||sfGroups.length){
-      html+=`<tr><td colspan="9" style="background:var(--bg2);font-weight:700;font-size:13px;padding:8px 12px;border-top:2px solid var(--border2);">📁 ${escH(f.nom)}</td></tr>`;
-      famArts.forEach(a=>{html+=stockRow(a);});
-      sfGroups.forEach(({sf,arts})=>{
-        html+=`<tr><td colspan="9" style="background:var(--bg);font-weight:600;font-size:12px;padding:6px 12px 6px 28px;color:var(--text2);">📁 ${escH(sf.nom)}</td></tr>`;
-        arts.forEach(a=>{html+=stockRow(a);});
-      });
-    }
+    const allArts=[...famDirect,...sfGroups.flatMap(g=>g.arts)];
+    if(!allArts.length)return;
+    const crit=allArts.filter(a=>getStatus(a)==='danger').length;
+    const warn=allArts.filter(a=>getStatus(a)==='warn').length;
+    const val=allArts.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
+    const isOpen=_stockOpen.has(f.id)||_stockOpen.size===0;// ouvert par défaut
+    html+=`<div class="stock-fam-block">
+      <div class="stock-fam-header" onclick="toggleStockFam('${f.id}',this)">
+        <span class="sfh-toggle${isOpen?' open':''}">▶</span>
+        <span class="sfh-nom">📁 ${escH(f.nom)}</span>
+        <div class="sfh-chips">
+          <span class="chip-art">${allArts.length} art.</span>
+          ${warn>0&&crit===0?`<span class="chip-warn">⚠ ${warn}</span>`:''}
+          ${crit>0?`<span class="chip-crit">🔴 ${crit}</span>`:''}
+        </div>
+        ${!CLIENT_MODE?`<span class="sfh-total">${val>0?val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+' €':'—'}</span>`:''}
+      </div>
+      <div class="stock-fam-body${isOpen?' open':''}" id="sfbody-${f.id}">
+        ${famDirect.map(a=>sarRow(a,false)).join('')}
+        ${sfGroups.map(({sf,arts})=>{
+          const sfOpen=_stockOpen.has(sf.id)||_stockOpen.size===0;
+          const sfCrit=arts.filter(a=>getStatus(a)==='danger').length;
+          const sfWarn=arts.filter(a=>getStatus(a)==='warn').length;
+          return`<div class="stock-sf-block">
+            <div class="stock-sf-header" onclick="toggleStockSF('${sf.id}',this)">
+              <span class="sfh-toggle${sfOpen?' open':''}">▶</span>
+              <span style="flex:1">📁 ${escH(sf.nom)}</span>
+              <span class="chip-art">${arts.length} art.</span>
+              ${sfWarn>0&&sfCrit===0?`<span class="chip-warn" style="margin-left:5px;">⚠ ${sfWarn}</span>`:''}
+              ${sfCrit>0?`<span class="chip-crit" style="margin-left:5px;">🔴 ${sfCrit}</span>`:''}
+            </div>
+            <div class="stock-sf-body${sfOpen?' open':''}" id="sfbody-${sf.id}">
+              ${arts.map(a=>sarRow(a,true)).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
   });
-  // Articles non classés
+  // Non classés
   const unclassed=filtered.filter(a=>!rendered.has(a.id));
   if(unclassed.length){
-    html+=`<tr><td colspan="9" style="background:var(--bg2);font-weight:600;font-size:12px;padding:6px 12px;color:var(--text3);">— Non classés</td></tr>`;
-    unclassed.forEach(a=>{html+=stockRow(a);});
+    const ucOpen=_stockOpen.has('__unclassed')||_stockOpen.size===0;
+    html+=`<div class="stock-fam-block">
+      <div class="stock-fam-header" onclick="toggleStockFam('__unclassed',this)" style="opacity:.7;">
+        <span class="sfh-toggle${ucOpen?' open':''}">▶</span>
+        <span class="sfh-nom" style="color:var(--text3);font-style:italic;">— Non classés</span>
+        <span class="chip-art">${unclassed.length} art.</span>
+      </div>
+      <div class="stock-fam-body${ucOpen?' open':''}" id="sfbody-__unclassed">
+        ${unclassed.map(a=>sarRow(a,false)).join('')}
+      </div>
+    </div>`;
   }
-  tbody.innerHTML=html||'';
+  el.innerHTML=html||'';
 }
 
-function renderStockTable(filtered){
-  const tbody=document.getElementById('stock-table');
-  if(!tbody)return;
-  tbody.innerHTML=filtered.map(a=>stockRow(a)).join('');
+function toggleStockFam(id,headerEl){
+  const body=document.getElementById('sfbody-'+id);
+  const arrow=headerEl.querySelector('.sfh-toggle');
+  if(!body)return;
+  const isOpen=body.classList.toggle('open');
+  if(arrow)arrow.classList.toggle('open',isOpen);
+  if(isOpen)_stockOpen.add(id);else _stockOpen.delete(id);
 }
 
-function stockRow(a){
-  const s=getStatus(a),val=a.stock*a.prixUnitaire;
+function toggleStockSF(id,headerEl){
+  const body=document.getElementById('sfbody-'+id);
+  const arrow=headerEl.querySelector('.sfh-toggle');
+  if(!body)return;
+  const isOpen=body.classList.toggle('open');
+  if(arrow)arrow.classList.toggle('open',isOpen);
+  if(isOpen)_stockOpen.add(id);else _stockOpen.delete(id);
+}
+
+function sarRow(a,indented){
+  const s=getStatus(a);
   const pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
   const color=s==='ok'?'var(--green)':s==='warn'?'var(--amber)':'var(--red)';
   const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
-  return`<tr>
-    <td><code>${a.id}</code></td><td>${a.categorie}</td><td>${a.diametre}</td>
-    <td><span class="${sc}">${a.stock}</span><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${color};"></div></div></td>
-    <td>${a.stockMin}</td>
+  const val=a.stock*a.prixUnitaire;
+  return`<div class="stock-art-row${indented?' indent-sf':''}">
+    <div class="sar-ref"><code>${a.id}</code></div>
+    <div class="sar-cat">${a.categorie}</div>
+    <div class="sar-diam">Ø ${a.diametre}</div>
+    <div class="sar-stock">
+      <span class="${sc}" style="font-weight:700;">${a.stock}</span>
+      <div class="prog-bar" style="margin-top:3px;"><div class="prog-fill" style="width:${pct}%;background:${color};"></div></div>
+    </div>
+    <div class="sar-min" title="Stock minimum">min. ${a.stockMin}</div>
     ${CLIENT_MODE
-      ? `<td>${a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—'}</td>`
-      : `<td>${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</td>
-         <td>${val>0?val.toFixed(2).replace('.',',')+' €':'—'}</td>
-         <td style="font-size:12px;color:var(--text3);">${a.fournisseur||'—'}</td>`
+      ? `<div class="sar-prix">${a.prixVente>0?a.prixVente.toFixed(2).replace('.',',')+' €':'—'}</div>`
+      : `<div class="sar-prix" title="Prix achat">${a.prixUnitaire>0?a.prixUnitaire.toFixed(2).replace('.',',')+' €':'—'}</div>`
     }
-    <td>${statusLabel(s)}</td>
-    <td>${CLIENT_MODE?'':`<button class="btn btn-xs" onclick="openMouvement('${a.id}')">±</button>
-       <button class="btn btn-xs" style="margin-left:3px;" onclick="showQR('${a.id}')">QR</button>
-       <button class="btn btn-xs" style="margin-left:3px;" onclick="editArticle('${a.id}')">✏</button>`
-    }</td></tr>`;
+    <div class="sar-statut">${statusLabel(s)}</div>
+    <div class="sar-actions">${CLIENT_MODE?'':`
+      <button class="btn btn-xs" onclick="openMouvement('${a.id}')" title="Mouvement stock">±</button>
+      <button class="btn btn-xs" onclick="showQR('${a.id}')" title="QR Code">QR</button>
+      <button class="btn btn-xs" onclick="editArticle('${a.id}')" title="Modifier">✏</button>
+      <button class="btn btn-xs btn-danger" onclick="deleteArticle('${a.id}')" title="Supprimer" style="margin-left:2px;">🗑</button>`
+    }</div>
+  </div>`;
+}
+
+function renderStockFlatList(filtered){
+  if(!filtered.length)return'';
+  const fmt=(a)=>sarRow(a,false);
+  // Grouper par famille même en mode filtre
+  if(famillesTree.length===0)return filtered.map(fmt).join('');
+  const rendered=new Set();let html='';
+  famillesTree.forEach(f=>{
+    const allCats=[];
+    (f.categories||[]).forEach(c=>allCats.push(c));
+    (f.enfants||[]).forEach(sf=>(sf.categories||[]).forEach(c=>allCats.push(c)));
+    const arts=filtered.filter(a=>allCats.includes(a.categorie)&&!rendered.has(a.id));
+    if(!arts.length)return;
+    arts.forEach(a=>rendered.add(a.id));
+    html+=`<div style="font-size:11px;font-weight:600;color:var(--text3);padding:4px 8px;margin-top:8px;text-transform:uppercase;letter-spacing:.05em;">📁 ${escH(f.nom)}</div>`;
+    html+=arts.map(fmt).join('');
+  });
+  filtered.filter(a=>!rendered.has(a.id)).forEach(a=>{html+=fmt(a);});
+  return html;
+}
+
+// deleteArticle — suppression depuis la vue stock
+async function deleteArticle(id){
+  if(!confirm('Supprimer l\'article '+id+' ?'))return;
+  const {error}=await db.from('stock').delete().eq('id',id);
+  if(error){showToast('❌ Erreur: '+error.message);return;}
+  stock=stock.filter(a=>a.id!==id);
+  renderStock();renderDashboard();updateBadges();
+  showToast('Article supprimé');
 }
 
 // ==================== COMMANDES — FONCTIONS MANQUANTES ====================
