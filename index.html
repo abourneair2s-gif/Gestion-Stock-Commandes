@@ -393,12 +393,20 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <!-- COMMANDES -->
     <div class="page" id="page-commandes">
       <div class="section-header">
-        <div class="section-title">Demandes de matériel par chantier</div>
-        <button class="btn btn-primary btn-sm" onclick="openCmdModal()">+ Nouvelle demande</button>
+        <div class="section-title" id="cmd-page-title">Demandes de matériel</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <select id="cmd-filter-statut" onchange="renderCommandes()" class="admin-only" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);">
+            <option value="">Tous statuts</option>
+            <option value="en_attente">En attente</option>
+            <option value="approuvee">Approuvées</option>
+            <option value="refusee">Refusées</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="openCmdModal()">+ Nouvelle demande</button>
+        </div>
       </div>
       <div class="table-wrap">
-        <table><thead><tr><th>N°</th><th>Date</th><th>Chantier</th><th>Articles</th><th>Urgence</th><th>Statut</th><th></th></tr></thead>
-        <tbody id="commandes-table"></tbody></table>
+        <table><thead><tr><th>N°</th><th>Date</th><th>Chantier</th><th>Demandeur</th><th>Urgence</th><th>Articles</th><th>Statut</th><th></th></tr></thead>
+        <tbody id="cmd-table"></tbody></table>
       </div>
       <div id="cmd-empty" class="empty-state" style="display:none;">Aucune commande pour l'instant.</div>
     </div>
@@ -1465,14 +1473,19 @@ function printQR(){
 // ==================== RENDER COMMANDES ====================
 function renderCommandes(){
   const tbody=document.getElementById('cmd-table');if(!tbody)return;
-  const filtered=commandes.filter(c=>{
-    const s=document.getElementById('cmd-filter-statut')?.value||'';
-    return !s||c.statut===s;
+  const statutFilt=document.getElementById('cmd-filter-statut')?.value||'';
+  // En mode client : afficher uniquement les commandes de la session client
+  let filtered=commandes.filter(c=>{
+    if(CLIENT_MODE&&c.source!=='client')return false;
+    return !statutFilt||c.statut===statutFilt;
   });
-  if(filtered.length===0){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;">Aucune commande.</td></tr>';return;}
+  if(filtered.length===0){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;">'+(CLIENT_MODE?'Aucune demande soumise.':'Aucune commande.')+'</td></tr>';
+    return;
+  }
   tbody.innerHTML=filtered.sort((a,b)=>b.num-a.num).map(c=>{
     const urgColor=c.urgence==='critique'?'var(--red)':c.urgence==='urgent'?'var(--amber)':'var(--green)';
-    const statLabel={'en_attente':'En attente','approuvee':'Approuvee','refusee':'Refusee'}[c.statut]||c.statut;
+    const statLabel={'en_attente':'En attente ⏳','approuvee':'✅ Approuvée','refusee':'❌ Refusée'}[c.statut]||c.statut;
     const statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
     const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
     const nbArt=(c.items||[]).length;
@@ -1483,14 +1496,14 @@ function renderCommandes(){
       <td><span style="color:${urgColor};font-weight:600;">${c.urgence||''}</span></td>
       <td>${nbArt} article(s)</td>
       <td><span style="color:${statColor};font-weight:600;">${statLabel}</span></td>
-      <td style="text-align:right;white-space:nowrap;">
-        <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Detail</button>
-        ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">pencil</button>
-        <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">v</button>
-        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">x</button>`:''}
-        <button class="btn btn-xs" onclick="printCmd('${c.id}')" style="margin-left:3px;">print</button>
-        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">del</button>
-      </td></tr>`;
+      ${!CLIENT_MODE?`<td style="text-align:right;white-space:nowrap;">
+        <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
+        ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
+        <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✕</button>`:''}
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">🗑</button>
+      </td>`:`<td style="text-align:right;"><button class="btn btn-xs" onclick="viewCmd('${c.id}')">Voir</button></td>`}
+    </tr>`;
   }).join('');
 }
 function viewCmd(id){
@@ -2121,12 +2134,11 @@ function cmdSelectSF(el,famId,sfId){
 }
 
 function artCmdRow(a){
-  const s=getStatus(a);const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
   return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;" onclick="addCmdItem('${a.id}')" onmouseenter="this.style.background='var(--green-bg)'" onmouseleave="this.style.background=''">
     <code style="font-size:12px;font-weight:700;min-width:80px;">${a.id}</code>
     <span style="font-size:12px;color:var(--text2);">Ø ${a.diametre}</span>
-    <span class="${sc}" style="font-size:12px;font-weight:700;margin-left:auto;">${a.stock}</span>
-    <span style="font-size:18px;color:var(--green);font-weight:700;padding-left:6px;">+</span>
+    ${CLIENT_MODE?'':`<span class="${getStatus(a)==='ok'?'stock-ok':getStatus(a)==='warn'?'stock-warn':'stock-danger'}" style="font-size:12px;font-weight:700;margin-left:auto;">${a.stock}</span>`}
+    <span style="font-size:18px;color:var(--green);font-weight:700;${CLIENT_MODE?'margin-left:auto;':''}padding-left:6px;">+</span>
   </div>`;
 }
 
