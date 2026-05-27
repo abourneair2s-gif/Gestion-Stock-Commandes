@@ -236,6 +236,10 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .archives-section{margin-top:20px;border-top:1px solid var(--border);padding-top:14px;}
 .archives-toggle{cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;user-select:none;margin-bottom:10px;}
 .archives-toggle:hover{color:var(--blue);}
+
+.badge-reliquat{background:#fff3e0;color:#e65100;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;border:1px solid #ffb74d;}
+.reliquat-row{background:#fff8f0 !important;}
+.reliquat-cell{color:#e65100;font-weight:700;}
 </style>
 </head>
 <body>
@@ -419,6 +423,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
             <option value="">Tous statuts</option>
             <option value="en_attente">En attente</option>
             <option value="approuvee">Approuvées</option>
+            <option value="approuvee_partielle">⚠ Reliquat</option>
             <option value="refusee">Refusées</option>
           </select>
           <button class="btn btn-primary btn-sm" onclick="openCmdModal()">+ Nouvelle demande</button>
@@ -1097,9 +1102,10 @@ function getAlerts(){return stock.filter(a=>getStatus(a)!=='ok');}
 function getCmdPending(){return commandes.filter(c=>c.statut==='en_attente');}
 function updateBadges(){
   const a=getAlerts().length,p=getCmdPending().length;
+  const reliquats=commandes.filter(c=>c.statut==='approuvee_partielle').length;
   const sa=document.getElementById('sb-alert-count'),sc=document.getElementById('sb-cmd-count');
   if(sa){sa.textContent=a;sa.style.display=a>0?'':'none';}
-  if(sc){sc.textContent=p;sc.style.display=p>0?'':'none';}
+  if(sc){sc.textContent=p+reliquats;sc.style.display=(p+reliquats)>0?'':'none';}
 }
 function cmdBadge(s){
   return{en_attente:'<span class="badge badge-blue">En attente</span>',approuvee:'<span class="badge badge-ok">Approuvée</span>',refusee:'<span class="badge badge-danger">Refusée</span>'}[s]||s;
@@ -1512,8 +1518,8 @@ function renderCommandes(){
   }
   tbody.innerHTML=filtered.sort((a,b)=>b.num-a.num).map(c=>{
     const urgColor=c.urgence==='critique'?'var(--red)':c.urgence==='urgent'?'var(--amber)':'var(--green)';
-    const statLabel={'en_attente':'En attente ⏳','approuvee':'✅ Approuvée','refusee':'❌ Refusée'}[c.statut]||c.statut;
-    const statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
+    const statLabel={'en_attente':'En attente ⏳','approuvee':'✅ Approuvée','refusee':'❌ Refusée','approuvee_partielle':'⚠ Reliquat'}[c.statut]||c.statut;
+    const statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)','approuvee_partielle':'#e65100'}[c.statut]||'';
     const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
     const nbArt=(c.items||[]).length;
     return`<tr>
@@ -1527,7 +1533,7 @@ function renderCommandes(){
         <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
         ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
         <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
-        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✕</button>`:''}
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✕</button>`:c.statut==='approuvee_partielle'?`<button class="btn btn-xs" style="margin-left:3px;border-color:#888;color:#555;" onclick="abandonnerReliquat('${c.id}')">✖ Abandon</button>`:''}
         <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">🗑</button>
       </td>`:`<td style="text-align:right;"><button class="btn btn-xs" onclick="viewCmd('${c.id}')">Voir</button></td>`}
     </tr>`;
@@ -1537,33 +1543,41 @@ function viewCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
   const date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
   const statLabel={'en_attente':'⏳ En attente','approuvee':'✅ Approuvée','refusee':'❌ Refusée'}[c.statut]||c.statut;
-  const statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)'}[c.statut]||'';
+  const statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)','approuvee_partielle':'#e65100'}[c.statut]||'';
   document.getElementById('cmd-detail-title').textContent='Commande #'+String(c.num).padStart(3,'0')+' — '+c.chantier;
   // Tableau articles : masquer colonne Stock en mode client
   const thStock=CLIENT_MODE?'':'<th>Stock</th>';
   const tdStock=CLIENT_MODE?'':(art)=>'<td>'+art.stock+'</td>';
   const prixKey=CLIENT_MODE?'prixVente':'prixUnitaire';
   const prixLabel=CLIENT_MODE?'P.U. vente HT':'P.U. achat';
+  const hasReliquat=(c.items||[]).some(i=>i.qtyReliquat>0);
   let total=0;
   const rows=(c.items||[]).map(i=>{
-    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:'?',prixVente:0,prixUnitaire:0};
+    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',stock:0,prixVente:0,prixUnitaire:0};
     const pu=art[prixKey]||0;
-    const ligne=i.qty*pu;
-    total+=ligne;
+    const sorti=i.qtySorti!=null?i.qtySorti:i.qty;
+    const reliquat=i.qtyReliquat||0;
+    const ligne=sorti*pu;total+=ligne;
     const puStr=pu>0?pu.toFixed(2).replace('.',',')+' €':'—';
     const ligneStr=ligne>0?ligne.toFixed(2).replace('.',',')+' €':'—';
-    return'<tr>'
+    const isRel=reliquat>0;
+    return'<tr class="'+(isRel?'reliquat-row':'')+'">'
       +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);"><code>'+i.id+'</code></td>'
       +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);">'+art.categorie+' Ø'+art.diametre+'</td>'
       +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:center;font-weight:700;">'+i.qty+'</td>'
+      +(hasReliquat
+        ?'<td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:center;color:var(--green);font-weight:700;">'+sorti+'</td>'
+         +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:center;" class="'+(isRel?'reliquat-cell':'')+'">'+( isRel?'⚠ '+reliquat:'—')+'</td>'
+        :'')
       +(CLIENT_MODE?'':'<td style="padding:5px 10px;border-bottom:1px solid var(--border);">'+art.stock+'</td>')
       +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;color:var(--text2);">'+puStr+'</td>'
       +'<td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:700;">'+ligneStr+'</td>'
       +'</tr>';
   }).join('');
   const totalStr=total>0?total.toFixed(2).replace('.',',')+' €':'—';
+  const colSpanTotal=CLIENT_MODE?(hasReliquat?6:4):(hasReliquat?7:5);
   const totalRow='<tr style="background:var(--bg2);">'
-    +'<td colspan="'+(CLIENT_MODE?4:5)+'" style="padding:8px 10px;font-weight:700;text-align:right;">TOTAL</td>'
+    +'<td colspan="'+colSpanTotal+'" style="padding:8px 10px;font-weight:700;text-align:right;">'+(hasReliquat?'TOTAL SORTI':'TOTAL')+'</td>'
     +'<td style="padding:8px 10px;font-weight:700;text-align:right;font-size:15px;color:var(--blue);">'+totalStr+'</td>'
     +'</tr>';
   document.getElementById('cmd-detail-body').innerHTML=
@@ -1575,10 +1589,11 @@ function viewCmd(id){
     +'<thead><tr style="background:var(--bg2);">'
     +'<th style="padding:6px 10px;text-align:left;">Réf.</th>'
     +'<th style="padding:6px 10px;text-align:left;">Article</th>'
-    +'<th style="padding:6px 10px;text-align:center;">Qté</th>'
-    +(CLIENT_MODE?'':'<th style="padding:6px 10px;">Stock</th>')
+    +'<th style="padding:6px 10px;text-align:center;">Demandé</th>'
+    +(hasReliquat?'<th style="padding:6px 10px;text-align:center;color:var(--green);">✅ Sorti</th><th style="padding:6px 10px;text-align:center;color:#e65100;">⚠ Reliquat</th>':'')
+    +(CLIENT_MODE?'':'<th style="padding:6px 10px;">Stock actuel</th>')
     +'<th style="padding:6px 10px;text-align:right;">'+prixLabel+'</th>'
-    +'<th style="padding:6px 10px;text-align:right;">Total</th>'
+    +'<th style="padding:6px 10px;text-align:right;">Total sorti</th>'
     +'</tr></thead>'
     +'<tbody>'+rows+totalRow+'</tbody></table>';
   const cid=c.id,isP=c.statut==='en_attente';
@@ -1586,14 +1601,16 @@ function viewCmd(id){
   const btnImprimer=`<button class="btn btn-sm" onclick="printCmd('${cid}')" style="gap:4px;">🖨 Imprimer</button>`;
   let footer=btnFermer+btnImprimer;
   if(CLIENT_MODE){
-    // Client : Modifier si en attente, pas de Refuser/Approuver
     if(isP) footer+=`<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">✏ Modifier</button>`;
   } else {
-    // Admin : tous les boutons
     if(isP) footer+=
       `<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">✏ Modifier</button>`+
       `<button class="btn btn-danger btn-sm" onclick="refuserCmd('${cid}');closeModal('modal-cmd-detail');">✕ Refuser</button>`+
       `<button class="btn btn-primary btn-sm" onclick="approuverCmd('${cid}');closeModal('modal-cmd-detail');">✓ Approuver</button>`;
+    else if(c.statut==='approuvee_partielle') footer+=
+      `<button class="btn btn-sm" style="background:var(--amber);color:#fff;border-color:var(--amber);" onclick="honorerReliquat('${cid}');">📦 Honorer le reliquat</button>`+
+      `<button class="btn btn-sm" style="border-color:#888;color:#555;" onclick="abandonnerReliquat('${cid}');" title="Clôturer sans honorer — conserve ce qui a été sorti">✖ Abandonner</button>`+
+      `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer tout</button>`;
     else footer+=`<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
   }
   document.getElementById('cmd-detail-footer').innerHTML=footer;
@@ -1645,12 +1662,26 @@ function printCmd(id){
 }
 async function approuverCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
-  for(const item of c.items||[]){const art=stock.find(a=>a.id===item.id);if(art){const ns=Math.max(0,art.stock-item.qty);await db.from('stock').update({stock:ns}).eq('id',item.id);}}
-  await db.from('commandes').update({statut:'approuvee'}).eq('id',id);
-  const idx=commandes.findIndex(x=>x.id===id);if(idx>-1)commandes[idx].statut='approuvee';
-  const {data:sd}=await db.from('stock').select('*').order('categorie').order('id');if(sd)stock=sd.map(adaptArticle);
-  renderCommandes();renderStock();renderDashboard();updateBadges();
-  showToast('Commande approuvee');
+  const itemsDetail=[];
+  let hasReliquat=false;
+  for(const item of c.items||[]){
+    const art=stock.find(a=>a.id===item.id);
+    const dispo=art?art.stock:0;
+    const sorti=Math.min(dispo,item.qty);
+    const reliquat=item.qty-sorti;
+    if(reliquat>0)hasReliquat=true;
+    if(sorti>0&&art){
+      await db.from('stock').update({stock:art.stock-sorti}).eq('id',item.id);
+      art.stock=art.stock-sorti;
+    }
+    itemsDetail.push({...item,qtySorti:sorti,qtyReliquat:reliquat});
+  }
+  const newStatut=hasReliquat?'approuvee_partielle':'approuvee';
+  await db.from('commandes').update({statut:newStatut,items:itemsDetail}).eq('id',id);
+  const idx=commandes.findIndex(x=>x.id===id);
+  if(idx>-1){commandes[idx].statut=newStatut;commandes[idx].items=itemsDetail;}
+  renderCommandes();renderStock();updateBadges();
+  showToast(hasReliquat?'⚠ Approuvée avec reliquat':'✅ Commande approuvée');
 }
 async function refuserCmd(id){
   await db.from('commandes').update({statut:'refusee'}).eq('id',id);
@@ -3011,6 +3042,47 @@ async function saveChantierHeures(nom, val){
   const title=document.getElementById('chantier-detail-title');
   if(title&&title.textContent.includes(nom))showChantierDetail(nom);
   showToast('⏱ Heures mises à jour');
+}
+
+async function honorerReliquat(id){
+  closeModal('modal-cmd-detail');
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  let restReliquat=false;
+  const updatedItems=[];
+  for(const item of c.items||[]){
+    const rel=item.qtyReliquat||0;
+    if(rel<=0){updatedItems.push(item);continue;}
+    const art=stock.find(a=>a.id===item.id);
+    const dispo=art?art.stock:0;
+    const sorti=Math.min(dispo,rel);
+    const newRel=rel-sorti;
+    if(newRel>0)restReliquat=true;
+    if(sorti>0&&art){
+      await db.from('stock').update({stock:art.stock-sorti}).eq('id',item.id);
+      art.stock=art.stock-sorti;
+    }
+    updatedItems.push({...item,qtySorti:(item.qtySorti||0)+sorti,qtyReliquat:newRel});
+  }
+  const newStatut=restReliquat?'approuvee_partielle':'approuvee';
+  await db.from('commandes').update({statut:newStatut,items:updatedItems}).eq('id',id);
+  const idx=commandes.findIndex(x=>x.id===id);
+  if(idx>-1){commandes[idx].statut=newStatut;commandes[idx].items=updatedItems;}
+  renderCommandes();renderStock();updateBadges();
+  if(restReliquat){showToast('⚠ Reliquat partiel encore en attente');viewCmd(id);}
+  else showToast('✅ Reliquat entièrement honoré !');
+}
+
+async function abandonnerReliquat(id){
+  if(!confirm('Abandonner le reliquat ?\n\nLe stock déjà sorti reste déduit. Seule la partie non livrée est annulée.\nLa commande sera marquée "Approuvée partiellement clôturée".'))return;
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  // Mettre qtyReliquat à 0 pour tous les articles — ce qui a été sorti reste sorti
+  const updatedItems=(c.items||[]).map(i=>({...i,qtyReliquat:0}));
+  await db.from('commandes').update({statut:'approuvee',items:updatedItems}).eq('id',id);
+  const idx=commandes.findIndex(x=>x.id===id);
+  if(idx>-1){commandes[idx].statut='approuvee';commandes[idx].items=updatedItems;}
+  closeModal('modal-cmd-detail');
+  renderCommandes();renderStock();updateBadges();
+  showToast('✖ Reliquat abandonné — commande clôturée');
 }
 
 initApp();
