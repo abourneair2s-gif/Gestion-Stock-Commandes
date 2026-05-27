@@ -1041,12 +1041,13 @@ async function loadAllData() {
 }
 
 function subscribeRealtime() {
-  db.channel('stockpro-realtime')
+  // Nom de channel unique par session pour éviter les conflits entre onglets
+  const channelName = 'stockpro-' + Math.random().toString(36).slice(2,8);
+  db.channel(channelName)
     .on('postgres_changes', {event:'*', schema:'public', table:'stock'}, async () => {
       const {data} = await db.from('stock').select('*').order('categorie').order('id');
       stock = (data||[]).map(adaptArticle);
       renderStock(); renderDashboard(); updateBadges();
-      showToast('🔄 Stock mis à jour en temps réel');
     })
     .on('postgres_changes', {event:'*', schema:'public', table:'commandes'}, async () => {
       const {data} = await db.from('commandes').select('*').order('created_at',{ascending:false});
@@ -1068,12 +1069,42 @@ function subscribeRealtime() {
       if (data) data.forEach(row => {
         if (row.key === 'categories') { categories = row.value; renderCategories(); }
         if (row.key === 'chantiers') { chantiers = Array.isArray(row.value)?row.value:[]; renderChantiers(); }
+        if (row.key === 'familles') { famillesTree = Array.isArray(row.value)?row.value:[]; renderStock(); renderDashboard(); }
         if (row.key === 'cmd_counter') cmdCounter = row.value;
       });
     })
     .subscribe((status) => {
       setConnected(status === 'SUBSCRIBED');
+      if (status === 'SUBSCRIBED') {
+        console.log('Realtime connecté:', channelName);
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('Realtime erreur:', status, '— bascule sur polling');
+        startPolling();
+      }
     });
+  // Polling de secours toutes les 20s si realtime échoue
+  startPolling();
+}
+
+let _pollInterval = null;
+function startPolling() {
+  if (_pollInterval) return;
+  _pollInterval = setInterval(async () => {
+    try {
+      const [{data:s},{data:c},{data:cfg}] = await Promise.all([
+        db.from('stock').select('*').order('categorie').order('id'),
+        db.from('commandes').select('*').order('created_at',{ascending:false}),
+        db.from('config').select('*'),
+      ]);
+      if(s){ const ns=s.map(adaptArticle); if(JSON.stringify(ns)!==JSON.stringify(stock)){stock=ns;renderStock();renderDashboard();updateBadges();} }
+      if(c){ if(JSON.stringify(c)!==JSON.stringify(commandes)){commandes=c;renderCommandes();updateBadges();} }
+      if(cfg){ cfg.forEach(row=>{
+        if(row.key==='familles'&&JSON.stringify(row.value)!==JSON.stringify(famillesTree)){famillesTree=Array.isArray(row.value)?row.value:[];renderStock();renderDashboard();}
+        if(row.key==='chantiers'&&JSON.stringify(row.value)!==JSON.stringify(chantiers)){chantiers=Array.isArray(row.value)?row.value:[];renderChantiers();}
+        if(row.key==='categories'&&JSON.stringify(row.value)!==JSON.stringify(categories)){categories=row.value;renderCategories();}
+      });}
+    } catch(e) { console.warn('Poll erreur:', e); }
+  }, 20000);
 }
 
 function setConnected(ok) {
