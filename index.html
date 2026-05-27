@@ -1624,12 +1624,26 @@ function printCmd(id){
   const pKey=CLIENT_MODE?'prixVente':'prixUnitaire';
   const pLabel=CLIENT_MODE?'P.U. vente HT':'P.U. achat';
   let printTotal=0;
+  // Calculer reliquats prévus basés sur stock actuel (si commande en attente)
+  const isPending=c.statut==='en_attente';
+  const hasAnyReliquat=(c.items||[]).some(i=>{
+    if(i.qtyReliquat>0)return true;
+    if(isPending){const art=stock.find(a=>a.id===i.id);return art&&art.stock<i.qty;}
+    return false;
+  });
   const rows=(c.items||[]).map(i=>{
-    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',prixVente:0,prixUnitaire:0};
-    const pu=art[pKey]||0;const ligne=i.qty*pu;printTotal+=ligne;
+    const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',prixVente:0,prixUnitaire:0,stock:0};
+    const pu=art[pKey]||0;
+    // Sorti = qtySorti si validée, sinon estimation sur stock actuel
+    const sorti=i.qtySorti!=null?i.qtySorti:(isPending?Math.min(art.stock||0,i.qty):i.qty);
+    const reliquat=i.qtyReliquat!=null?i.qtyReliquat:(isPending?Math.max(0,i.qty-(art.stock||0)):0);
+    const ligne=sorti*pu;printTotal+=ligne;
     const puStr=pu>0?pu.toFixed(2).replace('.',',')+' €':'—';
     const ligneStr=ligne>0?ligne.toFixed(2).replace('.',',')+' €':'—';
-    return`<tr><td style="padding:6px 10px;border-bottom:1px solid #ddd;"><code>${i.id}</code></td><td style="padding:6px 10px;border-bottom:1px solid #ddd;">${art.categorie} Ø${art.diametre}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700;">${i.qty}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;color:#555;">${puStr}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;font-weight:700;">${ligneStr}</td></tr>`;
+    const relCell=hasAnyReliquat
+      ?`<td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;${sorti<i.qty?'color:#e65100;font-weight:700;':''}">${sorti<i.qty?'⚠ '+reliquat:'—'}</td>`
+      :'';
+    return`<tr style="${reliquat>0?'background:#fff8f0;':''}"><td style="padding:6px 10px;border-bottom:1px solid #ddd;"><code>${i.id}</code></td><td style="padding:6px 10px;border-bottom:1px solid #ddd;">${art.categorie} Ø${art.diametre}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700;">${i.qty}</td>${hasAnyReliquat?`<td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;color:green;font-weight:700;">${sorti}</td>`:''}${relCell}<td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;color:#555;">${puStr}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;font-weight:700;">${ligneStr}</td></tr>`;
   }).join('');
   const printTotalStr=printTotal>0?printTotal.toFixed(2).replace('.',',')+' €':'—';
   const w=window.open('','_blank');
@@ -1652,9 +1666,24 @@ function printCmd(id){
     ${c.notes?'<br><strong>Notes :</strong> '+c.notes:''}
   </div>
   <table>
-    <thead><tr><th>Référence</th><th>Article</th><th style="text-align:center;">Quantité</th><th style="text-align:right;">${pLabel}</th><th style="text-align:right;">Total</th></tr></thead>
-    <tbody>${rows}<tr style="background:#f5f4f0;"><td colspan="3" style="padding:8px 10px;font-weight:700;text-align:right;">TOTAL</td><td></td><td style="padding:8px 10px;font-weight:700;text-align:right;font-size:15px;">${printTotalStr}</td></tr></tbody>
+    <thead><tr>
+      <th>Référence</th>
+      <th>Article</th>
+      <th style="text-align:center;">Demandé</th>
+      ${hasAnyReliquat?'<th style="text-align:center;color:green;">Sorti</th><th style="text-align:center;color:#e65100;">⚠ Reliquat</th>':''}
+      <th style="text-align:right;">${pLabel}</th>
+      <th style="text-align:right;">Total sorti</th>
+    </tr></thead>
+    <tbody>
+      ${rows}
+      <tr style="background:#f5f4f0;">
+        <td colspan="${hasAnyReliquat?5:3}" style="padding:8px 10px;font-weight:700;text-align:right;">${hasAnyReliquat?'TOTAL SORTI':'TOTAL'}</td>
+        <td></td>
+        <td style="padding:8px 10px;font-weight:700;text-align:right;font-size:15px;">${printTotalStr}</td>
+      </tr>
+    </tbody>
   </table>
+  ${hasAnyReliquat?'<p style="margin-top:16px;font-size:12px;color:#e65100;border:1px solid #ffb74d;border-radius:6px;padding:8px 12px;background:#fff8f0;">⚠ Certains articles sont en <strong>reliquat</strong> : le stock disponible au moment de la commande était insuffisant. Les quantités en reliquat seront livrées lors du réapprovisionnement.</p>':''}
   <div class="footer">StockPro AIR2S — Imprimé le ${new Date().toLocaleString('fr-FR')}</div>
   <script>window.onload=()=>{window.print();}<\/script>
   </body></html>`);
@@ -2659,14 +2688,26 @@ function renderCmdItems(){
   if(!el)return;
   if(empty)empty.style.display=cmdItems.length?'none':'';
   el.innerHTML=cmdItems.map((item,i)=>{
-    const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:'?'};
-    return`<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:4px;">
-      <code style="flex:1;font-size:12px;">${item.id}</code>
-      <span style="font-size:11px;color:var(--text2);">${art.categorie} ${art.diametre}</span>
-      <button onclick="changeCmdItemQty(${i},-1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">−</button>
-      <strong style="min-width:24px;text-align:center;">${item.qty}</strong>
-      <button onclick="changeCmdItemQty(${i},1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">+</button>
-      <button onclick="removeCmdItem(${i})" style="color:var(--red);border:none;background:none;cursor:pointer;font-size:16px;">×</button>
+    const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:0};
+    const dispo=typeof art.stock==='number'?art.stock:0;
+    const sorti=Math.min(dispo,item.qty);
+    const reliquat=item.qty-sorti;
+    const hasRel=reliquat>0;
+    const stockColor=dispo===0?'var(--red)':dispo<item.qty?'var(--amber)':'var(--green)';
+    return`<div style="background:var(--surface);border:1.5px solid ${hasRel?'#ffb74d':'var(--border)'};border-radius:var(--radius-sm);margin-bottom:6px;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;">
+        <code style="font-size:12px;font-weight:700;flex:1;">${item.id}</code>
+        <span style="font-size:11px;color:var(--text2);">${art.categorie} ${art.diametre}</span>
+        <span style="font-size:11px;font-weight:600;color:${stockColor};" title="Stock disponible">stock: ${dispo}</span>
+        <button onclick="changeCmdItemQty(${i},-1)" style="width:26px;height:26px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">−</button>
+        <strong style="min-width:24px;text-align:center;">${item.qty}</strong>
+        <button onclick="changeCmdItemQty(${i},1)" style="width:26px;height:26px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">+</button>
+        <button onclick="removeCmdItem(${i})" style="color:var(--red);border:none;background:none;cursor:pointer;font-size:16px;padding:0 4px;">×</button>
+      </div>
+      ${hasRel?`<div style="display:flex;gap:12px;padding:4px 10px 6px;background:#fff8f0;border-top:1px dashed #ffb74d;font-size:11px;">
+        <span style="color:var(--green);">✅ Sorti : <strong>${sorti}</strong></span>
+        <span style="color:#e65100;">⚠ Reliquat prévu : <strong>${reliquat}</strong></span>
+      </div>`:''}
     </div>`;
   }).join('');
 }
