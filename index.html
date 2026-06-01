@@ -2370,7 +2370,7 @@ function renderStockAccordion(filtered,isFiltered){
     const crit=allArts.filter(a=>getStatus(a)==='danger').length;
     const warn=allArts.filter(a=>getStatus(a)==='warn').length;
     const val=allArts.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
-    const isOpen=_stockOpen.has(f.id)||_stockOpen.size===0;
+    const isOpen=_stockOpen.has(f.id);
     html+=`<div class="stock-fam-block">
       <div class="stock-fam-header" onclick="toggleStockFam('${f.id}',this)">
         <span class="sfh-toggle${isOpen?' open':''}">▶</span>
@@ -2386,7 +2386,7 @@ function renderStockAccordion(filtered,isFiltered){
         ${!allArts.length?'<div style="padding:12px 16px;font-size:12px;color:var(--text3);font-style:italic;">Aucun article — assignez des catégories à cette famille via le menu Familles.</div>':''}
         ${famDirect.map(a=>sarRow(a,false)).join('')}
         ${sfGroups.map(({sf,arts})=>{
-          const sfOpen=_stockOpen.has(sf.id)||_stockOpen.size===0;
+          const sfOpen=_stockOpen.has(sf.id);
           const sfCrit=arts.filter(a=>getStatus(a)==='danger').length;
           const sfWarn=arts.filter(a=>getStatus(a)==='warn').length;
           return`<div class="stock-sf-block">
@@ -2408,7 +2408,7 @@ function renderStockAccordion(filtered,isFiltered){
   // Non classés
   const unclassed=filtered.filter(a=>!rendered.has(a.id));
   if(unclassed.length){
-    const ucOpen=_stockOpen.has('__unclassed')||_stockOpen.size===0;
+    const ucOpen=_stockOpen.has('__unclassed');
     html+=`<div class="stock-fam-block">
       <div class="stock-fam-header" onclick="toggleStockFam('__unclassed',this)" style="opacity:.7;">
         <span class="sfh-toggle${ucOpen?' open':''}">▶</span>
