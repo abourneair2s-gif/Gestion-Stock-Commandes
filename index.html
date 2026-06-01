@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>StockPro — Gestion inventaire et commandes</title>
 <!-- Supabase: chargé en priorité (requis pour la connexion) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Librairies secondaires: chargées après sans bloquer -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
@@ -279,7 +280,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <button class="nav-btn" onclick="showPage('categories',this)" data-page="categories"><span class="nav-icon">🏷</span>Catégories</button>
   <button class="nav-btn" onclick="showPage('familles',this)" data-page="familles"><span class="nav-icon">🗂</span>Familles</button>
   <button class="nav-btn" onclick="showPage('parametres',this)" data-page="parametres"><span class="nav-icon">⚙️</span>Paramètres</button>
-  <button class="nav-btn" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);"><span class="nav-icon">📥</span>Exporter Excel</button>
+  <button class="nav-btn" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);" title="Export global : stock + alertes + historique"><span class="nav-icon">📥</span>Export global</button>
 </div>
 
 <div id="main">
@@ -3205,6 +3206,73 @@ function exportAlertesCSV(){
   a.download='Alertes_stock_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();
   showToast('📥 Export alertes généré');
+}
+
+function exportExcel(){
+  if(typeof XLSX==='undefined'){showToast('❌ Bibliothèque Excel non chargée');return;}
+  const wb=XLSX.utils.book_new();
+  const dateStr=new Date().toISOString().slice(0,10);
+
+  // ── Onglet 1 : Stock complet ──
+  const stockData=[
+    ['Référence','Catégorie','Diamètre','Stock actuel','Seuil min.','Statut','Prix achat €','Prix vente €','Valeur achat €','Fournisseur'],
+    ...stock.map(a=>{
+      const s=getStatus(a);
+      return[a.id,a.categorie,String(a.diametre),a.stock,a.stockMin,
+        s==='danger'?'Critique':s==='warn'?'Bas':'OK',
+        Number((a.prixUnitaire||0).toFixed(2)),
+        Number((a.prixVente||0).toFixed(2)),
+        Number((a.stock*(a.prixUnitaire||0)).toFixed(2)),
+        a.fournisseur||''];
+    }),
+    ['','','','','','TOTAL','','',Number(stock.reduce((s,a)=>s+a.stock*(a.prixUnitaire||0),0).toFixed(2)),''],
+  ];
+  const ws1=XLSX.utils.aoa_to_sheet(stockData);
+  // Largeurs colonnes
+  ws1['!cols']=[{wch:12},{wch:20},{wch:10},{wch:12},{wch:10},{wch:10},{wch:12},{wch:12},{wch:14},{wch:16}];
+  // Ligne total en gras (dernière ligne)
+  const lastRow=stockData.length;
+  ['A','B','C','D','E','F','G','H','I','J'].forEach(col=>{
+    const cell=ws1[col+lastRow];
+    if(cell)cell.s={font:{bold:true}};
+  });
+  XLSX.utils.book_append_sheet(wb,ws1,'Stock complet');
+
+  // ── Onglet 2 : Alertes ──
+  const alerts=getAlerts();
+  const alertData=[
+    ['Référence','Catégorie','Diamètre','Stock actuel','Seuil min.','Statut','Valeur achat €'],
+    ...(alerts.length
+      ? alerts.map(a=>{
+          const s=getStatus(a);
+          return[a.id,a.categorie,String(a.diametre),a.stock,a.stockMin,
+            s==='danger'?'Critique':'Bas',
+            Number((a.stock*(a.prixUnitaire||0)).toFixed(2))];
+        })
+      : [['Aucune alerte — tous les stocks sont OK','','','','','','']]),
+  ];
+  const ws2=XLSX.utils.aoa_to_sheet(alertData);
+  ws2['!cols']=[{wch:12},{wch:20},{wch:10},{wch:12},{wch:10},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Alertes');
+
+  // ── Onglet 3 : Historique ──
+  const histData=[
+    ['Date','Type','Référence','Catégorie','Diamètre','Quantité','Équipe','Note'],
+    ...(historique.length
+      ? historique.slice(0,1000).map(h=>{
+          const date=h.ts?new Date(h.ts).toLocaleString('fr-FR'):'';
+          const type=h.type==='in'?'Entrée':h.type==='out'?'Sortie':'Commande';
+          return[date,type,h.id||h.categorie||'',h.categorie||'',String(h.diametre||''),h.qty,h.equipe||'',h.note||''];
+        })
+      : [['Aucun mouvement enregistré','','','','','','','']]),
+  ];
+  const ws3=XLSX.utils.aoa_to_sheet(histData);
+  ws3['!cols']=[{wch:18},{wch:10},{wch:12},{wch:20},{wch:10},{wch:10},{wch:14},{wch:24}];
+  XLSX.utils.book_append_sheet(wb,ws3,'Historique');
+
+  // Télécharger
+  XLSX.writeFile(wb,'StockPro_'+dateStr+'.xlsx');
+  showToast('📥 Export Excel généré (3 onglets)');
 }
 
 initApp();
