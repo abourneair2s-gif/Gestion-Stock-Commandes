@@ -438,7 +438,10 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 
     <!-- ALERTES -->
     <div class="page" id="page-alertes">
-      <div class="info-box">Les alertes se déclenchent automatiquement quand le stock passe sous le seuil minimum.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div class="info-box" style="margin:0;flex:1;">Les alertes se déclenchent automatiquement quand le stock passe sous le seuil minimum.</div>
+        <button class="btn btn-sm" onclick="exportAlertesCSV()">📥 Export Excel</button>
+      </div>
       <div class="table-wrap">
         <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Stock actuel</th><th>Seuil min.</th><th>Statut</th><th></th></tr></thead>
         <tbody id="alertes-table"></tbody></table>
@@ -2056,10 +2059,36 @@ async function saveChantier(){const nom=document.getElementById('chantier-name')
 async function deleteChantier(nom){if(!confirm('Supprimer?'))return;const l=chantiers.filter(c=>c.nom!==nom);await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;renderChantiers();showToast('Supprime');}
 let etiqSelectedCat='';let etiqSelected=new Set();function renderAlertes(){
   const alerts=getAlerts();
-  const el=document.getElementById('alertes-list');if(!el)return;
-  if(alerts.length===0){el.innerHTML='<div style="text-align:center;color:var(--green);padding:20px;">Tous les stocks OK</div>';return;}
-  el.innerHTML=alerts.map(a=>{const s=getStatus(a);
-    return`<div class="alert-card"><div><strong>${a.id}</strong> - ${a.categorie} ${a.diametre}<br><small>Stock: <strong class="${s==='warn'?'stock-warn':'stock-danger'}">${a.stock}</strong> / Min: ${a.stockMin}</small></div><button class="btn btn-xs btn-primary" onclick="openMouvement('${a.id}')">Mouvement</button></div>`;}).join('');
+  // Remplacer toute la zone alertes par un rendu autonome (pas de table vide cachée)
+  const page=document.getElementById('page-alertes');
+  if(!page)return;
+  if(alerts.length===0){
+    page.querySelector('.table-wrap').innerHTML='<div style="text-align:center;color:var(--green);padding:30px;font-weight:600;font-size:14px;">✅ Tous les stocks sont au-dessus du seuil minimum</div>';
+    return;
+  }
+  const rows=alerts.map(a=>{
+    const s=getStatus(a);
+    const sc=s==='warn'?'stock-warn':'stock-danger';
+    const label=s==='warn'?'<span class="badge badge-warn">⚠ Bas</span>':'<span class="badge badge-danger">🔴 Critique</span>';
+    const pct=Math.min(100,Math.round(a.stock/Math.max(a.stockMin*1.5,1)*100));
+    const color=s==='warn'?'var(--amber)':'var(--red)';
+    return`<tr>
+      <td><code>${a.id}</code></td>
+      <td>${a.categorie}</td>
+      <td>${a.diametre}</td>
+      <td>
+        <span class="${sc}" style="font-weight:700;">${a.stock}</span>
+        <div class="prog-bar" style="margin-top:3px;"><div class="prog-fill" style="width:${pct}%;background:${color};"></div></div>
+      </td>
+      <td>${a.stockMin}</td>
+      <td>${label}</td>
+      <td><button class="btn btn-xs" onclick="openMouvement('${a.id}')">± Réappro</button></td>
+    </tr>`;
+  }).join('');
+  page.querySelector('.table-wrap').innerHTML=`<table><thead><tr>
+    <th>Référence</th><th>Catégorie</th><th>Ø</th>
+    <th>Stock actuel</th><th>Seuil min.</th><th>Statut</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
 }
 function renderHistorique(){
   const tbody=document.getElementById('hist-table');if(!tbody)return;
@@ -3155,6 +3184,27 @@ async function abandonnerReliquat(id){
   closeModal('modal-cmd-detail');
   renderCommandes();renderStock();updateBadges();
   showToast('✖ Reliquat abandonné — commande clôturée');
+}
+
+function exportAlertesCSV(){
+  const alerts=getAlerts();
+  if(!alerts.length){showToast('Aucune alerte à exporter');return;}
+  const BOM='\uFEFF';
+  const headers=['Référence','Catégorie','Diamètre','Stock actuel','Seuil min.','Statut','Valeur achat'];
+  const rows=alerts.map(a=>{
+    const s=getStatus(a);
+    const statut=s==='danger'?'Critique':s==='warn'?'Bas':'OK';
+    const val=(a.stock*(a.prixUnitaire||0)).toFixed(2);
+    return[a.id,a.categorie,a.diametre,a.stock,a.stockMin,statut,val];
+  });
+  const totalVal=alerts.reduce((s,a)=>s+a.stock*(a.prixUnitaire||0),0);
+  rows.push(['','','','','','TOTAL',totalVal.toFixed(2)]);
+  const csv=BOM+[headers,...rows].map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='Alertes_stock_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  showToast('📥 Export alertes généré');
 }
 
 initApp();
