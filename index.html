@@ -459,11 +459,17 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 
     <!-- HISTORIQUE -->
     <div class="page" id="page-historique">
-      <div class="search-bar">
-        <input type="search" id="hist-search" placeholder="Rechercher…" oninput="renderHistorique()">
-        <select id="hist-filter" onchange="renderHistorique()">
+      <div class="search-bar" style="flex-wrap:wrap;gap:6px;">
+        <input type="search" id="hist-search" placeholder="Rechercher…" oninput="renderHistorique()" style="flex:1;min-width:140px;">
+        <select id="hist-filter" onchange="renderHistorique()" style="font-size:12px;">
           <option value="">Tous types</option><option value="in">Entrées</option>
           <option value="out">Sorties</option><option value="cmd">Commandes</option>
+        </select>
+        <select id="hist-filter-fam" onchange="histSelectFam()" style="font-size:12px;">
+          <option value="">Toutes familles</option>
+        </select>
+        <select id="hist-filter-sf" onchange="renderHistorique()" style="font-size:12px;display:none;">
+          <option value="">Toutes sous-familles</option>
         </select>
         <button class="btn btn-sm" onclick="exportExcel()">📥 Exporter Excel</button>
       </div>
@@ -610,8 +616,11 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <input type="text" id="inv-search" placeholder="Rechercher…" oninput="filterInvTable()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;width:180px;">
-      <select id="inv-filter-fam" onchange="filterInvTable()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+      <select id="inv-filter-fam" onchange="invSelectFam()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
         <option value="">Toutes familles</option>
+      </select>
+      <select id="inv-filter-sf" onchange="filterInvTable()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;display:none;">
+        <option value="">Toutes sous-familles</option>
       </select>
       <button class="btn btn-primary btn-sm" onclick="saveInventaire()" id="inv-save-btn" style="display:none;">✅ Valider les corrections</button>
     </div>
@@ -2139,10 +2148,49 @@ let etiqSelectedCat='';let etiqSelected=new Set();function renderAlertes(){
     <th>Stock actuel</th><th>Seuil min.</th><th>Statut</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table>`;
 }
+function histSelectFam(){
+  const famId=document.getElementById('hist-filter-fam')?.value||'';
+  const sfSel=document.getElementById('hist-filter-sf');
+  if(!sfSel)return;
+  if(!famId){sfSel.style.display='none';sfSel.innerHTML='<option value="">Toutes sous-familles</option>';renderHistorique();return;}
+  const f=famillesTree.find(x=>x.id===famId);
+  const sfs=(f?.enfants||[]).filter(sf=>(sf.categories||[]).length);
+  if(!sfs.length){sfSel.style.display='none';sfSel.innerHTML='<option value="">Toutes sous-familles</option>';}
+  else{
+    sfSel.innerHTML='<option value="">Toutes sous-familles</option>';
+    sfs.forEach(sf=>{const o=document.createElement('option');o.value=sf.id;o.textContent='📁 '+sf.nom;sfSel.appendChild(o);});
+    sfSel.style.display='';
+  }
+  renderHistorique();
+}
+
+function populateHistFamFilter(){
+  const sel=document.getElementById('hist-filter-fam');if(!sel||sel.options.length>1)return;
+  famillesTree.forEach(f=>{const o=document.createElement('option');o.value=f.id;o.textContent='📁 '+f.nom;sel.appendChild(o);});
+}
+
 function renderHistorique(){
+  populateHistFamFilter();
   const tbody=document.getElementById('hist-table');if(!tbody)return;
-  const sorted=[...historique].sort((a,b)=>new Date(b.created_at||b.ts)-new Date(a.created_at||a.ts));
-  tbody.innerHTML=sorted.slice(0,200).map(h=>{const date=new Date(h.created_at||h.ts).toLocaleString('fr-FR');return'<tr><td style="font-size:11px;">'+date+'</td><td><span class="badge '+(h.type==='out'?'badge-danger':'badge-ok')+'">'+(h.type==='out'?'Sortie':'Entree')+'</span></td><td><code>'+(h.article_id||h.id)+'</code></td><td>'+(h.categorie||'')+'</td><td>'+(h.diametre||'')+'</td><td><strong>'+h.qty+'</strong></td><td>'+(h.new_stock??'')+'</td><td style="font-size:11px;">'+(h.equipe||'')+'</td><td style="font-size:11px;">'+(h.note||'')+'</td></tr>';}).join('');
+  const q=(document.getElementById('hist-search')?.value||'').toLowerCase();
+  const type=document.getElementById('hist-filter')?.value||'';
+  const famId=document.getElementById('hist-filter-fam')?.value||'';
+  const sfId=document.getElementById('hist-filter-sf')?.value||'';
+  // Calculer les catégories du filtre famille/SF
+  let famCats=null;
+  if(sfId){
+    famCats=[];
+    famillesTree.forEach(f=>(f.enfants||[]).forEach(sf=>{if(sf.id===sfId)famCats=sf.categories||[];}));
+  } else if(famId){
+    const f=famillesTree.find(x=>x.id===famId);
+    if(f)famCats=[...(f.categories||[]),...(f.enfants||[]).flatMap(sf=>sf.categories||[])];
+  }
+  let filtered=[...historique].sort((a,b)=>new Date(b.created_at||b.ts)-new Date(a.created_at||a.ts));
+  if(type)filtered=filtered.filter(h=>h.type===type);
+  if(q)filtered=filtered.filter(h=>(h.article_id||h.id||'').toLowerCase().includes(q)||(h.categorie||'').toLowerCase().includes(q)||(h.equipe||'').toLowerCase().includes(q)||(h.note||'').toLowerCase().includes(q));
+  if(famCats)filtered=filtered.filter(h=>famCats.includes(h.categorie||''));
+  const sorted=filtered.slice(0,300);
+  tbody.innerHTML=sorted.map(h=>{const date=new Date(h.created_at||h.ts).toLocaleString('fr-FR');return'<tr><td style="font-size:11px;">'+date+'</td><td><span class="badge '+(h.type==='out'?'badge-danger':'badge-ok')+'">'+(h.type==='out'?'Sortie':'Entrée')+'</span></td><td><code>'+(h.article_id||h.id)+'</code></td><td>'+(h.categorie||'')+'</td><td>'+(h.diametre||'')+'</td><td><strong>'+h.qty+'</strong></td><td>'+(h.new_stock??'')+'</td><td style="font-size:11px;">'+(h.equipe||'')+'</td><td style="font-size:11px;">'+(h.note||'')+'</td></tr>';}).join('');
 }
 function renderCategories(){
   const tbody=document.getElementById('cat-table');if(!tbody)return;
@@ -3335,7 +3383,25 @@ function renderInventaire(){
     sel.innerHTML='<option value="">Toutes familles</option>';
     famillesTree.forEach(f=>{const o=document.createElement('option');o.value=f.id;o.textContent='📁 '+f.nom;sel.appendChild(o);});
   }
+  const sfSel=document.getElementById('inv-filter-sf');
+  if(sfSel)sfSel.style.display='none';
   renderInvTable(stock);
+}
+
+function invSelectFam(){
+  const famId=document.getElementById('inv-filter-fam')?.value||'';
+  const sfSel=document.getElementById('inv-filter-sf');
+  if(!sfSel)return;
+  if(!famId){sfSel.style.display='none';sfSel.innerHTML='<option value="">Toutes sous-familles</option>';filterInvTable();return;}
+  const f=famillesTree.find(x=>x.id===famId);
+  const sfs=(f?.enfants||[]).filter(sf=>(sf.categories||[]).length);
+  if(!sfs.length){sfSel.style.display='none';sfSel.innerHTML='<option value="">Toutes sous-familles</option>';}
+  else{
+    sfSel.innerHTML='<option value="">Toutes sous-familles</option>';
+    sfs.forEach(sf=>{const o=document.createElement('option');o.value=sf.id;o.textContent='📁 '+sf.nom;sfSel.appendChild(o);});
+    sfSel.style.display='';
+  }
+  filterInvTable();
 }
 
 function renderInvTable(articles){
@@ -3390,9 +3456,15 @@ function updateInvBanner(){
 function filterInvTable(){
   const q=(document.getElementById('inv-search')?.value||'').toLowerCase();
   const famId=document.getElementById('inv-filter-fam')?.value||'';
+  const sfId=document.getElementById('inv-filter-sf')?.value||'';
   let filtered=stock;
   if(q)filtered=filtered.filter(a=>a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).includes(q));
-  if(famId){
+  if(sfId){
+    // Filtre sous-famille précis
+    let cats=[];
+    famillesTree.forEach(f=>(f.enfants||[]).forEach(sf=>{if(sf.id===sfId)cats=sf.categories||[];}));
+    filtered=filtered.filter(a=>cats.includes(a.categorie));
+  } else if(famId){
     const f=famillesTree.find(x=>x.id===famId);
     if(f){const cats=[...(f.categories||[]),...(f.enfants||[]).flatMap(sf=>sf.categories||[])];filtered=filtered.filter(a=>cats.includes(a.categorie));}
   }
