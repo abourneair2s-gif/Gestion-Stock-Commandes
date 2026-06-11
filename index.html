@@ -241,6 +241,12 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .badge-reliquat{background:#fff3e0;color:#e65100;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;border:1px solid #ffb74d;}
 .reliquat-row{background:#fff8f0 !important;}
 .reliquat-cell{color:#e65100;font-weight:700;}
+
+.inv-row-changed{background:#fffbea !important;}
+.inv-ecart-pos{color:var(--green);font-weight:700;}
+.inv-ecart-neg{color:var(--red);font-weight:700;}
+.inv-input{width:80px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);text-align:center;font-size:13px;font-weight:600;}
+.inv-input.changed{border-color:var(--amber);background:#fffbea;}
 </style>
 </head>
 <body>
@@ -280,6 +286,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
   <button class="nav-btn" onclick="showPage('categories',this)" data-page="categories"><span class="nav-icon">🏷</span>Catégories</button>
   <button class="nav-btn" onclick="showPage('familles',this)" data-page="familles"><span class="nav-icon">🗂</span>Familles</button>
   <button class="nav-btn" onclick="showPage('parametres',this)" data-page="parametres"><span class="nav-icon">⚙️</span>Paramètres</button>
+  <button class="nav-btn" onclick="showPage('inventaire',this)" data-page="inventaire"><span class="nav-icon">📋</span>Inventaire</button>
   <button class="nav-btn" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);" title="Export global : stock + alertes + historique"><span class="nav-icon">📥</span>Export global</button>
 </div>
 
@@ -590,6 +597,34 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     </label>
     <button class="btn btn-primary btn-sm" onclick="confirmEditFamille()">✓</button>
     <button class="btn btn-xs" onclick="cancelEditFamille()">✕</button>
+  </div>
+</div>
+
+
+<!-- PAGE INVENTAIRE -->
+<div class="page" id="page-inventaire">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div class="section-title">📋 Saisie d'inventaire</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px;">Corrigez les quantités réelles puis validez. Seuls les articles modifiés seront mis à jour.</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" id="inv-search" placeholder="Rechercher…" oninput="filterInvTable()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;width:180px;">
+      <select id="inv-filter-fam" onchange="filterInvTable()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+        <option value="">Toutes familles</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="saveInventaire()" id="inv-save-btn" style="display:none;">✅ Valider les corrections</button>
+    </div>
+  </div>
+  <div id="inv-changes-banner" style="display:none;background:#e6f5ef;border:1px solid var(--green);border-radius:var(--radius);padding:8px 14px;margin-bottom:10px;font-size:12px;color:var(--green);font-weight:600;"></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Référence</th><th>Catégorie</th><th>Ø</th>
+        <th>Stock actuel</th><th style="min-width:120px;">Correction</th><th>Écart</th>
+      </tr></thead>
+      <tbody id="inv-table"></tbody>
+    </table>
   </div>
 </div>
 
@@ -1180,7 +1215,7 @@ function showPage(page,el){
   },10);
   const titles={dashboard:'Tableau de bord',stock:'Articles & Stock',pareto:'Analyse Pareto (80/20)',
     scan:'Scanner QR',commandes:'Commandes chantiers',alertes:'Alertes de stock',
-    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres',familles:'Familles & Sous-familles'};
+    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres',familles:'Familles & Sous-familles',inventaire:'Saisie d\'inventaire'};
   document.getElementById('topbar-title').textContent=titles[page]||page;
   const ab=document.getElementById('topbar-action');
   if(page==='stock'){ab.style.display='none';}
@@ -1189,7 +1224,7 @@ function showPage(page,el){
   else ab.style.display='none';
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
     commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
-    categories:renderCategories,parametres:renderParams,familles:renderFamillesPage};
+    categories:renderCategories,parametres:renderParams,familles:renderFamillesPage,inventaire:renderInventaire};
   if(renders[page])renders[page]();
   if(page!=='scan'){stopQRScan();stopCmdQR();}
 }
@@ -1466,6 +1501,11 @@ async function confirmScanMove(artId, type, qty){
     if(html5QrCode)try{await html5QrCode.resume();}catch(e){}
     return;
   }
+  // Confirmation obligatoire
+  const typeLabel=type==='out'?'SORTIE':'ENTREE';
+  const msg=typeLabel+' de '+qty+' x '+art.id+' ('+art.categorie+' O'+art.diametre+') ?\nStock : '+art.stock+' -> '+(type==='out'?art.stock-qty:art.stock+qty);
+  const ok=confirm(msg);
+  if(!ok){if(html5QrCode)try{await html5QrCode.resume();}catch(e){}return;}
   const newStock=type==='out'?art.stock-qty:art.stock+qty;
   await db.from('stock').update({stock:newStock}).eq('id',art.id);
   await db.from('historique').insert({type,article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty,equipe,note:'Scan QR',new_stock:newStock});
@@ -1737,6 +1777,14 @@ async function approuverCmd(id){
     if(sorti>0&&art){
       await db.from('stock').update({stock:art.stock-sorti}).eq('id',item.id);
       art.stock=art.stock-sorti;
+    }
+    if(sorti>0){
+      await db.from('historique').insert({
+        type:'out',article_id:item.id,
+        categorie:art?art.categorie:'?',diametre:art?art.diametre:'?',
+        qty:sorti,new_stock:art?art.stock:0,
+        equipe:'Commande',note:'Cmd #'+String(c.num).padStart(3,'0')+' — '+c.chantier
+      });
     }
     itemsDetail.push({...item,qtySorti:sorti,qtyReliquat:reliquat});
   }
@@ -3275,15 +3323,115 @@ function exportExcel(){
   showToast('📥 Export Excel généré (3 onglets)');
 }
 
+// ==================== INVENTAIRE ====================
+let _invChanges={};// {id: nouvelleValeur}
+
+function renderInventaire(){
+  _invChanges={};
+  updateInvBanner();
+  // Peupler filtre famille
+  const sel=document.getElementById('inv-filter-fam');
+  if(sel){
+    sel.innerHTML='<option value="">Toutes familles</option>';
+    famillesTree.forEach(f=>{const o=document.createElement('option');o.value=f.id;o.textContent='📁 '+f.nom;sel.appendChild(o);});
+  }
+  renderInvTable(stock);
+}
+
+function renderInvTable(articles){
+  const tbody=document.getElementById('inv-table');if(!tbody)return;
+  if(!articles.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px;">Aucun article.</td></tr>';return;}
+  tbody.innerHTML=articles.map(a=>{
+    const newVal=_invChanges[a.id]!=null?_invChanges[a.id]:a.stock;
+    const ecart=newVal-a.stock;
+    const changed=_invChanges[a.id]!=null&&_invChanges[a.id]!==a.stock;
+    return`<tr class="${changed?'inv-row-changed':''}">
+      <td><code>${a.id}</code></td>
+      <td>${a.categorie}</td>
+      <td>${a.diametre}</td>
+      <td style="text-align:center;font-weight:700;">${a.stock}</td>
+      <td style="text-align:center;">
+        <input type="number" min="0" class="inv-input${changed?' changed':''}"
+          value="${newVal}"
+          data-id="${a.id}"
+          data-orig="${a.stock}"
+          onchange="onInvChange(this)"
+          oninput="onInvChange(this)">
+      </td>
+      <td style="text-align:center;" id="inv-ecart-${a.id.replace(/\s/g,'_')}">
+        ${ecart!==0?`<span class="${ecart>0?'inv-ecart-pos':'inv-ecart-neg'}">${ecart>0?'+':''}${ecart}</span>`:'—'}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function onInvChange(input){
+  const id=input.dataset.id;
+  const orig=parseInt(input.dataset.orig)||0;
+  const val=parseInt(input.value)||0;
+  if(val!==orig){_invChanges[id]=val;}else{delete _invChanges[id];}
+  // Mise à jour visuelle inline
+  const ecartEl=document.getElementById('inv-ecart-'+id.replace(/\s/g,'_'));
+  const ecart=val-orig;
+  if(ecartEl)ecartEl.innerHTML=ecart!==0?`<span class="${ecart>0?'inv-ecart-pos':'inv-ecart-neg'}">${ecart>0?'+':''}${ecart}</span>`:'—';
+  input.classList.toggle('changed',val!==orig);
+  input.closest('tr').classList.toggle('inv-row-changed',val!==orig);
+  updateInvBanner();
+}
+
+function updateInvBanner(){
+  const n=Object.keys(_invChanges).length;
+  const banner=document.getElementById('inv-changes-banner');
+  const btn=document.getElementById('inv-save-btn');
+  if(banner){banner.style.display=n>0?'':'none';banner.textContent=n+' article(s) modifié(s) en attente de validation.';}
+  if(btn)btn.style.display=n>0?'':'none';
+}
+
+function filterInvTable(){
+  const q=(document.getElementById('inv-search')?.value||'').toLowerCase();
+  const famId=document.getElementById('inv-filter-fam')?.value||'';
+  let filtered=stock;
+  if(q)filtered=filtered.filter(a=>a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).includes(q));
+  if(famId){
+    const f=famillesTree.find(x=>x.id===famId);
+    if(f){const cats=[...(f.categories||[]),...(f.enfants||[]).flatMap(sf=>sf.categories||[])];filtered=filtered.filter(a=>cats.includes(a.categorie));}
+  }
+  renderInvTable(filtered);
+}
+
+async function saveInventaire(){
+  const ids=Object.keys(_invChanges);
+  if(!ids.length){showToast('Aucune modification à enregistrer');return;}
+  const btn=document.getElementById('inv-save-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Enregistrement…';}
+  let ok=0,err=0;
+  for(const id of ids){
+    const newStock=_invChanges[id];
+    const art=stock.find(a=>a.id===id);if(!art)continue;
+    const ecart=newStock-art.stock;
+    const {error}=await db.from('stock').update({stock:newStock}).eq('id',id);
+    if(error){err++;console.error(id,error);}
+    else{
+      // Historique
+      await db.from('historique').insert({
+        type:ecart>0?'in':'out',
+        categorie:art.categorie,diametre:art.diametre,
+        qty:Math.abs(ecart),new_stock:newStock,
+        equipe:'Inventaire',note:'Correction inventaire manuelle',
+        article_id:id
+      });
+      art.stock=newStock;ok++;
+    }
+  }
+  _invChanges={};
+  if(btn){btn.disabled=false;btn.textContent='✅ Valider les corrections';}
+  renderStock();renderDashboard();updateBadges();
+  renderInventaire();
+  showToast(ok+' article(s) corrigé(s)'+(err?' — '+err+' erreur(s)':''));
+}
+
 initApp();
 
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
