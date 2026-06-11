@@ -657,7 +657,10 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <div class="form-row" id="art-newid-row" style="display:none;"><label class="form-label" style="color:var(--blue);">✏ Nouvelle référence <small style="color:var(--text3);font-weight:400;">(vide = inchangée)</small></label><input type="text" id="art-newid" placeholder="Saisir la nouvelle référence…" style="border-color:var(--blue);background:#f0f6ff;"></div>
       </div>
       <div class="form-grid col2">
-        <div class="form-row"><label class="form-label">Catégorie</label><select id="art-cat"></select></div>
+        <div class="form-row"><label class="form-label">Catégorie <small style="color:var(--text3);font-weight:400;">(existante ou nouvelle)</small></label>
+          <input type="text" id="art-cat" list="art-cat-datalist" placeholder="ex: Pinceau, Visserie…" autocomplete="off">
+          <datalist id="art-cat-datalist"></datalist>
+        </div>
         <div class="form-row"><label class="form-label">Diamètre</label><input type="text" id="art-diam" placeholder="ex: 315"></div>
       </div>
       <div class="form-row"><label class="form-label">Fournisseur</label><input type="text" id="art-fournisseur" placeholder="ex: Aldes, Atlantic…"></div>
@@ -3064,23 +3067,37 @@ function selectScanArt(id){
 }
 
 // ==================== ARTICLES CRUD ====================
-function populateArtCatSelect(){
-  const sel=document.getElementById('art-cat');if(!sel)return;
-  sel.innerHTML='';
+function populateArtCatSelect(currentVal){
+  // Peupler le datalist pour l'autocomplétion
+  const dl=document.getElementById('art-cat-datalist');
+  const inp=document.getElementById('art-cat');
+  if(!dl)return;
+  dl.innerHTML='';
+  // Toutes les catégories existantes + familles/sous-familles comme suggestions
+  const allSuggestions=[];
   if(famillesTree.length>0){
     famillesTree.forEach(f=>{
-      const grp=document.createElement('optgroup');grp.label='📁 '+f.nom;
-      (f.categories||[]).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;grp.appendChild(o);});
+      // Ajouter la famille elle-même comme suggestion (pour créer catégorie = famille)
+      allSuggestions.push({value:f.nom,label:'📁 '+f.nom+' (famille)'});
+      (f.categories||[]).forEach(c=>allSuggestions.push({value:c,label:c+' — '+f.nom}));
       (f.enfants||[]).forEach(sf=>{
-        const sg=document.createElement('optgroup');sg.label='  📁 '+sf.nom;
-        (sf.categories||[]).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sg.appendChild(o);});
-        if(sg.children.length)sel.appendChild(sg);
+        allSuggestions.push({value:sf.nom,label:'📁 '+sf.nom+' (sous-famille de '+f.nom+')'});
+        (sf.categories||[]).forEach(c=>allSuggestions.push({value:c,label:c+' — '+f.nom+' > '+sf.nom}));
       });
-      if(grp.children.length)sel.appendChild(grp);
     });
   } else {
-    categories.sort().forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
+    categories.sort().forEach(c=>allSuggestions.push({value:c,label:c}));
   }
+  // Dédoublonner
+  const seen=new Set();
+  allSuggestions.forEach(s=>{
+    if(seen.has(s.value))return;seen.add(s.value);
+    const o=document.createElement('option');
+    o.value=s.value;
+    o.label=s.label||s.value;
+    dl.appendChild(o);
+  });
+  if(inp&&currentVal)inp.value=currentVal;
 }
 
 function editArticle(id){
@@ -3099,9 +3116,7 @@ function editArticle(id){
   document.getElementById('art-min').value=a.stockMin||0;
   document.getElementById('art-prix').value=a.prixUnitaire||0;
   document.getElementById('art-prix-vente').value=a.prixVente||0;
-  populateArtCatSelect();
-  const sel=document.getElementById('art-cat');
-  if(sel)sel.value=a.categorie||'';
+  populateArtCatSelect(a.categorie||'');
   populateArtCatSelect();
   document.getElementById('art-prix').value=0;
   document.getElementById('art-prix-vente').value=0;
@@ -3111,7 +3126,7 @@ function editArticle(id){
 async function saveArticle(){
   const id=document.getElementById('art-id').value.trim();
   const newId=document.getElementById('art-newid')?.value.trim()||'';
-  const cat=document.getElementById('art-cat').value;
+  const cat=(document.getElementById('art-cat').value||'').trim();
   const diam=document.getElementById('art-diam').value.trim();
   const stockVal=parseInt(document.getElementById('art-stock').value)||0;
   const stockMin=parseInt(document.getElementById('art-min').value)||0;
@@ -3119,6 +3134,11 @@ async function saveArticle(){
   const prixVente=parseFloat(document.getElementById('art-prix-vente').value)||0;
   const fourn=document.getElementById('art-fournisseur').value.trim();
   if(!id||!cat||!diam){showToast('⚠ Référence, catégorie et diamètre requis');return;}
+  // Créer la catégorie si elle n'existe pas encore
+  if(!categories.includes(cat)){
+    categories.push(cat);categories.sort();
+    await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
+  }
   const finalId=newId||id;
   const payload={id:finalId,categorie:cat,diametre:diam,stock:stockVal,stock_min:stockMin,prix_unitaire:prix,prix_vente:prixVente,fournisseur:fourn};
   const isEdit=document.getElementById('art-id').readOnly;
