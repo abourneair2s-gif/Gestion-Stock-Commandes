@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -1715,20 +1716,43 @@ function printCmd(id){
     if(isPending){const art=stock.find(a=>a.id===i.id);return art&&art.stock<i.qty;}
     return false;
   });
-  const rows=(c.items||[]).map(i=>{
+  // Grouper les articles par famille/sous-famille
+  const itemsWithArt=(c.items||[]).map(i=>{
     const art=stock.find(a=>a.id===i.id)||{categorie:'?',diametre:'?',prixVente:0,prixUnitaire:0,stock:0};
-    const pu=art[pKey]||0;
-    // Sorti = qtySorti si validée, sinon estimation sur stock actuel
     const sorti=i.qtySorti!=null?i.qtySorti:(isPending?Math.min(art.stock||0,i.qty):i.qty);
     const reliquat=i.qtyReliquat!=null?i.qtyReliquat:(isPending?Math.max(0,i.qty-(art.stock||0)):0);
-    const ligne=sorti*pu;printTotal+=ligne;
-    const puStr=pu>0?pu.toFixed(2).replace('.',',')+' €':'—';
-    const ligneStr=ligne>0?ligne.toFixed(2).replace('.',',')+' €':'—';
-    const relCell=hasAnyReliquat
-      ?`<td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;${sorti<i.qty?'color:#e65100;font-weight:700;':''}">${sorti<i.qty?'⚠ '+reliquat:'—'}</td>`
-      :'';
-    return`<tr style="${reliquat>0?'background:#fff8f0;':''}"><td style="padding:6px 10px;border-bottom:1px solid #ddd;"><code>${i.id}</code></td><td style="padding:6px 10px;border-bottom:1px solid #ddd;">${art.categorie} Ø${art.diametre}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700;">${i.qty}</td>${hasAnyReliquat?`<td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;color:green;font-weight:700;">${sorti}</td>`:''}${relCell}<td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;color:#555;">${puStr}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;font-weight:700;">${ligneStr}</td></tr>`;
-  }).join('');
+    const pu=art[pKey]||0;const ligne=sorti*pu;printTotal+=ligne;
+    return{...i,art,sorti,reliquat,pu,ligne};
+  });
+  const colCount=hasAnyReliquat?6:4;
+  function famRow(label,bg){return`<tr><td colspan="${colCount}" style="padding:7px 12px;background:${bg};font-weight:700;font-size:12px;border-bottom:2px solid #ddd;">${label}</td></tr>`;}
+  function artRow(iw){
+    const puStr=iw.pu>0?iw.pu.toFixed(2).replace('.',',')+' \u20ac':'—';
+    const ligneStr=iw.ligne>0?iw.ligne.toFixed(2).replace('.',',')+' \u20ac':'—';
+    const relCell=hasAnyReliquat?`<td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;${iw.sorti<iw.qty?'color:#e65100;font-weight:700;':''}">${iw.sorti<iw.qty?'\u26a0 '+iw.reliquat:'—'}</td>`:'';
+    return`<tr style="${iw.reliquat>0?'background:#fff8f0;':''}"><td style="padding:6px 10px;border-bottom:1px solid #ddd;"><code>${iw.id}</code></td><td style="padding:6px 10px;border-bottom:1px solid #ddd;">${iw.art.categorie} \u00d8${iw.art.diametre}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;font-weight:700;">${iw.qty}</td>${hasAnyReliquat?`<td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:center;color:green;font-weight:700;">${iw.sorti}</td>`:''}${relCell}<td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;color:#555;">${puStr}</td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;font-weight:700;">${ligneStr}</td></tr>`;
+  }
+  let rows='';
+  if(famillesTree.length>0){
+    const rendered=new Set();
+    famillesTree.forEach(f=>{
+      const famCats=[...(f.categories||[]),...(f.enfants||[]).flatMap(sf=>sf.categories||[])];
+      const famItems=itemsWithArt.filter(iw=>famCats.includes(iw.art.categorie));
+      if(!famItems.length)return;
+      rows+=famRow('\ud83d\udcc1 '+f.nom,'#f0ede7');
+      (f.enfants||[]).forEach(sf=>{
+        const sfItems=famItems.filter(iw=>(sf.categories||[]).includes(iw.art.categorie)&&!rendered.has(iw.id));
+        if(!sfItems.length)return;
+        rows+=famRow('\u00a0\u00a0\u00a0\ud83d\udcc1 '+sf.nom,'#fafaf8');
+        sfItems.forEach(iw=>{rendered.add(iw.id);rows+=artRow(iw);});
+      });
+      famItems.filter(iw=>(f.categories||[]).includes(iw.art.categorie)&&!rendered.has(iw.id)).forEach(iw=>{rendered.add(iw.id);rows+=artRow(iw);});
+    });
+    itemsWithArt.filter(iw=>!rendered.has(iw.id)).forEach(iw=>{rows+=artRow(iw);});
+  } else {
+    itemsWithArt.forEach(iw=>{rows+=artRow(iw);});
+  }
+  const _r=''
   const printTotalStr=printTotal>0?printTotal.toFixed(2).replace('.',',')+' €':'—';
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Commande #${String(c.num).padStart(3,'0')}</title>
@@ -3525,3 +3549,10 @@ initApp();
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
