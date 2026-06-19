@@ -248,6 +248,11 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .inv-ecart-neg{color:var(--red);font-weight:700;}
 .inv-input{width:80px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);text-align:center;font-size:13px;font-weight:600;}
 .inv-input.changed{border-color:var(--amber);background:#fffbea;}
+
+.cmd-archived-section{margin-top:16px;border-top:1px solid var(--border);padding-top:12px;}
+.cmd-archived-toggle{cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;user-select:none;margin-bottom:8px;}
+.cmd-archived-toggle:hover{color:var(--blue);}
+tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
 </style>
 </head>
 <body>
@@ -443,6 +448,20 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <tbody id="cmd-table"></tbody></table>
       </div>
       <div id="cmd-empty" class="empty-state" style="display:none;">Aucune commande pour l'instant.</div>
+      <!-- Archives commandes -->
+      <div class="cmd-archived-section admin-only" id="cmd-archives-section" style="display:none;">
+        <div class="cmd-archived-toggle" onclick="toggleCmdArchives()">
+          <span id="cmd-archives-icon">▶</span>
+          <span>Commandes archivées</span>
+          <span id="cmd-archives-count" class="badge-archived"></span>
+        </div>
+        <div id="cmd-archives-body" style="display:none;">
+          <div class="table-wrap">
+            <table><thead><tr><th>N°</th><th>Date</th><th>Chantier</th><th>Demandeur</th><th>Urgence</th><th>Articles</th><th>Statut</th><th></th></tr></thead>
+            <tbody id="cmd-archives-table"></tbody></table>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ALERTES -->
@@ -596,6 +615,7 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
     <strong>Exemple :</strong> 📁 Gaines &amp; Accessoires → 📁 Sans joint → ☑ Gaines ☑ Coudes 90°
   </div>
   <div id="familles-tree"></div>
+  <div id="familles-unassigned" style="display:none;margin-top:16px;background:#fff8f0;border:1.5px solid var(--amber);border-radius:var(--radius);padding:12px 16px;"></div>
   <!-- Zone édition inline famille -->
   <div class="fam-inline-edit" id="fam-edit-zone">
     <input type="text" id="fam-edit-input" placeholder="Nom de la famille…" style="flex:1;">
@@ -657,9 +677,10 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
         <div class="form-row" id="art-newid-row" style="display:none;"><label class="form-label" style="color:var(--blue);">✏ Nouvelle référence <small style="color:var(--text3);font-weight:400;">(vide = inchangée)</small></label><input type="text" id="art-newid" placeholder="Saisir la nouvelle référence…" style="border-color:var(--blue);background:#f0f6ff;"></div>
       </div>
       <div class="form-grid col2">
-        <div class="form-row"><label class="form-label">Catégorie <small style="color:var(--text3);font-weight:400;">(existante ou nouvelle)</small></label>
-          <input type="text" id="art-cat" list="art-cat-datalist" placeholder="ex: Pinceau, Visserie…" autocomplete="off">
-          <datalist id="art-cat-datalist"></datalist>
+        <div class="form-row"><label class="form-label">Famille / Sous-famille</label>
+          <select id="art-cat" onchange="onArtFamChange(this)">
+            <option value="">— Sélectionner —</option>
+          </select>
         </div>
         <div class="form-row"><label class="form-label">Diamètre</label><input type="text" id="art-diam" placeholder="ex: 315"></div>
       </div>
@@ -1612,9 +1633,34 @@ function renderCommandes(){
   const statutFilt=document.getElementById('cmd-filter-statut')?.value||'';
   // En mode client : afficher uniquement les commandes de la session client
   let filtered=commandes.filter(c=>{
+    if(c.archived)return false;
     if(CLIENT_MODE&&c.source!=='client')return false;
     return !statutFilt||c.statut===statutFilt;
   });
+  // Section archives
+  const archived=commandes.filter(c=>c.archived&&(!CLIENT_MODE||c.source==='client'));
+  const arcSection=document.getElementById('cmd-archives-section');
+  const arcCount=document.getElementById('cmd-archives-count');
+  const arcTable=document.getElementById('cmd-archives-table');
+  if(arcSection)arcSection.style.display=archived.length?'':'none';
+  if(arcCount)arcCount.textContent=archived.length+' commande(s)';
+  if(arcTable){
+    arcTable.innerHTML=archived.sort((a,b)=>b.num-a.num).map(c=>{
+      const statLabel={'en_attente':'⏳ En attente','approuvee':'✅ Approuvée','refusee':'❌ Refusée','approuvee_partielle':'⚠ Reliquat'}[c.statut]||c.statut;
+      const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
+      return`<tr class="cmd-archived-row">
+        <td><strong>#${String(c.num).padStart(3,'0')}</strong></td>
+        <td>${date}</td><td>${c.chantier||''}</td><td>${c.nom||''}</td>
+        <td>${c.urgence||''}</td><td>${(c.items||[]).length} art.</td>
+        <td>${statLabel}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
+          <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="desarchiverCmd('${c.id}')">↩ Restaurer</button>
+          <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">🗑</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
   if(filtered.length===0){
     tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;">'+(CLIENT_MODE?'Aucune demande soumise.':'Aucune commande.')+'</td></tr>';
     return;
@@ -1637,6 +1683,7 @@ function renderCommandes(){
         ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
         <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
         <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✕</button>`:c.statut==='approuvee_partielle'?`<button class="btn btn-xs" style="margin-left:3px;border-color:#888;color:#555;" onclick="abandonnerReliquat('${c.id}')">✖ Abandon</button>`:''}
+        ${c.statut!=='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;color:var(--blue);border-color:var(--blue);" onclick="archiverCmd('${c.id}')" title="Archiver cette commande">📦 Archiver</button>`:''}
         <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">🗑</button>
       </td>`:`<td style="text-align:right;"><button class="btn btn-xs" onclick="viewCmd('${c.id}')">Voir</button></td>`}
     </tr>`;
@@ -1712,9 +1759,9 @@ function viewCmd(id){
       `<button class="btn btn-primary btn-sm" onclick="approuverCmd('${cid}');closeModal('modal-cmd-detail');">✓ Approuver</button>`;
     else if(c.statut==='approuvee_partielle') footer+=
       `<button class="btn btn-sm" style="background:var(--amber);color:#fff;border-color:var(--amber);" onclick="honorerReliquat('${cid}');">📦 Honorer le reliquat</button>`+
-      `<button class="btn btn-sm" style="border-color:#888;color:#555;" onclick="abandonnerReliquat('${cid}');" title="Clôturer sans honorer — conserve ce qui a été sorti">✖ Abandonner</button>`+
-      `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer tout</button>`;
-    else footer+=`<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
+      `<button class="btn btn-sm" style="border-color:var(--red);color:var(--red);" onclick="abandonnerReliquat('${cid}');" title="Clôture le reliquat sans livrer le reste — conserve la commande et ce qui a été sorti">✖ Abandonner le reliquat</button>`+
+      `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
+    else footer+=`<button class="btn btn-sm" style="color:var(--blue);border-color:var(--blue);" onclick="archiverCmd('${cid}');">📦 Archiver</button>`+`<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
   }
   document.getElementById('cmd-detail-footer').innerHTML=footer;
   openModal('modal-cmd-detail');
@@ -2285,11 +2332,30 @@ function renderFamillesPage(){
   const el=document.getElementById('familles-tree');
   if(!el)return;
   cancelEditFamille();
+  // Catégories non encore assignées à aucune famille
+  const allAssigned=[];
+  famillesTree.forEach(f=>{
+    (f.categories||[]).forEach(c=>allAssigned.push(c));
+    (f.enfants||[]).forEach(sf=>(sf.categories||[]).forEach(c=>allAssigned.push(c)));
+  });
+  const unassigned=categories.filter(c=>!allAssigned.includes(c));
+
   if(famillesTree.length===0){
     el.innerHTML='<div style="color:var(--text3);text-align:center;padding:30px;background:var(--surface);border:1px dashed var(--border);border-radius:var(--radius);">Aucune famille. Cliquez <strong>+ Nouvelle famille</strong> pour commencer.</div>';
-    return;
+  } else {
+    el.innerHTML=famillesTree.map((f,fi)=>renderFamilleNodeHTML(f,fi)).join('');
   }
-  el.innerHTML=famillesTree.map((f,fi)=>renderFamilleNodeHTML(f,fi)).join('');
+  // Encart catégories non classées
+  const uncEl=document.getElementById('familles-unassigned');
+  if(uncEl){
+    if(unassigned.length>0){
+      uncEl.style.display='';
+      uncEl.innerHTML='<div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--amber);">⚠ Catégories non assignées à une famille ('+unassigned.length+') :</div>'
+        +unassigned.map(c=>'<span style="display:inline-block;background:var(--surface);border:1.5px solid var(--amber);border-radius:20px;padding:3px 10px;font-size:12px;margin:3px;">'+c+'</span>').join('');
+    } else {
+      uncEl.style.display='none';
+    }
+  }
 }
 
 function renderFamilleNodeHTML(f,fi){
@@ -3068,36 +3134,61 @@ function selectScanArt(id){
 
 // ==================== ARTICLES CRUD ====================
 function populateArtCatSelect(currentVal){
-  // Peupler le datalist pour l'autocomplétion
-  const dl=document.getElementById('art-cat-datalist');
-  const inp=document.getElementById('art-cat');
-  if(!dl)return;
-  dl.innerHTML='';
-  // Toutes les catégories existantes + familles/sous-familles comme suggestions
-  const allSuggestions=[];
+  const sel=document.getElementById('art-cat');if(!sel)return;
+  sel.innerHTML='<option value="">— Sélectionner une famille —</option>';
   if(famillesTree.length>0){
     famillesTree.forEach(f=>{
-      // Ajouter la famille elle-même comme suggestion (pour créer catégorie = famille)
-      allSuggestions.push({value:f.nom,label:'📁 '+f.nom+' (famille)'});
-      (f.categories||[]).forEach(c=>allSuggestions.push({value:c,label:c+' — '+f.nom}));
-      (f.enfants||[]).forEach(sf=>{
-        allSuggestions.push({value:sf.nom,label:'📁 '+sf.nom+' (sous-famille de '+f.nom+')'});
-        (sf.categories||[]).forEach(c=>allSuggestions.push({value:c,label:c+' — '+f.nom+' > '+sf.nom}));
-      });
+      // Famille directement (si pas de sous-familles)
+      const sfs=(f.enfants||[]);
+      if(!sfs.length){
+        const o=document.createElement('option');
+        o.value='__fam__'+f.id;
+        o.textContent='📁 '+f.nom;
+        if(currentVal&&(currentVal==='__fam__'+f.id||(f.categories||[]).includes(currentVal)))o.selected=true;
+        sel.appendChild(o);
+      } else {
+        // Famille avec sous-familles → optgroup
+        const grp=document.createElement('optgroup');
+        grp.label='📁 '+f.nom;
+        // Option pour la famille elle-même (catégories directes)
+        if((f.categories||[]).length||(f.enfants||[]).length){
+          const od=document.createElement('option');
+          od.value='__fam__'+f.id;
+          od.textContent='  📁 '+f.nom+' (général)';
+          if(currentVal==='__fam__'+f.id)od.selected=true;
+          grp.appendChild(od);
+        }
+        sfs.forEach(sf=>{
+          const o=document.createElement('option');
+          o.value='__sf__'+sf.id;
+          o.textContent='  📁 '+sf.nom;
+          if(currentVal&&(currentVal==='__sf__'+sf.id||(sf.categories||[]).includes(currentVal)))o.selected=true;
+          grp.appendChild(o);
+        });
+        sel.appendChild(grp);
+      }
     });
-  } else {
-    categories.sort().forEach(c=>allSuggestions.push({value:c,label:c}));
   }
-  // Dédoublonner
-  const seen=new Set();
-  allSuggestions.forEach(s=>{
-    if(seen.has(s.value))return;seen.add(s.value);
-    const o=document.createElement('option');
-    o.value=s.value;
-    o.label=s.label||s.value;
-    dl.appendChild(o);
-  });
-  if(inp&&currentVal)inp.value=currentVal;
+  // Option "Autre / Sans famille"
+  const oa=document.createElement('option');oa.value='__none__';oa.textContent='— Sans famille';
+  if(currentVal==='__none__')oa.selected=true;
+  sel.appendChild(oa);
+}
+
+function onArtFamChange(sel){
+  // Afficher un champ texte libre si "Sans famille"
+  const val=sel.value;
+  let freeRow=document.getElementById('art-cat-free-row');
+  if(val==='__none__'){
+    if(!freeRow){
+      freeRow=document.createElement('div');freeRow.id='art-cat-free-row';freeRow.className='form-row';
+      freeRow.innerHTML='<label class="form-label">Nom de catégorie libre</label><input type="text" id="art-cat-free" placeholder="ex: Divers, Consommables…">';
+      sel.closest('.form-row').after(freeRow);
+    }
+    freeRow.style.display='';
+  } else {
+    if(freeRow)freeRow.style.display='none';
+  }
 }
 
 function editArticle(id){
@@ -3126,7 +3217,26 @@ function editArticle(id){
 async function saveArticle(){
   const id=document.getElementById('art-id').value.trim();
   const newId=document.getElementById('art-newid')?.value.trim()||'';
-  const cat=(document.getElementById('art-cat').value||'').trim();
+  const artCatVal=document.getElementById('art-cat').value||'';
+  let cat='';
+  let _famNodeToUpdate=null;
+  if(artCatVal.startsWith('__fam__')){
+    const famId=artCatVal.slice(7);
+    const f=famillesTree.find(x=>x.id===famId);
+    cat=f?f.nom:'?';
+    _famNodeToUpdate={type:'fam',id:famId};
+  } else if(artCatVal.startsWith('__sf__')){
+    const sfId=artCatVal.slice(6);
+    let found=null;
+    famillesTree.forEach(f=>(f.enfants||[]).forEach(sf=>{if(sf.id===sfId)found={f,sf};}));
+    cat=found?found.sf.nom:'?';
+    _famNodeToUpdate={type:'sf',famId:found?.f.id,sfId};
+  } else if(artCatVal==='__none__'){
+    cat=(document.getElementById('art-cat-free')?.value||'').trim();
+  } else {
+    cat=artCatVal.trim();
+  }
+  cat=cat.trim();
   const diam=document.getElementById('art-diam').value.trim();
   const stockVal=parseInt(document.getElementById('art-stock').value)||0;
   const stockMin=parseInt(document.getElementById('art-min').value)||0;
@@ -3135,7 +3245,8 @@ async function saveArticle(){
   const fourn=document.getElementById('art-fournisseur').value.trim();
   if(!id||!cat||!diam){showToast('⚠ Référence, catégorie et diamètre requis');return;}
   // Créer la catégorie si elle n'existe pas encore
-  if(!categories.includes(cat)){
+  const isNewCat=!categories.includes(cat);
+  if(isNewCat){
     categories.push(cat);categories.sort();
     await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
   }
@@ -3163,6 +3274,7 @@ async function saveArticle(){
   const {data}=await db.from('stock').select('*').order('categorie').order('id');
   if(data)stock=data.map(adaptArticle);
   renderStock();renderDashboard();updateBadges();
+  if(typeof renderFamillesPage==='function')renderFamillesPage();
   showToast(isEdit?'✅ Article modifié':'✅ Article ajouté');
 }
 
@@ -3580,6 +3692,32 @@ async function saveInventaire(){
   renderStock();renderDashboard();updateBadges();
   renderInventaire();
   showToast(ok+' article(s) corrigé(s)'+(err?' — '+err+' erreur(s)':''));
+}
+
+let _cmdArchivesOpen=false;
+function toggleCmdArchives(){
+  _cmdArchivesOpen=!_cmdArchivesOpen;
+  const body=document.getElementById('cmd-archives-body');
+  const icon=document.getElementById('cmd-archives-icon');
+  if(body)body.style.display=_cmdArchivesOpen?'':'none';
+  if(icon)icon.textContent=_cmdArchivesOpen?'▼':'▶';
+}
+
+async function archiverCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  c.archived=true;
+  await db.from('commandes').update({archived:true}).eq('id',id);
+  closeModal('modal-cmd-detail');
+  renderCommandes();updateBadges();
+  showToast('📦 Commande archivée');
+}
+
+async function desarchiverCmd(id){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  c.archived=false;
+  await db.from('commandes').update({archived:false}).eq('id',id);
+  renderCommandes();updateBadges();
+  showToast('✅ Commande restaurée');
 }
 
 initApp();
