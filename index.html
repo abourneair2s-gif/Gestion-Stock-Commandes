@@ -1035,6 +1035,20 @@ function openNewArticle(){
   };
 }
 
+// Tri "naturel" : par catégorie alphabétique, puis par diamètre croissant (numérique), puis par référence
+function sortStockArr(arr){
+  return (arr||[]).sort((a,b)=>{
+    const c=String(a.categorie||'').localeCompare(String(b.categorie||''));
+    if(c!==0)return c;
+    const da=parseFloat(String(a.diametre).replace(',','.'));
+    const db_=parseFloat(String(b.diametre).replace(',','.'));
+    const na=isNaN(da),nb=isNaN(db_);
+    if(!na&&!nb&&da!==db_)return da-db_;
+    if(na!==nb)return na?1:-1;
+    return String(a.id||'').localeCompare(String(b.id||''),undefined,{numeric:true,sensitivity:'base'});
+  });
+}
+
 // ==================== INIT SUPABASE ====================
 async function initApp() {
   try {
@@ -1100,7 +1114,7 @@ async function loadAllData() {
   if (cmdRes.error) throw cmdRes.error;
   if (histRes.error) throw histRes.error;
 
-  stock = (stockRes.data || []).map(adaptArticle);
+  stock = sortStockArr((stockRes.data || []).map(adaptArticle));
   commandes = (cmdRes.data || []);
   historique = (histRes.data || []).map(h => ({
     ts: new Date(h.created_at).getTime(),
@@ -1133,7 +1147,7 @@ function subscribeRealtime() {
   db.channel(channelName)
     .on('postgres_changes', {event:'*', schema:'public', table:'stock'}, async () => {
       const {data} = await db.from('stock').select('*').order('categorie').order('id');
-      stock = (data||[]).map(adaptArticle);
+      stock = sortStockArr((data||[]).map(adaptArticle));
       renderStock(); renderDashboard(); updateBadges();
     })
     .on('postgres_changes', {event:'*', schema:'public', table:'commandes'}, async () => {
@@ -1183,7 +1197,7 @@ function startPolling() {
         db.from('commandes').select('*').order('created_at',{ascending:false}),
         db.from('config').select('*'),
       ]);
-      if(s){ const ns=s.map(adaptArticle); if(JSON.stringify(ns)!==JSON.stringify(stock)){stock=ns;renderStock();renderDashboard();updateBadges();} }
+      if(s){ const ns=sortStockArr(s.map(adaptArticle)); if(JSON.stringify(ns)!==JSON.stringify(stock)){stock=ns;renderStock();renderDashboard();updateBadges();} }
       if(c){ if(JSON.stringify(c)!==JSON.stringify(commandes)){commandes=c;renderCommandes();updateBadges();} }
       if(cfg){ cfg.forEach(row=>{
         if(row.key==='familles'&&JSON.stringify(row.value)!==JSON.stringify(famillesTree)){famillesTree=Array.isArray(row.value)?row.value:[];renderStock();renderDashboard();}
@@ -2573,18 +2587,16 @@ function renderStockAccordion(filtered,isFiltered){
   const rendered=new Set();
   let html='';
   famillesTree.forEach(f=>{
-    // Collecter articles directs
-    const famDirect=[];
-    (f.categories||[]).forEach(c=>{
-      filtered.filter(a=>a.categorie===c&&!rendered.has(a.id)).forEach(a=>{famDirect.push(a);rendered.add(a.id);});
-    });
+    // Collecter articles directs (en une seule passe sur filtered, déjà trié, pour garder l'ordre croissant même si plusieurs catégories sont rattachées à cette famille)
+    const famCats=f.categories||[];
+    const famDirect=filtered.filter(a=>famCats.includes(a.categorie)&&!rendered.has(a.id));
+    famDirect.forEach(a=>rendered.add(a.id));
     // Collecter par sous-famille
     const sfGroups=[];
     (f.enfants||[]).forEach(sf=>{
-      const sfArts=[];
-      (sf.categories||[]).forEach(c=>{
-        filtered.filter(a=>a.categorie===c&&!rendered.has(a.id)).forEach(a=>{sfArts.push(a);rendered.add(a.id);});
-      });
+      const sfCats=sf.categories||[];
+      const sfArts=filtered.filter(a=>sfCats.includes(a.categorie)&&!rendered.has(a.id));
+      sfArts.forEach(a=>rendered.add(a.id));
       if(sfArts.length)sfGroups.push({sf,arts:sfArts});
     });
     const allArts=[...famDirect,...sfGroups.flatMap(g=>g.arts)];
@@ -3309,7 +3321,7 @@ async function saveArticle(){
   if(error){showToast('❌ '+error.message);return;}
   closeModal('modal-article');
   const {data}=await db.from('stock').select('*').order('categorie').order('id');
-  if(data)stock=data.map(adaptArticle);
+  if(data)stock=sortStockArr(data.map(adaptArticle));
   renderStock();renderDashboard();updateBadges();
   if(typeof renderFamillesPage==='function')renderFamillesPage();
   showToast(isEdit?'✅ Article modifié':'✅ Article ajouté');
