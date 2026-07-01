@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -3136,48 +3135,70 @@ function selectScanArt(id){
 function populateArtCatSelect(currentVal){
   const sel=document.getElementById('art-cat');if(!sel)return;
   sel.innerHTML='<option value="">— Sélectionner une famille —</option>';
-  if(famillesTree.length>0){
-    famillesTree.forEach(f=>{
-      // Famille directement (si pas de sous-familles)
-      const sfs=(f.enfants||[]);
-      if(!sfs.length){
-        const o=document.createElement('option');
-        o.value='__fam__'+f.id;
-        o.textContent='📁 '+f.nom;
-        if(currentVal&&(currentVal==='__fam__'+f.id||(f.categories||[]).includes(currentVal)))o.selected=true;
-        sel.appendChild(o);
-      } else {
-        // Famille avec sous-familles → optgroup
-        const grp=document.createElement('optgroup');
-        grp.label='📁 '+f.nom;
-        // Option pour la famille elle-même (catégories directes)
-        if((f.categories||[]).length||(f.enfants||[]).length){
-          const od=document.createElement('option');
-          od.value='__fam__'+f.id;
-          od.textContent='  📁 '+f.nom+' (général)';
-          if(currentVal==='__fam__'+f.id)od.selected=true;
-          grp.appendChild(od);
-        }
-        sfs.forEach(sf=>{
-          const o=document.createElement('option');
-          o.value='__sf__'+sf.id;
-          o.textContent='  📁 '+sf.nom;
-          if(currentVal&&(currentVal==='__sf__'+sf.id||(sf.categories||[]).includes(currentVal)))o.selected=true;
-          grp.appendChild(o);
-        });
-        sel.appendChild(grp);
-      }
+  famillesTree.forEach(f=>{
+    const sfs=(f.enfants||[]);
+    const grp=document.createElement('optgroup');
+    grp.label='📁 '+f.nom;
+    const od=document.createElement('option');
+    od.value='__fam__'+f.id;
+    od.textContent=sfs.length?'  📁 '+f.nom+' (général)':'📁 '+f.nom;
+    if(currentVal&&(currentVal==='__fam__'+f.id||(f.categories||[]).includes(currentVal)))od.selected=true;
+    grp.appendChild(od);
+    sfs.forEach(sf=>{
+      const o=document.createElement('option');
+      o.value='__sf__'+sf.id;
+      o.textContent='  ↳ '+sf.nom;
+      if(currentVal&&(currentVal==='__sf__'+sf.id||(sf.categories||[]).includes(currentVal)))o.selected=true;
+      grp.appendChild(o);
     });
-  }
+    const newSf=document.createElement('option');
+    newSf.value='__newsf__'+f.id;
+    newSf.textContent='  ➕ Nouvelle sous-famille…';
+    grp.appendChild(newSf);
+    sel.appendChild(grp);
+  });
+  // Créer une nouvelle famille directement depuis ce formulaire
+  const newFam=document.createElement('option');
+  newFam.value='__newfam__';
+  newFam.textContent='➕ Créer une nouvelle famille…';
+  sel.appendChild(newFam);
   // Option "Autre / Sans famille"
   const oa=document.createElement('option');oa.value='__none__';oa.textContent='— Sans famille';
   if(currentVal==='__none__')oa.selected=true;
   sel.appendChild(oa);
 }
 
-function onArtFamChange(sel){
-  // Afficher un champ texte libre si "Sans famille"
+async function onArtFamChange(sel){
   const val=sel.value;
+  // Créer une nouvelle famille à la volée
+  if(val==='__newfam__'){
+    const nom=(prompt('Nom de la nouvelle famille :')||'').trim();
+    if(!nom){populateArtCatSelect();return;}
+    const nf={id:genId(),nom,visible_client:true,categories:[],enfants:[]};
+    famillesTree.push(nf);
+    await saveFamillesTree();
+    populateArtCatSelect('__fam__'+nf.id);
+    if(typeof renderFamillesPage==='function')renderFamillesPage();
+    onArtFamChange(document.getElementById('art-cat'));
+    return;
+  }
+  // Créer une nouvelle sous-famille à la volée, sous la famille choisie
+  if(val.startsWith('__newsf__')){
+    const famId=val.slice(9);
+    const f=famillesTree.find(x=>x.id===famId);
+    if(!f){populateArtCatSelect();return;}
+    const nom=(prompt('Nom de la nouvelle sous-famille (dans « '+f.nom+' ») :')||'').trim();
+    if(!nom){populateArtCatSelect('__fam__'+famId);return;}
+    if(!f.enfants)f.enfants=[];
+    const nsf={id:genId(),nom,visible_client:true,categories:[]};
+    f.enfants.push(nsf);
+    await saveFamillesTree();
+    populateArtCatSelect('__sf__'+nsf.id);
+    if(typeof renderFamillesPage==='function')renderFamillesPage();
+    onArtFamChange(document.getElementById('art-cat'));
+    return;
+  }
+  // Afficher un champ texte libre si "Sans famille"
   let freeRow=document.getElementById('art-cat-free-row');
   if(val==='__none__'){
     if(!freeRow){
@@ -3208,9 +3229,6 @@ function editArticle(id){
   document.getElementById('art-prix').value=a.prixUnitaire||0;
   document.getElementById('art-prix-vente').value=a.prixVente||0;
   populateArtCatSelect(a.categorie||'');
-  populateArtCatSelect();
-  document.getElementById('art-prix').value=0;
-  document.getElementById('art-prix-vente').value=0;
   openModal('modal-article');
 }
 
@@ -3249,6 +3267,25 @@ async function saveArticle(){
   if(isNewCat){
     categories.push(cat);categories.sort();
     await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
+  }
+  // Rattacher la catégorie à la famille / sous-famille choisie (sinon l'article reste "non classé")
+  let famTreeChanged=false;
+  if(_famNodeToUpdate&&_famNodeToUpdate.type==='fam'){
+    const f=famillesTree.find(x=>x.id===_famNodeToUpdate.id);
+    if(f){
+      if(!f.categories)f.categories=[];
+      if(!f.categories.includes(cat)){f.categories.push(cat);famTreeChanged=true;}
+    }
+  } else if(_famNodeToUpdate&&_famNodeToUpdate.type==='sf'){
+    const f=famillesTree.find(x=>x.id===_famNodeToUpdate.famId);
+    const sf=f&&(f.enfants||[]).find(x=>x.id===_famNodeToUpdate.sfId);
+    if(sf){
+      if(!sf.categories)sf.categories=[];
+      if(!sf.categories.includes(cat)){sf.categories.push(cat);famTreeChanged=true;}
+    }
+  }
+  if(famTreeChanged){
+    await db.from('config').upsert({key:'familles',value:famillesTree},{onConflict:'key'});
   }
   const finalId=newId||id;
   const payload={id:finalId,categorie:cat,diametre:diam,stock:stockVal,stock_min:stockMin,prix_unitaire:prix,prix_vente:prixVente,fournisseur:fourn};
