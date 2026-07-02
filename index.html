@@ -3281,7 +3281,25 @@ async function saveArticle(){
     await db.from('config').upsert({key:'categories',value:categories},{onConflict:'key'});
   }
   // Rattacher la catégorie à la famille / sous-famille choisie (sinon l'article reste "non classé")
+  // Rattachement EXCLUSIF : on retire d'abord cette catégorie de tous les autres nœuds
+  // (famille ou sous-famille) pour éviter les doublons qui font apparaître l'article au mauvais endroit.
   let famTreeChanged=false;
+  if(_famNodeToUpdate){
+    famillesTree.forEach(f=>{
+      if(!(_famNodeToUpdate.type==='fam'&&_famNodeToUpdate.id===f.id)){
+        if(f.categories&&f.categories.includes(cat)){
+          f.categories=f.categories.filter(c=>c!==cat);famTreeChanged=true;
+        }
+      }
+      (f.enfants||[]).forEach(sf=>{
+        if(!(_famNodeToUpdate.type==='sf'&&_famNodeToUpdate.sfId===sf.id)){
+          if(sf.categories&&sf.categories.includes(cat)){
+            sf.categories=sf.categories.filter(c=>c!==cat);famTreeChanged=true;
+          }
+        }
+      });
+    });
+  }
   if(_famNodeToUpdate&&_famNodeToUpdate.type==='fam'){
     const f=famillesTree.find(x=>x.id===_famNodeToUpdate.id);
     if(f){
