@@ -1011,6 +1011,24 @@ let historique = [];
 let chantiers = []; // [{nom, desc}]
 const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='client';
 
+// Identifiant unique persistant par navigateur (mode client), pour n'afficher que ses propres demandes
+function getClientDeviceId(){
+  try{
+    let id=localStorage.getItem('stockpro_device_id');
+    if(!id){
+      id='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);
+      localStorage.setItem('stockpro_device_id',id);
+    }
+    return id;
+  }catch(e){
+    // localStorage indisponible : identifiant de secours (non persistant, valable pour la session en cours)
+    if(!window._stockproFallbackDeviceId){
+      window._stockproFallbackDeviceId='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);
+    }
+    return window._stockproFallbackDeviceId;
+  }
+}
+
 let categories = [...DEFAULT_CATEGORIES];
 let cmdCounter = 1;
 let params = {email:'',company:''};
@@ -1286,10 +1304,18 @@ function fmtDate(ts){
   return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 }
 function getAlerts(){return stock.filter(a=>getStatus(a)!=='ok');}
-function getCmdPending(){return commandes.filter(c=>c.statut==='en_attente');}
+function getCmdPending(){
+  if(CLIENT_MODE){
+    const myDeviceId=getClientDeviceId();
+    return commandes.filter(c=>c.statut==='en_attente'&&c.source==='client'&&c.device_id===myDeviceId);
+  }
+  return commandes.filter(c=>c.statut==='en_attente');
+}
 function updateBadges(){
   const a=getAlerts().length,p=getCmdPending().length;
-  const reliquats=commandes.filter(c=>c.statut==='approuvee_partielle').length;
+  const reliquats=CLIENT_MODE
+    ?commandes.filter(c=>c.statut==='approuvee_partielle'&&c.source==='client'&&c.device_id===getClientDeviceId()).length
+    :commandes.filter(c=>c.statut==='approuvee_partielle').length;
   const sa=document.getElementById('sb-alert-count'),sc=document.getElementById('sb-cmd-count');
   if(sa){sa.textContent=a;sa.style.display=a>0?'':'none';}
   if(sc){sc.textContent=p+reliquats;sc.style.display=(p+reliquats)>0?'':'none';}
@@ -1704,14 +1730,16 @@ function printQR(){
 function renderCommandes(){
   const tbody=document.getElementById('cmd-table');if(!tbody)return;
   const statutFilt=document.getElementById('cmd-filter-statut')?.value||'';
-  // En mode client : afficher uniquement les commandes de la session client
+  const myDeviceId=CLIENT_MODE?getClientDeviceId():null;
+  // En mode client : afficher uniquement les commandes passées depuis cet appareil (pas celles des autres clients)
   let filtered=commandes.filter(c=>{
     if(c.archived)return false;
     if(CLIENT_MODE&&c.source!=='client')return false;
+    if(CLIENT_MODE&&c.device_id!==myDeviceId)return false;
     return !statutFilt||c.statut===statutFilt;
   });
   // Section archives
-  const archived=commandes.filter(c=>c.archived&&(!CLIENT_MODE||c.source==='client'));
+  const archived=commandes.filter(c=>c.archived&&(!CLIENT_MODE||(c.source==='client'&&c.device_id===myDeviceId)));
   const arcSection=document.getElementById('cmd-archives-section');
   const arcCount=document.getElementById('cmd-archives-count');
   const arcTable=document.getElementById('cmd-archives-table');
@@ -3119,7 +3147,8 @@ async function saveCommande(){
   if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const num=(cmdCounter||0)+1;
   const source=CLIENT_MODE?'client':'admin';
-  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source};
+  const deviceId=CLIENT_MODE?getClientDeviceId():null;
+  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId};
   let result;
   if(editingCmdId){
     result=await db.from('commandes').update(payload).eq('id',editingCmdId);
