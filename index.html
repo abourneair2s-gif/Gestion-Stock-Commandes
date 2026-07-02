@@ -2887,9 +2887,11 @@ function cmdSelectSF(el,famId,sfId){
 }
 
 function artCmdRow(a){
+  const prixHtml=CLIENT_MODE?`<span style="font-size:12px;font-weight:700;color:var(--blue);margin-left:6px;">${(a.prixVente||0).toFixed(2)} €</span>`:'';
   return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;" onclick="addCmdItem('${a.id}')" onmouseenter="this.style.background='var(--green-bg)'" onmouseleave="this.style.background=''">
     <code style="font-size:12px;font-weight:700;min-width:80px;">${a.id}</code>
     <span style="font-size:12px;color:var(--text2);">Ø ${a.diametre}</span>
+    ${prixHtml}
     <span class="${getStatus(a)==='ok'?'stock-ok':getStatus(a)==='warn'?'stock-warn':'stock-danger'}" style="font-size:12px;font-weight:700;margin-left:auto;">${a.stock}</span>
     <span style="font-size:18px;color:var(--green);font-weight:700;padding-left:6px;">+</span>
   </div>`;
@@ -2977,9 +2979,11 @@ function filterCmdSearch(val){
   if(!res.length){dd.style.display='none';return;}
   dd.innerHTML=res.map(a=>{
     const s=getStatus(a);const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
+    const prixHtml=CLIENT_MODE?`<span style="font-size:12px;font-weight:700;color:var(--blue);">${(a.prixVente||0).toFixed(2)} €</span>`:'';
     return`<div onclick="addCmdItem('${a.id}')" style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
       <code style="flex:1;font-size:12px;">${a.id}</code>
       <span style="font-size:11px;color:var(--text2);">${a.categorie} ${a.diametre}</span>
+      ${prixHtml}
       <span class="${sc}" style="font-size:11px;">${a.stock}</span>
     </div>`;
   }).join('');
@@ -3021,6 +3025,7 @@ function renderCmdItems(){
   const empty=document.getElementById('cmd-items-empty');
   if(!el)return;
   if(empty)empty.style.display=cmdItems.length?'none':'';
+  let totalClient=0;
   el.innerHTML=cmdItems.map((item,i)=>{
     const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:0};
     const dispo=typeof art.stock==='number'?art.stock:0;
@@ -3028,10 +3033,17 @@ function renderCmdItems(){
     const reliquat=item.qty-sorti;
     const hasRel=reliquat>0;
     const stockColor=dispo===0?'var(--red)':dispo<item.qty?'var(--amber)':'var(--green)';
+    let prixHtml='';
+    if(CLIENT_MODE){
+      const ligneTotal=(art.prixVente||0)*item.qty;
+      totalClient+=ligneTotal;
+      prixHtml=`<span style="font-size:11px;font-weight:700;color:var(--blue);">${ligneTotal.toFixed(2)} €</span>`;
+    }
     return`<div style="background:var(--surface);border:1.5px solid ${hasRel?'#ffb74d':'var(--border)'};border-radius:var(--radius-sm);margin-bottom:6px;overflow:hidden;">
       <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;">
         <code style="font-size:12px;font-weight:700;flex:1;">${item.id}</code>
         <span style="font-size:11px;color:var(--text2);">${art.categorie} ${art.diametre}</span>
+        ${prixHtml}
         <span style="font-size:11px;font-weight:600;color:${stockColor};" title="Stock disponible">stock: ${dispo}</span>
         <button onclick="changeCmdItemQty(${i},-1)" style="width:26px;height:26px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">−</button>
         <strong style="min-width:24px;text-align:center;">${item.qty}</strong>
@@ -3044,6 +3056,18 @@ function renderCmdItems(){
       </div>`:''}
     </div>`;
   }).join('');
+  const totalRow=document.getElementById('cmd-items-total');
+  if(CLIENT_MODE&&cmdItems.length){
+    if(!totalRow){
+      const wrap=document.createElement('div');
+      wrap.id='cmd-items-total';
+      wrap.style.cssText='text-align:right;font-size:13px;font-weight:700;padding:8px 10px;color:var(--blue);border-top:1px solid var(--border);';
+      el.after(wrap);
+    }
+    document.getElementById('cmd-items-total').textContent='Total : '+totalClient.toFixed(2)+' €';
+  } else if(totalRow){
+    totalRow.remove();
+  }
 }
 
 function changeCmdItemQty(i,delta){
