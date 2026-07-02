@@ -687,11 +687,13 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
       <div class="form-grid col3">
         <div class="form-row"><label class="form-label">Stock actuel</label><input type="number" id="art-stock" value="0" min="0"></div>
         <div class="form-row"><label class="form-label">Stock minimum</label><input type="number" id="art-min" value="5" min="0"></div>
-        <div class="form-row"><label class="form-label">Prix achat (€)</label><input type="number" id="art-prix" value="0" step="0.01" min="0"></div>
+        <div class="form-row"><label class="form-label">Prix achat (€)</label><input type="number" id="art-prix" value="0" step="0.01" min="0" oninput="updateArtPrixVente()"></div>
       </div>
       <div class="form-grid col2">
-        <div class="form-row"><label class="form-label">Prix vente (€)</label><input type="number" id="art-prix-vente" value="0" step="0.01" min="0"></div>
+        <div class="form-row"><label class="form-label">Coefficient multiplicateur</label><input type="number" id="art-coef" placeholder="ex: 1.4" step="0.01" min="0" oninput="updateArtPrixVente()"></div>
+        <div class="form-row"><label class="form-label">Prix vente (€)</label><input type="number" id="art-prix-vente" value="0" step="0.01" min="0" oninput="updateArtMargeInfo()"></div>
       </div>
+      <div class="form-row" id="art-marge-info" style="font-size:12px;color:var(--text-secondary,#888);"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-article')">Annuler</button>
@@ -1021,8 +1023,29 @@ function openNewArticle(){
   document.getElementById('art-fournisseur').value='';
   document.getElementById('art-diam').value='';
   document.getElementById('art-stock').value=0;
-  document.getElementById('art-min').value=5;document.getElementById('art-prix').value=0;document.getElementById('art-prix-vente').value=0;populateArtCatSelect();
-  openModal('modal-article');}function adaptArticle(row) {
+  document.getElementById('art-min').value=5;document.getElementById('art-prix').value=0;document.getElementById('art-prix-vente').value=0;document.getElementById('art-coef').value='';document.getElementById('art-marge-info').textContent='';populateArtCatSelect();
+  openModal('modal-article');}// Calcule automatiquement le prix de vente = prix d'achat × coefficient, dès qu'un des deux champs change
+function updateArtPrixVente(){
+  const prix=parseFloat(document.getElementById('art-prix').value)||0;
+  const coef=parseFloat(document.getElementById('art-coef').value)||0;
+  if(coef>0){
+    document.getElementById('art-prix-vente').value=(prix*coef).toFixed(2);
+  }
+  updateArtMargeInfo();
+}
+function updateArtMargeInfo(){
+  const info=document.getElementById('art-marge-info');if(!info)return;
+  const prix=parseFloat(document.getElementById('art-prix').value)||0;
+  const vente=parseFloat(document.getElementById('art-prix-vente').value)||0;
+  if(prix>0&&vente>0){
+    const marge=vente-prix;
+    const margePct=(marge/prix*100);
+    info.textContent='Marge : '+marge.toFixed(2)+' € ('+margePct.toFixed(1)+'%)';
+  } else {
+    info.textContent='';
+  }
+}
+function adaptArticle(row) {
   return {
     id: row.id,
     categorie: row.categorie,
@@ -3251,6 +3274,13 @@ function editArticle(id){
   document.getElementById('art-min').value=a.stockMin||0;
   document.getElementById('art-prix').value=a.prixUnitaire||0;
   document.getElementById('art-prix-vente').value=a.prixVente||0;
+  const coefField=document.getElementById('art-coef');
+  if(a.prixUnitaire>0&&a.prixVente>0){
+    coefField.value=(a.prixVente/a.prixUnitaire).toFixed(2);
+  } else {
+    coefField.value='';
+  }
+  updateArtMargeInfo();
   populateArtCatSelect(a.categorie||'');
   openModal('modal-article');
 }
