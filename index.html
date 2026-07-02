@@ -702,6 +702,27 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   </div>
 </div>
 
+<!-- Modal: Connexion client (email + code PIN) -->
+<div class="modal-backdrop" id="modal-client-login">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-body" style="padding-top:24px;">
+      <div style="text-align:center;margin-bottom:16px;">
+        <img src="data:image/png;base64,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" alt="AIR2S" style="height:44px;">
+      </div>
+      <div style="text-align:center;font-weight:700;font-size:16px;margin-bottom:4px;">Connexion</div>
+      <p style="text-align:center;font-size:12.5px;color:var(--text3);margin-bottom:16px;">
+        Première visite ? Indiquez votre email et choisissez un code PIN à 4 chiffres : votre compte sera créé automatiquement. Il vous sera redemandé à chaque connexion.
+      </p>
+      <div class="form-row"><label class="form-label">Adresse mail</label><input type="email" id="login-email" placeholder="votre@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')submitClientLogin()"></div>
+      <div class="form-row"><label class="form-label">Code PIN (4 chiffres)</label><input type="password" id="login-pin" placeholder="••••" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" onkeydown="if(event.key==='Enter')submitClientLogin()"></div>
+      <div id="login-error" style="color:var(--red);font-size:12.5px;margin-top:4px;display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="submitClientLogin()" style="width:100%;" id="login-submit-btn">Continuer</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Bienvenue mode client -->
 <div class="modal-backdrop" id="modal-client-welcome">
   <div class="modal" style="max-width:480px;">
@@ -1011,7 +1032,14 @@ let historique = [];
 let chantiers = []; // [{nom, desc}]
 const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='client';
 
-// Identifiant unique persistant par navigateur (mode client), pour n'afficher que ses propres demandes
+// Compte client connecté (email) — null tant que non authentifié
+let clientAccountEmail = null;
+
+// Hash SHA-256 (hex) — utilisé pour ne jamais stocker le PIN en clair
+async function sha256Hex(str){
+  const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 function getClientDeviceId(){
   try{
     let id=localStorage.getItem('stockpro_device_id');
@@ -1030,6 +1058,70 @@ function getClientDeviceId(){
 }
 
 let categories = [...DEFAULT_CATEGORIES];
+
+// ==================== COMPTE CLIENT (email + PIN) ====================
+async function submitClientLogin(){
+  const btn=document.getElementById('login-submit-btn');
+  const errEl=document.getElementById('login-error');
+  errEl.style.display='none';
+  const email=(document.getElementById('login-email').value||'').trim().toLowerCase();
+  const pin=(document.getElementById('login-pin').value||'').trim();
+  if(!email||!email.includes('@')){errEl.textContent='Adresse mail invalide.';errEl.style.display='';return;}
+  if(!/^\d{4}$/.test(pin)){errEl.textContent='Le code PIN doit contenir exactement 4 chiffres.';errEl.style.display='';return;}
+  btn.disabled=true;btn.textContent='Connexion…';
+  try{
+    const pinHash=await sha256Hex(email+':'+pin); // salé avec l'email pour éviter les collisions entre comptes
+    const {data:existing,error:selErr}=await db.from('client_accounts').select('*').eq('email',email).maybeSingle();
+    if(selErr){throw selErr;}
+    if(existing){
+      // Compte existant → vérifier le PIN
+      if(existing.pin_hash!==pinHash){
+        errEl.textContent='Code PIN incorrect.';errEl.style.display='';
+        btn.disabled=false;btn.textContent='Continuer';
+        return;
+      }
+    } else {
+      // Première connexion → création du compte
+      const {error:insErr}=await db.from('client_accounts').insert({email,pin_hash:pinHash});
+      if(insErr){throw insErr;}
+    }
+    clientAccountEmail=email;
+    try{localStorage.setItem('stockpro_client_session_email',email);}catch(e){}
+    closeModal('modal-client-login');
+    updateClientAccountBadge();
+    renderCommandes();updateBadges();
+    openModal('modal-client-welcome');
+  }catch(err){
+    console.error('Erreur connexion client:',err);
+    errEl.textContent='Erreur de connexion : '+(err.message||'réessayez.');errEl.style.display='';
+  }
+  btn.disabled=false;btn.textContent='Continuer';
+}
+
+function logoutClient(){
+  clientAccountEmail=null;
+  try{localStorage.removeItem('stockpro_client_session_email');}catch(e){}
+  window.location.reload();
+}
+
+function updateClientAccountBadge(){
+  const el=document.getElementById('client-account-badge');
+  if(el)el.textContent=clientAccountEmail||'';
+}
+
+// Lance le flux de connexion : session existante → reconnexion silencieuse, sinon affiche le formulaire
+function initClientLogin(){
+  let saved=null;
+  try{saved=localStorage.getItem('stockpro_client_session_email');}catch(e){}
+  if(saved){
+    clientAccountEmail=saved;
+    updateClientAccountBadge();
+    renderCommandes();updateBadges();
+    openModal('modal-client-welcome');
+  } else {
+    openModal('modal-client-login');
+  }
+}
 let cmdCounter = 1;
 let params = {email:'',company:''};
 let famillesTree = [];
@@ -1057,7 +1149,9 @@ function openCmdModal(){
     }
   } else {
     const inp=document.getElementById('cmd-chantier');if(inp)inp.value='';
-  }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
+  }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  if(CLIENT_MODE&&clientAccountEmail){const em=document.getElementById('cmd-email');if(em)em.value=clientAccountEmail;}
+  document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
   document.getElementById('art-modal-title').textContent='Ajouter un article';
   // Référence
@@ -1151,7 +1245,7 @@ async function initApp() {
     renderDashboard();
     updateBadges();
     if(CLIENT_MODE) applyClientMode();
-    if(CLIENT_MODE) openModal('modal-client-welcome');
+    if(CLIENT_MODE) initClientLogin();
 
   } catch (err) {
     console.error('Erreur init:', err);
@@ -1306,15 +1400,14 @@ function fmtDate(ts){
 function getAlerts(){return stock.filter(a=>getStatus(a)!=='ok');}
 function getCmdPending(){
   if(CLIENT_MODE){
-    const myDeviceId=getClientDeviceId();
-    return commandes.filter(c=>c.statut==='en_attente'&&c.source==='client'&&c.device_id===myDeviceId);
+    return commandes.filter(c=>c.statut==='en_attente'&&c.source==='client'&&c.account_email===clientAccountEmail);
   }
   return commandes.filter(c=>c.statut==='en_attente');
 }
 function updateBadges(){
   const a=getAlerts().length,p=getCmdPending().length;
   const reliquats=CLIENT_MODE
-    ?commandes.filter(c=>c.statut==='approuvee_partielle'&&c.source==='client'&&c.device_id===getClientDeviceId()).length
+    ?commandes.filter(c=>c.statut==='approuvee_partielle'&&c.source==='client'&&c.account_email===clientAccountEmail).length
     :commandes.filter(c=>c.statut==='approuvee_partielle').length;
   const sa=document.getElementById('sb-alert-count'),sc=document.getElementById('sb-cmd-count');
   if(sa){sa.textContent=a;sa.style.display=a>0?'':'none';}
@@ -1730,16 +1823,15 @@ function printQR(){
 function renderCommandes(){
   const tbody=document.getElementById('cmd-table');if(!tbody)return;
   const statutFilt=document.getElementById('cmd-filter-statut')?.value||'';
-  const myDeviceId=CLIENT_MODE?getClientDeviceId():null;
-  // En mode client : afficher uniquement les commandes passées depuis cet appareil (pas celles des autres clients)
+  // En mode client : afficher uniquement les commandes passées par le compte connecté (pas celles des autres clients)
   let filtered=commandes.filter(c=>{
     if(c.archived)return false;
     if(CLIENT_MODE&&c.source!=='client')return false;
-    if(CLIENT_MODE&&c.device_id!==myDeviceId)return false;
+    if(CLIENT_MODE&&c.account_email!==clientAccountEmail)return false;
     return !statutFilt||c.statut===statutFilt;
   });
   // Section archives
-  const archived=commandes.filter(c=>c.archived&&(!CLIENT_MODE||(c.source==='client'&&c.device_id===myDeviceId)));
+  const archived=commandes.filter(c=>c.archived&&(!CLIENT_MODE||(c.source==='client'&&c.account_email===clientAccountEmail)));
   const arcSection=document.getElementById('cmd-archives-section');
   const arcCount=document.getElementById('cmd-archives-count');
   const arcTable=document.getElementById('cmd-archives-table');
@@ -3148,7 +3240,8 @@ async function saveCommande(){
   const num=(cmdCounter||0)+1;
   const source=CLIENT_MODE?'client':'admin';
   const deviceId=CLIENT_MODE?getClientDeviceId():null;
-  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId};
+  const accountEmail=CLIENT_MODE?clientAccountEmail:null;
+  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail};
   let result;
   if(editingCmdId){
     result=await db.from('commandes').update(payload).eq('id',editingCmdId);
@@ -3226,6 +3319,14 @@ function applyClientMode(){
   // Afficher les champs mail / téléphone (mode client uniquement)
   const contactRow=document.getElementById('cmd-client-contact-row');
   if(contactRow)contactRow.style.display='';
+  // Badge compte connecté + déconnexion (sous le logo)
+  const connInd=document.getElementById('conn-indicator');
+  if(connInd&&!document.getElementById('client-account-badge')){
+    const badgeWrap=document.createElement('div');
+    badgeWrap.style.cssText='margin-top:6px;font-size:11px;color:var(--text3);text-align:center;';
+    badgeWrap.innerHTML='<span id="client-account-badge"></span> · <a href="#" onclick="logoutClient();return false;" style="color:var(--blue);text-decoration:none;">Déconnexion</a>';
+    connInd.after(badgeWrap);
+  }
 }
 
 function switchScanManualMode(mode, btn){
