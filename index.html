@@ -724,6 +724,10 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div class="form-row"><label class="form-label">Demandeur</label><input type="text" id="cmd-nom" placeholder="Votre nom"></div>
         <div class="form-row"><label class="form-label">Notes / Motif</label><input type="text" id="cmd-notes" placeholder="Raison, précisions…"></div>
       </div>
+      <div class="form-grid col2" id="cmd-client-contact-row" style="display:none;">
+        <div class="form-row"><label class="form-label">Adresse mail</label><input type="email" id="cmd-email" placeholder="votre@email.com" autocomplete="email"></div>
+        <div class="form-row"><label class="form-label">Téléphone</label><input type="tel" id="cmd-telephone" placeholder="06 12 34 56 78" autocomplete="tel"></div>
+      </div>
       <div class="section-header" style="margin-top:6px;">
         <div class="section-title">Articles à commander</div>
         <div style="display:flex;gap:6px;">
@@ -1008,7 +1012,7 @@ function openCmdModal(){
     }
   } else {
     const inp=document.getElementById('cmd-chantier');if(inp)inp.value='';
-  }['cmd-nom','cmd-notes','cmd-art-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
+  }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
   document.getElementById('art-modal-title').textContent='Ajouter un article';
   // Référence
@@ -1770,6 +1774,7 @@ function viewCmd(id){
     '<div style="font-size:13px;margin-bottom:14px;line-height:1.7;">'
     +'<strong>Date :</strong> '+date+' &nbsp;|&nbsp; <strong>Demandeur :</strong> '+(c.nom||'—')+'<br>'
     +'<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'
+    +((c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):'')
     +(c.notes?'<br><strong>Notes :</strong> '+c.notes:'')+'</div>'
     +'<table style="width:100%;font-size:13px;border-collapse:collapse;">'
     +'<thead><tr style="background:var(--bg2);">'
@@ -1886,6 +1891,7 @@ function printCmd(id){
     <strong>Demandeur :</strong> ${c.nom||'—'} &nbsp;|&nbsp;
     <strong>Urgence :</strong> ${c.urgence||'—'} &nbsp;|&nbsp;
     <strong>Statut :</strong> ${statLabel}
+    ${(c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):''}
     ${c.notes?'<br><strong>Notes :</strong> '+c.notes:''}
   </div>
   <table>
@@ -3050,11 +3056,13 @@ async function saveCommande(){
   const nom=document.getElementById('cmd-nom')?.value?.trim()||'';
   const urgence=document.getElementById('cmd-urgence')?.value||'normale';
   const notes=document.getElementById('cmd-notes')?.value?.trim()||'';
+  const email=document.getElementById('cmd-email')?.value?.trim()||'';
+  const telephone=document.getElementById('cmd-telephone')?.value?.trim()||'';
   if(!chantier){showToast('⚠ Renseignez le chantier');return;}
   if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const num=(cmdCounter||0)+1;
   const source=CLIENT_MODE?'client':'admin';
-  const payload={num,chantier,nom,urgence,notes,items:cmdItems,statut:'en_attente',source};
+  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source};
   let result;
   if(editingCmdId){
     result=await db.from('commandes').update(payload).eq('id',editingCmdId);
@@ -3083,6 +3091,8 @@ function editCmd(id){
   if(selC){if(CLIENT_MODE){selC.value=c.chantier||'';}else{selC.innerHTML='<option value="">Sélectionner</option>';chantiers.forEach(ch=>{const o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom;selC.appendChild(o);});selC.value=c.chantier||'';}}
   const nom=document.getElementById('cmd-nom');if(nom)nom.value=c.nom||'';
   const notes=document.getElementById('cmd-notes');if(notes)notes.value=c.notes||'';
+  const email=document.getElementById('cmd-email');if(email)email.value=c.email||'';
+  const tel=document.getElementById('cmd-telephone');if(tel)tel.value=c.telephone||'';
   const urg=document.getElementById('cmd-urgence');if(urg)urg.value=c.urgence||'normale';
   renderCmdItems();
   switchAddMode('search');
@@ -3127,6 +3137,9 @@ function applyClientMode(){
   if(row){
     row.innerHTML='<label class="form-label">Nom de l\'entreprise / chantier</label><input type="text" id="cmd-chantier" placeholder="Ex: Dupont Construction, Chantier Nantes…" autocomplete="organization">';
   }
+  // Afficher les champs mail / téléphone (mode client uniquement)
+  const contactRow=document.getElementById('cmd-client-contact-row');
+  if(contactRow)contactRow.style.display='';
 }
 
 function switchScanManualMode(mode, btn){
