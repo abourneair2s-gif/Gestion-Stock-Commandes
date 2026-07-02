@@ -724,7 +724,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
       <!-- ============================================================ -->
     </div>
     <div class="modal-footer">
-      <button class="btn btn-primary" onclick="closeClientWelcome()" style="width:100%;">J'ai compris</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-client-welcome')" style="width:100%;">J'ai compris</button>
     </div>
   </div>
 </div>
@@ -1133,16 +1133,7 @@ async function initApp() {
     renderDashboard();
     updateBadges();
     if(CLIENT_MODE) applyClientMode();
-    if(CLIENT_MODE){
-      try{
-        if(localStorage.getItem('stockpro_client_welcome_seen')!=='1'){
-          openModal('modal-client-welcome');
-        }
-      }catch(e){
-        // localStorage indisponible (mode privé…) → afficher quand même
-        openModal('modal-client-welcome');
-      }
-    }
+    if(CLIENT_MODE) openModal('modal-client-welcome');
 
   } catch (err) {
     console.error('Erreur init:', err);
@@ -3181,11 +3172,6 @@ function stopCmdQR(){
 }
 
 // ==================== CLIENT MODE ====================
-function closeClientWelcome(){
-  closeModal('modal-client-welcome');
-  try{localStorage.setItem('stockpro_client_welcome_seen','1');}catch(e){}
-}
-
 function applyClientMode(){
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display='none');
   // Menus masqués en mode client
