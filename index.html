@@ -2577,6 +2577,17 @@ function peuplerFamilleSelect(){
 // État expand/collapse accordéon (Set des IDs ouverts)
 const _stockOpen=new Set();
 
+// Tri numérique pur par diamètre — utilisé pour ordonner les articles DÉJÀ regroupés
+// dans une même famille/sous-famille (peu importe leur libellé de catégorie exact)
+function diamCompare(a,b){
+  const da=parseFloat(String(a.diametre).replace(',','.'));
+  const db_=parseFloat(String(b.diametre).replace(',','.'));
+  const na=isNaN(da),nb=isNaN(db_);
+  if(!na&&!nb&&da!==db_)return da-db_;
+  if(na!==nb)return na?1:-1;
+  return String(a.id||'').localeCompare(String(b.id||''),undefined,{numeric:true,sensitivity:'base'});
+}
+
 function renderStockAccordion(filtered,isFiltered){
   const el=document.getElementById('stock-accordion');
   if(!el)return;
@@ -2589,13 +2600,13 @@ function renderStockAccordion(filtered,isFiltered){
   famillesTree.forEach(f=>{
     // Collecter articles directs (en une seule passe sur filtered, déjà trié, pour garder l'ordre croissant même si plusieurs catégories sont rattachées à cette famille)
     const famCats=f.categories||[];
-    const famDirect=filtered.filter(a=>famCats.includes(a.categorie)&&!rendered.has(a.id));
+    const famDirect=filtered.filter(a=>famCats.includes(a.categorie)&&!rendered.has(a.id)).sort(diamCompare);
     famDirect.forEach(a=>rendered.add(a.id));
     // Collecter par sous-famille
     const sfGroups=[];
     (f.enfants||[]).forEach(sf=>{
       const sfCats=sf.categories||[];
-      const sfArts=filtered.filter(a=>sfCats.includes(a.categorie)&&!rendered.has(a.id));
+      const sfArts=filtered.filter(a=>sfCats.includes(a.categorie)&&!rendered.has(a.id)).sort(diamCompare);
       sfArts.forEach(a=>rendered.add(a.id));
       if(sfArts.length)sfGroups.push({sf,arts:sfArts});
     });
