@@ -1161,6 +1161,23 @@ function initClientLogin(){
 let cmdCounter = 1;
 let params = {email:'',company:''};
 let famillesTree = [];
+
+// Vérifie si une famille est visible côté client (respecte le toggle admin "Client")
+function isFamilleVisibleClient(f){return f&&f.visible_client!==false;}
+// Vérifie si une sous-famille est visible côté client (la famille parente doit aussi être visible)
+function isSousFamilleVisibleClient(f,sf){return isFamilleVisibleClient(f)&&sf&&sf.visible_client!==false;}
+// Vérifie si un article est visible côté client, selon la famille/sous-famille à laquelle sa catégorie est rattachée.
+// Un article non rattaché à une famille (catégorie orpheline) reste visible par défaut.
+function isArticleVisibleClient(a){
+  if(!CLIENT_MODE)return true;
+  for(const f of famillesTree){
+    if((f.categories||[]).includes(a.categorie))return isFamilleVisibleClient(f);
+    for(const sf of (f.enfants||[])){
+      if((sf.categories||[]).includes(a.categorie))return isSousFamilleVisibleClient(f,sf);
+    }
+  }
+  return true;
+}
 let scanSelectedArt = null;
 let editingCmdId = null;
 let editingFamilleIdx = null;
@@ -2987,6 +3004,7 @@ function buildCatPills(){
   let pills='<span class="cat-pill active" onclick="cmdSelectFam(this,null)">Toutes</span>';
   if(famillesTree.length>0){
     famillesTree.forEach(f=>{
+      if(CLIENT_MODE&&!isFamilleVisibleClient(f))return;
       const hasCats=(f.categories||[]).length||(f.enfants||[]).some(sf=>(sf.categories||[]).length);
       if(hasCats) pills+=`<span class="cat-pill" onclick="cmdSelectFam(this,'${f.id}')">${escH(f.nom)}</span>`;
     });
@@ -3049,8 +3067,9 @@ function cmdSelectFam(el,famId){
 
   const f=famillesTree.find(x=>x.id===famId);
   if(!f)return;
+  if(CLIENT_MODE&&!isFamilleVisibleClient(f))return;
 
-  const sfList=(f.enfants||[]).filter(sf=>(sf.categories||[]).length);
+  const sfList=(f.enfants||[]).filter(sf=>(sf.categories||[]).length&&(!CLIENT_MODE||isSousFamilleVisibleClient(f,sf)));
   const hasDirect=(f.categories||[]).length;
 
   if(!sfList.length&&hasDirect){
@@ -3101,11 +3120,13 @@ function renderCmdArtList(famId,sfId){
     let html='';
     if(famillesTree.length>0){
       famillesTree.forEach(f=>{
-        const allFamCats=[...(f.categories||[]),...(f.enfants||[]).flatMap(sf=>sf.categories||[])];
+        if(CLIENT_MODE&&!isFamilleVisibleClient(f))return;
+        const visibleSfs=(f.enfants||[]).filter(sf=>!CLIENT_MODE||isSousFamilleVisibleClient(f,sf));
+        const allFamCats=[...(f.categories||[]),...visibleSfs.flatMap(sf=>sf.categories||[])];
         const famArts=stock.filter(a=>allFamCats.includes(a.categorie));
         if(!famArts.length)return;
         html+=`<div style="padding:6px 10px;background:var(--bg2);font-size:12px;font-weight:700;border-bottom:1px solid var(--border);border-top:2px solid var(--border2);">📁 ${escH(f.nom)}</div>`;
-        (f.enfants||[]).forEach(sf=>{
+        visibleSfs.forEach(sf=>{
           const sfArts=famArts.filter(a=>(sf.categories||[]).includes(a.categorie));
           if(!sfArts.length)return;
           html+=`<div style="padding:4px 10px 4px 20px;background:var(--bg);font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.04em;">📁 ${escH(sf.nom)}</div>`;
@@ -3127,10 +3148,12 @@ function renderCmdArtList(famId,sfId){
   } else {
     const f=famillesTree.find(x=>x.id===famId);
     if(!f){el.innerHTML='';return;}
+    if(CLIENT_MODE&&!isFamilleVisibleClient(f)){el.innerHTML='';return;}
     if(!sfId||sfId==='__direct__'){
       arts=stock.filter(a=>(f.categories||[]).includes(a.categorie));
     } else {
       const sf=(f.enfants||[]).find(x=>x.id===sfId);
+      if(CLIENT_MODE&&sf&&!isSousFamilleVisibleClient(f,sf)){el.innerHTML='';return;}
       arts=sf?stock.filter(a=>(sf.categories||[]).includes(a.categorie)):[];
     }
   }
@@ -3170,7 +3193,7 @@ function filterCmdSearch(val){
   const dd=document.getElementById('cmd-search-dropdown');if(!dd)return;
   const v=val.toLowerCase().trim();
   if(!v){dd.style.display='none';return;}
-  const res=stock.filter(a=>a.id.toLowerCase().includes(v)||a.categorie.toLowerCase().includes(v)||String(a.diametre).includes(v)).slice(0,12);
+  const res=stock.filter(a=>(a.id.toLowerCase().includes(v)||a.categorie.toLowerCase().includes(v)||String(a.diametre).includes(v))&&isArticleVisibleClient(a)).slice(0,12);
   if(!res.length){dd.style.display='none';return;}
   dd.innerHTML=res.map(a=>{
     const s=getStatus(a);const sc=s==='ok'?'stock-ok':s==='warn'?'stock-warn':'stock-danger';
