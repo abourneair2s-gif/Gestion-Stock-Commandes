@@ -290,6 +290,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <button class="nav-btn" onclick="showPage('scan',this)" data-page="scan"><span class="nav-icon">📷</span>Scanner QR</button>
   <div class="sb-section">Gestion</div>
   <button class="nav-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="nav-icon">📋</span>Commandes <span class="badge-sb" id="sb-cmd-count" style="display:none">0</span></button>
+  <button class="nav-btn" onclick="showPage('retours',this)" data-page="retours"><span class="nav-icon">↩️</span>Retour articles</button>
   <button class="nav-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="nav-icon">🏗</span>Chantiers</button>
   <div class="sb-section">Admin</div>
   <button class="nav-btn" onclick="showPage('alertes',this)" data-page="alertes"><span class="nav-icon">🔔</span>Alertes <span class="badge-sb" id="sb-alert-count" style="display:none">0</span></button>
@@ -467,6 +468,19 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
           </div>
         </div>
       </div>
+    </div>
+
+    <div class="page" id="page-retours">
+      <div class="section-header">
+        <div class="section-title">Retour articles</div>
+        <button class="btn btn-primary btn-sm" onclick="openRetourModal()">+ Nouveau retour</button>
+      </div>
+      <p style="font-size:12.5px;color:var(--text3);margin:-8px 0 12px;">Enregistrez le retour d'articles en stock (chantier terminé, surplus, erreur de commande...). Le stock est mis à jour immédiatement.</p>
+      <div class="table-wrap">
+        <table><thead><tr><th>N°</th><th>Date</th><th>Origine</th><th>Motif</th><th>Articles</th><th></th></tr></thead>
+        <tbody id="retour-table"></tbody></table>
+      </div>
+      <div id="retour-empty" class="empty-state" style="display:none;">Aucun retour enregistré pour l'instant.</div>
     </div>
 
     <!-- ALERTES -->
@@ -704,6 +718,35 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-article')">Annuler</button>
       <button class="btn btn-primary" onclick="saveArticle()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Retour articles -->
+<div class="modal-backdrop" id="modal-retour">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">↩️ Nouveau retour d'articles</div>
+      <button class="btn btn-xs" onclick="closeModal('modal-retour')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Origine (chantier / client)</label><input type="text" id="retour-origine" placeholder="ex: Chantier Dupont, surplus…"></div>
+        <div class="form-row"><label class="form-label">Motif</label><input type="text" id="retour-motif" placeholder="ex: Chantier terminé, erreur de commande…"></div>
+      </div>
+      <div class="section-header" style="margin-top:6px;">
+        <div class="section-title">Articles retournés</div>
+      </div>
+      <div style="position:relative;">
+        <input type="text" id="retour-art-search" placeholder="Taper référence ou diamètre…" oninput="filterRetourSearch(this.value)" autocomplete="off">
+        <div id="retour-search-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);max-height:180px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+      </div>
+      <div id="retour-items-list" style="margin-top:12px;min-height:40px;"></div>
+      <div id="retour-items-empty" style="font-size:12px;color:var(--text3);text-align:center;padding:10px;">Aucun article ajouté.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-retour')">Annuler</button>
+      <button class="btn btn-primary" onclick="validateRetour()">✅ Valider le retour (remet en stock)</button>
     </div>
   </div>
 </div>
@@ -1036,6 +1079,8 @@ let stock = [];
 let commandes = [];
 let historique = [];
 let chantiers = []; // [{nom, desc}]
+let retours = [];
+let retourItems = [];
 const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='client' || window.location.pathname.replace(/\/$/,'')==='/client';
 
 // ==================== PWA (icone accueil + badge notifications) ====================
@@ -1352,6 +1397,12 @@ async function loadAllData() {
     newStock: h.new_stock,
   }));
 
+  // Retours d'articles (table optionnelle — ne bloque pas le chargement si absente)
+  try{
+    const {data:retourData,error:retourErr}=await db.from('retours').select('*').order('created_at',{ascending:false});
+    if(!retourErr)retours=retourData||[];
+  }catch(e){/* table pas encore créée */}
+
   // Config
   if (configRes.data) {
     configRes.data.forEach(row => {
@@ -1388,6 +1439,12 @@ function subscribeRealtime() {
         note: h.note, newStock: h.new_stock,
       }));
       renderHistorique();
+    })
+    .on('postgres_changes', {event:'*', schema:'public', table:'retours'}, async () => {
+      try{
+        const {data,error} = await db.from('retours').select('*').order('created_at',{ascending:false});
+        if(!error){retours = data||[]; renderRetoursPage();}
+      }catch(e){/* table pas encore créée */}
     })
     .on('postgres_changes', {event:'*', schema:'public', table:'config'}, async () => {
       const {data} = await db.from('config').select('*');
@@ -1488,7 +1545,7 @@ function showToast(msg, duration=3500) {
 // ==================== NAVIGATION ====================
 function showPage(page,el){
   // Sécurité : bloquer l'accès direct aux pages admin en mode client, même via appel JS direct
-  const adminOnlyPages=['categories','parametres','familles','historique','pareto','alertes','etiquettes','dashboard','scan','chantiers','inventaire'];
+  const adminOnlyPages=['categories','parametres','familles','historique','pareto','alertes','etiquettes','dashboard','scan','chantiers','inventaire','retours'];
   if(typeof CLIENT_MODE!=='undefined'&&CLIENT_MODE&&adminOnlyPages.includes(page)){
     page='commandes';el=document.querySelector('.nav-btn[data-page="commandes"]');
   }
@@ -1519,7 +1576,7 @@ function showPage(page,el){
   },10);
   const titles={dashboard:'Tableau de bord',stock:'Articles & Stock',pareto:'Analyse Pareto (80/20)',
     scan:'Scanner QR',commandes:'Commandes chantiers',alertes:'Alertes de stock',
-    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres',familles:'Familles & Sous-familles',inventaire:'Saisie d\'inventaire'};
+    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres',familles:'Familles & Sous-familles',inventaire:'Saisie d\'inventaire',retours:'Retour articles'};
   document.getElementById('topbar-title').textContent=titles[page]||page;
   const ab=document.getElementById('topbar-action');
   if(page==='stock'){ab.style.display='none';}
@@ -1528,7 +1585,7 @@ function showPage(page,el){
   else ab.style.display='none';
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
     commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
-    categories:renderCategories,parametres:renderParams,familles:renderFamillesPage,inventaire:renderInventaire};
+    categories:renderCategories,parametres:renderParams,familles:renderFamillesPage,inventaire:renderInventaire,retours:renderRetoursPage};
   if(renders[page])renders[page]();
   if(page!=='scan'){stopQRScan();stopCmdQR();}
 }
@@ -3193,6 +3250,120 @@ function filterScanCat(el,val){
   if(el)el.classList.add('active');
 }
 
+// ==================== RETOUR ARTICLES ====================
+function openRetourModal(){
+  retourItems=[];
+  document.getElementById('retour-origine').value='';
+  document.getElementById('retour-motif').value='';
+  document.getElementById('retour-art-search').value='';
+  document.getElementById('retour-search-dropdown').style.display='none';
+  renderRetourItems();
+  openModal('modal-retour');
+}
+
+function filterRetourSearch(val){
+  const dd=document.getElementById('retour-search-dropdown');if(!dd)return;
+  const v=val.toLowerCase().trim();
+  if(!v){dd.style.display='none';return;}
+  const res=stock.filter(a=>a.id.toLowerCase().includes(v)||a.categorie.toLowerCase().includes(v)||String(a.diametre).includes(v)).slice(0,12);
+  if(!res.length){dd.style.display='none';return;}
+  dd.innerHTML=res.map(a=>{
+    return`<div onclick="addRetourItem('${a.id}')" style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
+      <code style="flex:1;font-size:12px;">${a.id}</code>
+      <span style="font-size:11px;color:var(--text2);">${a.categorie} ${a.diametre}</span>
+      <span style="font-size:11px;color:var(--text3);">stock: ${a.stock}</span>
+    </div>`;
+  }).join('');
+  dd.style.display='';
+}
+
+function addRetourItem(id){
+  const existing=retourItems.find(i=>i.id===id);
+  if(existing){existing.qty++;}
+  else{retourItems.push({id,qty:1});}
+  document.getElementById('retour-art-search').value='';
+  document.getElementById('retour-search-dropdown').style.display='none';
+  renderRetourItems();
+}
+
+function changeRetourItemQty(i,delta){
+  const item=retourItems[i];if(!item)return;
+  item.qty+=delta;
+  if(item.qty<1)item.qty=1;
+  renderRetourItems();
+}
+function removeRetourItem(i){
+  retourItems.splice(i,1);
+  renderRetourItems();
+}
+
+function renderRetourItems(){
+  const el=document.getElementById('retour-items-list');
+  const empty=document.getElementById('retour-items-empty');
+  if(!el)return;
+  if(empty)empty.style.display=retourItems.length?'none':'';
+  el.innerHTML=retourItems.map((item,i)=>{
+    const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:0};
+    return`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;">
+      <code style="font-size:12px;font-weight:700;flex:1;">${item.id}</code>
+      <span style="font-size:11px;color:var(--text2);">${art.categorie} ${art.diametre}</span>
+      <span style="font-size:11px;color:var(--text3);">stock actuel: ${art.stock}</span>
+      <button onclick="changeRetourItemQty(${i},-1)" style="width:26px;height:26px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">−</button>
+      <strong style="min-width:24px;text-align:center;">${item.qty}</strong>
+      <button onclick="changeRetourItemQty(${i},1)" style="width:26px;height:26px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">+</button>
+      <button onclick="removeRetourItem(${i})" style="color:var(--red);border:none;background:none;cursor:pointer;font-size:16px;padding:0 4px;">×</button>
+    </div>`;
+  }).join('');
+}
+
+async function validateRetour(){
+  if(!retourItems.length){showToast('⚠ Ajoutez au moins un article');return;}
+  const origine=document.getElementById('retour-origine').value.trim();
+  const motif=document.getElementById('retour-motif').value.trim();
+  try{
+    for(const item of retourItems){
+      const art=stock.find(a=>a.id===item.id);
+      if(!art)continue;
+      const newStock=(art.stock||0)+item.qty;
+      await db.from('stock').update({stock:newStock}).eq('id',art.id);
+      await db.from('historique').insert({type:'in',article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty:item.qty,equipe:origine||'Retour',note:'Retour articles'+(motif?' — '+motif:''),new_stock:newStock});
+      art.stock=newStock;
+    }
+    const num=(retours.length?Math.max(...retours.map(r=>r.num||0)):0)+1;
+    const {error:insErr}=await db.from('retours').insert({num,origine,motif,items:retourItems});
+    if(insErr)throw insErr;
+    showToast('✅ Retour enregistré, stock mis à jour');
+    closeModal('modal-retour');
+    retourItems=[];
+    const {data}=await db.from('retours').select('*').order('created_at',{ascending:false});
+    if(data)retours=data;
+    renderStock();renderDashboard();renderRetoursPage();
+  }catch(err){
+    console.error('Erreur retour:',err);
+    showToast('❌ Erreur : '+(err.message||'la table "retours" existe-t-elle dans Supabase ?'));
+  }
+}
+
+function renderRetoursPage(){
+  const tbody=document.getElementById('retour-table');
+  const empty=document.getElementById('retour-empty');
+  if(!tbody)return;
+  if(empty)empty.style.display=retours.length?'none':'';
+  tbody.innerHTML=retours.map(r=>{
+    const date=new Date(r.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const items=(r.items||[]);
+    const itemsSummary=items.map(i=>i.id+' ×'+i.qty).join(', ');
+    return`<tr>
+      <td>#${String(r.num).padStart(3,'0')}</td>
+      <td>${date}</td>
+      <td>${escH(r.origine||'—')}</td>
+      <td>${escH(r.motif||'—')}</td>
+      <td style="font-size:12px;color:var(--text2);">${escH(itemsSummary)}</td>
+      <td></td>
+    </tr>`;
+  }).join('');
+}
+
 function filterCmdSearch(val){
   const dd=document.getElementById('cmd-search-dropdown');if(!dd)return;
   const v=val.toLowerCase().trim();
@@ -3366,7 +3537,7 @@ function stopCmdQR(){
 function applyClientMode(){
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display='none');
   // Menus masqués en mode client
-  ['categories','parametres','familles','historique','pareto','alertes','etiquettes','dashboard','scan','chantiers','inventaire'].forEach(p=>{
+  ['categories','parametres','familles','historique','pareto','alertes','etiquettes','dashboard','scan','chantiers','inventaire','retours'].forEach(p=>{
     document.querySelectorAll('.nav-btn[data-page="'+p+'"],.mob-btn[data-page="'+p+'"]').forEach(b=>b.style.display='none');
   });
   // Masquer physiquement la page dashboard et basculer sur commandes
