@@ -734,7 +734,13 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     </div>
     <div class="modal-body">
       <div class="form-grid col2">
-        <div class="form-row"><label class="form-label">Origine (chantier / client)</label><input type="text" id="retour-origine" placeholder="ex: Chantier Dupont, surplus…"></div>
+        <div class="form-row"><label class="form-label">Origine (chantier / client)</label>
+          <select id="retour-origine-select" onchange="onRetourOrigineChange()">
+            <option value="">— Sélectionner un chantier —</option>
+            <option value="__autre__">Autre / texte libre…</option>
+          </select>
+          <input type="text" id="retour-origine" placeholder="ex: surplus, erreur de commande…" style="display:none;margin-top:6px;">
+        </div>
         <div class="form-row"><label class="form-label">Motif</label><input type="text" id="retour-motif" placeholder="ex: Chantier terminé, erreur de commande…"></div>
       </div>
       <div class="form-row"><label class="form-label">Nom (fait le retour)</label><input type="text" id="retour-nom" placeholder="Votre nom"></div>
@@ -3299,7 +3305,14 @@ function filterScanCat(el,val){
 function openRetourModal(){
   retourItems=[];
   _retourPendingItem=null;
+  const selO=document.getElementById('retour-origine-select');
+  if(selO){
+    selO.innerHTML='<option value="">— Sélectionner un chantier —</option>'
+      +chantiers.map(c=>`<option value="${escH(c.nom)}">${escH(c.nom)}</option>`).join('')
+      +'<option value="__autre__">Autre / texte libre…</option>';
+  }
   document.getElementById('retour-origine').value='';
+  document.getElementById('retour-origine').style.display='none';
   document.getElementById('retour-motif').value='';
   document.getElementById('retour-nom').value='';
   document.getElementById('retour-art-search').value='';
@@ -3308,6 +3321,19 @@ function openRetourModal(){
   renderRetourItems();
   switchRetourAddMode('search');
   openModal('modal-retour');
+}
+
+function onRetourOrigineChange(){
+  const sel=document.getElementById('retour-origine-select');
+  const txt=document.getElementById('retour-origine');
+  if(sel.value==='__autre__'){
+    txt.style.display='';
+    txt.value='';
+    txt.focus();
+  } else {
+    txt.style.display='none';
+    txt.value=sel.value;
+  }
 }
 
 let _retourFamFilter=null;
@@ -3552,7 +3578,8 @@ function renderRetourItems(){
 
 async function validateRetour(){
   if(!retourItems.length){showToast('⚠ Ajoutez au moins un article');return;}
-  const origine=document.getElementById('retour-origine').value.trim();
+  const selO=document.getElementById('retour-origine-select');
+  const origine=(selO&&selO.value&&selO.value!=='__autre__')?selO.value:document.getElementById('retour-origine').value.trim();
   const motif=document.getElementById('retour-motif').value.trim();
   const nom=document.getElementById('retour-nom').value.trim();
   try{
