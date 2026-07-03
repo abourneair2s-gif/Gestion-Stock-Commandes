@@ -145,7 +145,9 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 #toast{position:fixed;bottom:24px;right:24px;background:#1a1917;color:#fff;padding:10px 18px;border-radius:var(--radius-sm);font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;}
 #toast.show{opacity:1;}
 #mobile-nav{display:none;background:var(--surface);border-top:1px solid var(--border);padding:6px 0 env(safe-area-inset-bottom);flex-shrink:0;}
-#mobile-nav-inner{display:flex;justify-content:space-around;}
+#mobile-nav-inner{display:flex;justify-content:flex-start;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+#mobile-nav-inner::-webkit-scrollbar{display:none;}
+#mobile-nav-inner .mob-btn{flex:0 0 auto;min-width:64px;}
 .mob-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border:none;background:none;color:var(--text3);font-size:10px;cursor:pointer;}
 .mob-btn.active{color:var(--green);}
 .mob-btn-icon{font-size:20px;}
@@ -313,6 +315,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <button class="mob-btn" onclick="showPage('stock',this)" data-page="stock"><span class="mob-btn-icon">📦</span>Stock</button>
     <button class="mob-btn" onclick="showPage('scan',this)" data-page="scan"><span class="mob-btn-icon">📷</span>Scanner</button>
     <button class="mob-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="mob-btn-icon">📋</span>Commandes</button>
+    <button class="mob-btn" onclick="showPage('retours',this)" data-page="retours"><span class="mob-btn-icon">↩️</span>Retour</button>
     <button class="mob-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="mob-btn-icon">🏗</span>Chantiers</button>
     <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
     <button class="mob-btn" onclick="showPage('etiquettes',this)" data-page="etiquettes"><span class="mob-btn-icon">🏷</span>Étiquettes</button>
@@ -477,7 +480,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
       </div>
       <p style="font-size:12.5px;color:var(--text3);margin:-8px 0 12px;">Enregistrez le retour d'articles en stock (chantier terminé, surplus, erreur de commande...). Le stock est mis à jour immédiatement.</p>
       <div class="table-wrap">
-        <table><thead><tr><th>N°</th><th>Date</th><th>Origine</th><th>Motif</th><th>Articles</th><th></th></tr></thead>
+        <table><thead><tr><th>N°</th><th>Date</th><th>Origine</th><th>Nom</th><th>Motif</th><th>Articles</th><th></th></tr></thead>
         <tbody id="retour-table"></tbody></table>
       </div>
       <div id="retour-empty" class="empty-state" style="display:none;">Aucun retour enregistré pour l'instant.</div>
@@ -734,12 +737,32 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div class="form-row"><label class="form-label">Origine (chantier / client)</label><input type="text" id="retour-origine" placeholder="ex: Chantier Dupont, surplus…"></div>
         <div class="form-row"><label class="form-label">Motif</label><input type="text" id="retour-motif" placeholder="ex: Chantier terminé, erreur de commande…"></div>
       </div>
+      <div class="form-row"><label class="form-label">Nom (fait le retour)</label><input type="text" id="retour-nom" placeholder="Votre nom"></div>
       <div class="section-header" style="margin-top:6px;">
         <div class="section-title">Articles retournés</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-xs btn-primary" onclick="switchRetourAddMode('search')">🔍 Recherche</button>
+          <button class="btn btn-xs" onclick="switchRetourAddMode('cat')">📂 Par famille</button>
+          <button class="btn btn-xs" onclick="switchRetourAddMode('qr')">📷 Scanner QR</button>
+        </div>
       </div>
-      <div style="position:relative;">
-        <input type="text" id="retour-art-search" placeholder="Taper référence ou diamètre…" oninput="filterRetourSearch(this.value)" autocomplete="off">
-        <div id="retour-search-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);max-height:180px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+      <div id="retour-add-mode-search">
+        <div style="position:relative;">
+          <input type="text" id="retour-art-search" placeholder="Taper référence ou diamètre…" oninput="filterRetourSearch(this.value)" autocomplete="off">
+          <div id="retour-search-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);max-height:180px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+        </div>
+      </div>
+      <div id="retour-add-mode-cat" style="display:none;">
+        <div class="cat-pills" id="retour-cat-pills" style="margin-bottom:0;"></div>
+        <div id="retour-sf-pills-wrap" style="display:none;border-top:1px dashed var(--border);padding-top:6px;margin-top:4px;">
+          <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;padding-left:2px;">Sous-famille</div>
+          <div class="cat-pills" id="retour-sf-pills" style="margin-bottom:0;"></div>
+        </div>
+        <div id="retour-cat-items" style="max-height:200px;overflow-y:auto;display:none;margin-top:4px;border:1px solid var(--border);border-radius:var(--radius-sm);"></div>
+        <div id="retour-cat-hint" style="text-align:center;color:var(--text3);font-size:12px;padding:16px 0;">Sélectionnez une famille ci-dessus</div>
+      </div>
+      <div id="retour-add-mode-qr" style="display:none;">
+        <div id="retour-qr-zone"></div>
       </div>
       <div id="retour-items-list" style="margin-top:12px;min-height:40px;"></div>
       <div id="retour-items-empty" style="font-size:12px;color:var(--text3);text-align:center;padding:10px;">Aucun article ajouté.</div>
@@ -3255,10 +3278,174 @@ function openRetourModal(){
   retourItems=[];
   document.getElementById('retour-origine').value='';
   document.getElementById('retour-motif').value='';
+  document.getElementById('retour-nom').value='';
   document.getElementById('retour-art-search').value='';
   document.getElementById('retour-search-dropdown').style.display='none';
   renderRetourItems();
+  switchRetourAddMode('search');
   openModal('modal-retour');
+}
+
+let _retourFamFilter=null;
+let _retourSFFilter=null;
+
+function switchRetourAddMode(mode){
+  ['search','cat','qr'].forEach(m=>{
+    const el=document.getElementById('retour-add-mode-'+m);
+    if(el)el.style.display=m===mode?'':'none';
+  });
+  if(mode==='cat')buildRetourCatPills();
+  if(mode==='qr'){startRetourQR();}else{stopRetourQR();}
+}
+
+function startRetourQR(){
+  const zone=document.getElementById('retour-qr-zone');if(!zone)return;
+  zone.innerHTML='<div style="text-align:center;color:var(--text2);padding:20px;font-size:13px;">📷 Scanner QR non disponible ici — utilisez la page <strong>Scanner QR</strong> pour ajouter des articles.</div>';
+}
+function stopRetourQR(){
+  const zone=document.getElementById('retour-qr-zone');
+  if(zone)zone.innerHTML='';
+}
+
+function retourShowHint(msg){
+  const hint=document.getElementById('retour-cat-hint');
+  const items=document.getElementById('retour-cat-items');
+  if(hint){hint.textContent=msg;hint.style.display='';}
+  if(items)items.style.display='none';
+}
+function retourHideHint(){
+  const hint=document.getElementById('retour-cat-hint');
+  const items=document.getElementById('retour-cat-items');
+  if(hint)hint.style.display='none';
+  if(items)items.style.display='';
+}
+
+function buildRetourCatPills(){
+  const el=document.getElementById('retour-cat-pills');
+  if(!el)return;
+  let pills='<span class="cat-pill active" onclick="retourSelectFam(this,null)">Toutes</span>';
+  if(famillesTree.length>0){
+    famillesTree.forEach(f=>{
+      const hasCats=(f.categories||[]).length||(f.enfants||[]).some(sf=>(sf.categories||[]).length);
+      if(hasCats) pills+=`<span class="cat-pill" onclick="retourSelectFam(this,'${f.id}')">${escH(f.nom)}</span>`;
+    });
+  } else {
+    const parents=categories.filter(c=>!c.includes(' > ')).sort();
+    parents.forEach(p=>{pills+=`<span class="cat-pill" onclick="retourSelectFam(this,'__cat__${p.replace(/'/g,"\\'")}')">  ${p}</span>`;});
+  }
+  el.innerHTML=pills;
+  _retourFamFilter=null;_retourSFFilter=null;
+  const sfWrap=document.getElementById('retour-sf-pills-wrap');if(sfWrap)sfWrap.style.display='none';
+  retourHideHint();
+  renderRetourArtList(null);
+}
+
+function retourSelectFam(el,famId){
+  _retourFamFilter=famId;
+  _retourSFFilter=null;
+  document.querySelectorAll('#retour-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+
+  const sfWrap=document.getElementById('retour-sf-pills-wrap');
+  const sfEl=document.getElementById('retour-sf-pills');
+
+  if(!famId){
+    if(sfWrap)sfWrap.style.display='none';
+    retourHideHint();
+    renderRetourArtList(null);
+    return;
+  }
+  if(famId.startsWith('__cat__')){
+    if(sfWrap)sfWrap.style.display='none';
+    retourHideHint();
+    renderRetourArtList(famId);
+    return;
+  }
+  const f=famillesTree.find(x=>x.id===famId);
+  if(!f)return;
+
+  const sfList=(f.enfants||[]).filter(sf=>(sf.categories||[]).length);
+  const hasDirect=(f.categories||[]).length;
+
+  if(!sfList.length&&hasDirect){
+    if(sfWrap)sfWrap.style.display='none';
+    retourHideHint();
+    renderRetourArtList(famId);
+    return;
+  }
+  if(sfWrap)sfWrap.style.display='';
+  let sfPills='';
+  if(hasDirect) sfPills+=`<span class="cat-pill" onclick="retourSelectSF(this,'${f.id}','__direct__')">— Général</span>`;
+  sfList.forEach(sf=>{
+    sfPills+=`<span class="cat-pill" onclick="retourSelectSF(this,'${f.id}','${sf.id}')">${escH(sf.nom)}</span>`;
+  });
+  if(sfEl)sfEl.innerHTML=sfPills;
+  retourShowHint('Sélectionnez une sous-famille');
+}
+
+function retourSelectSF(el,famId,sfId){
+  _retourSFFilter=sfId;
+  document.querySelectorAll('#retour-sf-pills .cat-pill').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  retourHideHint();
+  renderRetourArtList(famId,sfId);
+}
+
+function artRetourRow(a){
+  return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;" onclick="addRetourItem('${a.id}')" onmouseenter="this.style.background='var(--green-bg)'" onmouseleave="this.style.background=''">
+    <code style="font-size:12px;font-weight:700;min-width:80px;">${a.id}</code>
+    <span style="font-size:12px;color:var(--text2);">Ø ${a.diametre}</span>
+    <span style="font-size:12px;color:var(--text3);margin-left:auto;">stock: ${a.stock}</span>
+    <span style="font-size:18px;color:var(--green);font-weight:700;padding-left:6px;">+</span>
+  </div>`;
+}
+
+function renderRetourArtList(famId,sfId){
+  const el=document.getElementById('retour-cat-items');if(!el)return;
+  let arts=[];
+
+  if(!famId){
+    let html='';
+    if(famillesTree.length>0){
+      famillesTree.forEach(f=>{
+        const allFamCats=[...(f.categories||[]),...(f.enfants||[]).flatMap(sf=>sf.categories||[])];
+        const famArts=stock.filter(a=>allFamCats.includes(a.categorie));
+        if(!famArts.length)return;
+        html+=`<div style="padding:6px 10px;background:var(--bg2);font-size:12px;font-weight:700;border-bottom:1px solid var(--border);border-top:2px solid var(--border2);">📁 ${escH(f.nom)}</div>`;
+        (f.enfants||[]).forEach(sf=>{
+          const sfArts=famArts.filter(a=>(sf.categories||[]).includes(a.categorie));
+          if(!sfArts.length)return;
+          html+=`<div style="padding:4px 10px 4px 20px;background:var(--bg);font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.04em;">📁 ${escH(sf.nom)}</div>`;
+          sfArts.forEach(a=>{html+=artRetourRow(a);});
+        });
+        const directArts=famArts.filter(a=>(f.categories||[]).includes(a.categorie));
+        directArts.forEach(a=>{html+=artRetourRow(a);});
+      });
+    } else {
+      stock.forEach(a=>{html+=artRetourRow(a);});
+    }
+    el.innerHTML=html||'<div style="text-align:center;color:var(--text3);padding:14px;">Aucun article.</div>';
+    return;
+  }
+
+  if(famId.startsWith('__cat__')){
+    const cat=famId.slice(7);
+    arts=stock.filter(a=>a.categorie===cat);
+  } else {
+    const f=famillesTree.find(x=>x.id===famId);
+    if(!f){el.innerHTML='';return;}
+    if(!sfId||sfId==='__direct__'){
+      arts=stock.filter(a=>(f.categories||[]).includes(a.categorie));
+    } else {
+      const sf=(f.enfants||[]).find(x=>x.id===sfId);
+      arts=sf?stock.filter(a=>(sf.categories||[]).includes(a.categorie)):[];
+    }
+  }
+  if(!arts.length){
+    el.innerHTML='<div style="text-align:center;color:var(--text3);padding:14px;">Aucun article dans cette sous-famille.</div>';
+    return;
+  }
+  el.innerHTML=arts.map(artRetourRow).join('');
 }
 
 function filterRetourSearch(val){
@@ -3320,17 +3507,18 @@ async function validateRetour(){
   if(!retourItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const origine=document.getElementById('retour-origine').value.trim();
   const motif=document.getElementById('retour-motif').value.trim();
+  const nom=document.getElementById('retour-nom').value.trim();
   try{
     for(const item of retourItems){
       const art=stock.find(a=>a.id===item.id);
       if(!art)continue;
       const newStock=(art.stock||0)+item.qty;
       await db.from('stock').update({stock:newStock}).eq('id',art.id);
-      await db.from('historique').insert({type:'in',article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty:item.qty,equipe:origine||'Retour',note:'Retour articles'+(motif?' — '+motif:''),new_stock:newStock});
+      await db.from('historique').insert({type:'in',article_id:art.id,categorie:art.categorie,diametre:art.diametre,qty:item.qty,equipe:nom||origine||'Retour',note:'Retour articles'+(origine?' — '+origine:'')+(motif?' ('+motif+')':''),new_stock:newStock});
       art.stock=newStock;
     }
     const num=(retours.length?Math.max(...retours.map(r=>r.num||0)):0)+1;
-    const {error:insErr}=await db.from('retours').insert({num,origine,motif,items:retourItems});
+    const {error:insErr}=await db.from('retours').insert({num,origine,motif,nom,items:retourItems});
     if(insErr)throw insErr;
     showToast('✅ Retour enregistré, stock mis à jour');
     closeModal('modal-retour');
@@ -3357,6 +3545,7 @@ function renderRetoursPage(){
       <td>#${String(r.num).padStart(3,'0')}</td>
       <td>${date}</td>
       <td>${escH(r.origine||'—')}</td>
+      <td>${escH(r.nom||'—')}</td>
       <td>${escH(r.motif||'—')}</td>
       <td style="font-size:12px;color:var(--text2);">${escH(itemsSummary)}</td>
       <td></td>
