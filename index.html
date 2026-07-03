@@ -257,7 +257,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="StockPro">
+<meta name="apple-mobile-web-app-title" content="StockPro" id="apple-title-meta">
 <link rel="apple-touch-icon" id="apple-touch-icon-link">
 </head>
 <body>
@@ -1045,8 +1045,9 @@ function setupPWA(){
     const startUrl=CLIENT_MODE?'/client':'/';
     const scopeUrl=CLIENT_MODE?'/client':'/';
     const manifest={
-      name:CLIENT_MODE?'StockPro - Commandes':'StockPro - AIR2S',
-      short_name:'StockPro',
+      id:CLIENT_MODE?'/client':'/',
+      name:CLIENT_MODE?'Commande client AIR2S':'StockPro - AIR2S',
+      short_name:CLIENT_MODE?'Cde Client':'StockPro',
       start_url:startUrl,
       scope:scopeUrl,
       display:'standalone',
@@ -1060,6 +1061,9 @@ function setupPWA(){
     document.head.appendChild(link);
     const appleIcon=document.getElementById('apple-touch-icon-link');
     if(appleIcon)appleIcon.href=iconUrl;
+    const appleTitle=document.getElementById('apple-title-meta');
+    if(appleTitle)appleTitle.setAttribute('content',CLIENT_MODE?'Cde Client':'StockPro');
+    if(CLIENT_MODE)document.title='Commande client AIR2S';
     if('serviceWorker' in navigator){
       navigator.serviceWorker.register('/sw.js').catch(()=>{/* installation PWA non critique si echec */});
     }
