@@ -1036,18 +1036,19 @@ let stock = [];
 let commandes = [];
 let historique = [];
 let chantiers = []; // [{nom, desc}]
-const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='client';
+const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='client' || window.location.pathname.replace(/\/$/,'')==='/client';
 
 // ==================== PWA (icone accueil + badge notifications) ====================
 function setupPWA(){
   try{
     const iconUrl=CLIENT_MODE?'/icon-client-512.png':'/icon-admin-512.png';
-    const startUrl=CLIENT_MODE?'/?mode=client':'/';
+    const startUrl=CLIENT_MODE?'/client':'/';
+    const scopeUrl=CLIENT_MODE?'/client':'/';
     const manifest={
       name:CLIENT_MODE?'StockPro - Commandes':'StockPro - AIR2S',
       short_name:'StockPro',
       start_url:startUrl,
-      scope:'/',
+      scope:scopeUrl,
       display:'standalone',
       background_color:'#ffffff',
       theme_color:'#1a8c66',
