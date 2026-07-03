@@ -730,7 +730,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <div class="modal modal-lg">
     <div class="modal-header">
       <div class="modal-title">↩️ Nouveau retour d'articles</div>
-      <button class="btn btn-xs" onclick="closeModal('modal-retour')">✕</button>
+      <button class="btn btn-xs" onclick="stopRetourQR();closeModal('modal-retour')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-grid col2">
@@ -763,13 +763,35 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
       </div>
       <div id="retour-add-mode-qr" style="display:none;">
         <div id="retour-qr-zone"></div>
+        <div style="text-align:center;margin-top:8px;">
+          <button class="btn btn-primary btn-sm" onclick="startRetourQR()" id="btn-retour-qr-start">▶ Démarrer caméra</button>
+          <button class="btn btn-sm" onclick="stopRetourQR()" id="btn-retour-qr-stop" style="display:none;">⏹ Arrêter</button>
+        </div>
+      </div>
+      <!-- Panneau de validation quantité -->
+      <div id="retour-qty-picker" style="display:none;flex-direction:column;gap:10px;background:#e6f5ef;border:3px solid var(--green);border-radius:10px;padding:14px;margin-top:10px;">
+        <div style="font-weight:700;font-size:14px;color:var(--green);">📦 Article sélectionné</div>
+        <div style="font-weight:700;font-size:15px;" id="retour-qty-picker-id"></div>
+        <div style="font-size:12px;color:var(--text2);" id="retour-qty-picker-desc"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+          <button onclick="document.getElementById('retour-qty-picker-input').value=Math.max(1,parseInt(document.getElementById('retour-qty-picker-input').value||1)-1)" style="width:44px;height:44px;font-size:22px;border:2px solid var(--green);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;color:var(--green);">−</button>
+          <input type="number" id="retour-qty-picker-input" value="1" min="1" style="width:70px;height:44px;font-size:22px;font-weight:700;text-align:center;border:2px solid var(--green);border-radius:8px;padding:4px;">
+          <button onclick="document.getElementById('retour-qty-picker-input').value=parseInt(document.getElementById('retour-qty-picker-input').value||1)+1" style="width:44px;height:44px;font-size:22px;border:2px solid var(--green);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;color:var(--green);">+</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button class="btn" onclick="cancelRetourItem()" style="flex:1;padding:12px;font-size:14px;">✕ Annuler</button>
+          <button class="btn btn-primary" onclick="confirmRetourItem()" style="flex:2;padding:12px;font-size:16px;font-weight:700;">✅ Valider l'article</button>
+        </div>
       </div>
       <div id="retour-items-list" style="margin-top:12px;min-height:40px;"></div>
       <div id="retour-items-empty" style="font-size:12px;color:var(--text3);text-align:center;padding:10px;">Aucun article ajouté.</div>
     </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-retour')">Annuler</button>
-      <button class="btn btn-primary" onclick="validateRetour()">✅ Valider le retour (remet en stock)</button>
+    <div class="modal-footer" style="flex-direction:column;gap:8px;padding-top:12px;border-top:2px dashed var(--border);">
+      <div style="font-size:11px;color:var(--text3);text-align:center;">— Vérifiez la liste des articles avant de valider —</div>
+      <div style="display:flex;gap:8px;width:100%;">
+        <button class="btn" onclick="stopRetourQR();closeModal('modal-retour')" style="flex:1;">Annuler</button>
+        <button class="btn btn-primary" onclick="validateRetour()" style="flex:2;">✅ Valider le retour (remet en stock)</button>
+      </div>
     </div>
   </div>
 </div>
@@ -827,7 +849,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <div class="modal modal-lg">
     <div class="modal-header">
       <div class="modal-title" id="cmd-modal-title">Nouvelle demande de matériel</div>
-      <button class="btn btn-xs" onclick="closeModal('modal-commande')">✕</button>
+      <button class="btn btn-xs" onclick="stopCmdQR();closeModal('modal-commande')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-grid col2">
@@ -905,7 +927,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <div class="modal-footer" style="flex-direction:column;gap:8px;padding-top:12px;border-top:2px dashed var(--border);">
       <div style="font-size:11px;color:var(--text3);text-align:center;">— Vérifiez la liste des articles avant de soumettre —</div>
       <div style="display:flex;gap:8px;width:100%;">
-        <button class="btn" onclick="closeModal('modal-commande')" style="flex:1;">Annuler</button>
+        <button class="btn" onclick="stopCmdQR();closeModal('modal-commande')" style="flex:1;">Annuler</button>
         <button class="btn btn-primary" onclick="saveCommande()" style="flex:2;background:var(--blue);">📤 Soumettre la commande</button>
       </div>
     </div>
@@ -1610,7 +1632,7 @@ function showPage(page,el){
     commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
     categories:renderCategories,parametres:renderParams,familles:renderFamillesPage,inventaire:renderInventaire,retours:renderRetoursPage};
   if(renders[page])renders[page]();
-  if(page!=='scan'){stopQRScan();stopCmdQR();}
+  if(page!=='scan'){stopQRScan();stopCmdQR();stopRetourQR();}
 }
 
 // ==================== DASHBOARD ====================
@@ -3079,7 +3101,7 @@ function switchAddMode(mode){
     if(el)el.style.display=m===mode?'':'none';
   });
   if(mode==='cat')buildCatPills();
-  if(mode==='qr'){startCmdQR();}else{stopCmdQR();}
+  if(mode!=='qr')stopCmdQR();
 }
 
 function buildCatPills(){
@@ -3276,11 +3298,13 @@ function filterScanCat(el,val){
 // ==================== RETOUR ARTICLES ====================
 function openRetourModal(){
   retourItems=[];
+  _retourPendingItem=null;
   document.getElementById('retour-origine').value='';
   document.getElementById('retour-motif').value='';
   document.getElementById('retour-nom').value='';
   document.getElementById('retour-art-search').value='';
   document.getElementById('retour-search-dropdown').style.display='none';
+  document.getElementById('retour-qty-picker').style.display='none';
   renderRetourItems();
   switchRetourAddMode('search');
   openModal('modal-retour');
@@ -3295,16 +3319,18 @@ function switchRetourAddMode(mode){
     if(el)el.style.display=m===mode?'':'none';
   });
   if(mode==='cat')buildRetourCatPills();
-  if(mode==='qr'){startRetourQR();}else{stopRetourQR();}
+  if(mode!=='qr')stopRetourQR();
 }
 
 function startRetourQR(){
-  const zone=document.getElementById('retour-qr-zone');if(!zone)return;
-  zone.innerHTML='<div style="text-align:center;color:var(--text2);padding:20px;font-size:13px;">📷 Scanner QR non disponible ici — utilisez la page <strong>Scanner QR</strong> pour ajouter des articles.</div>';
+  startModalQR('retour',(text)=>{
+    const art=stock.find(a=>a.id===text);
+    if(art){addRetourItem(art.id);}
+    else{showToast('❌ QR inconnu : '+text);}
+  });
 }
 function stopRetourQR(){
-  const zone=document.getElementById('retour-qr-zone');
-  if(zone)zone.innerHTML='';
+  stopModalQR('retour');
 }
 
 function retourShowHint(msg){
@@ -3464,13 +3490,34 @@ function filterRetourSearch(val){
   dd.style.display='';
 }
 
+let _retourPendingItem=null;
 function addRetourItem(id){
-  const existing=retourItems.find(i=>i.id===id);
-  if(existing){existing.qty++;}
-  else{retourItems.push({id,qty:1});}
-  document.getElementById('retour-art-search').value='';
+  const art=stock.find(a=>a.id===id);if(!art)return;
+  _retourPendingItem=art;
   document.getElementById('retour-search-dropdown').style.display='none';
+  const se=document.getElementById('retour-art-search');if(se)se.value='';
+  document.getElementById('retour-qty-picker-id').textContent=art.id;
+  document.getElementById('retour-qty-picker-desc').textContent=art.categorie+' — Ø'+art.diametre+' | Stock actuel: '+art.stock;
+  document.getElementById('retour-qty-picker-input').value=1;
+  const pk=document.getElementById('retour-qty-picker');if(pk){pk.style.display='flex';}
+  document.getElementById('retour-qty-picker-input').focus();
+}
+
+function confirmRetourItem(){
+  if(!_retourPendingItem)return;
+  const qty=parseInt(document.getElementById('retour-qty-picker-input')?.value)||1;
+  const existing=retourItems.findIndex(x=>x.id===_retourPendingItem.id);
+  if(existing>-1)retourItems[existing].qty+=qty;
+  else retourItems.push({id:_retourPendingItem.id,qty});
+  _retourPendingItem=null;
+  document.getElementById('retour-qty-picker').style.display='none';
   renderRetourItems();
+  showToast('Article ajouté');
+}
+
+function cancelRetourItem(){
+  _retourPendingItem=null;
+  const pk=document.getElementById('retour-qty-picker');if(pk)pk.style.display='none';
 }
 
 function changeRetourItemQty(i,delta){
@@ -3708,18 +3755,68 @@ function editCmd(id){
   openModal('modal-commande');
 }
 
-// QR dans modale commande (placeholders - fonctionnalité complète via startQRScan)
-let cmdQrScanner=null;
+// QR dans modales commande / retour : scanner caméra réel, partagé via helper générique
+let _modalQrInstances={};
+
+async function startModalQR(prefix,onDecode){
+  if(_modalQrInstances[prefix])return;
+  const zone=document.getElementById(prefix+'-qr-zone');if(!zone)return;
+  zone.innerHTML='';
+  zone.style.minHeight='250px';
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    zone.innerHTML='<div style="text-align:center;color:var(--red);padding:20px;font-size:13px;">Votre navigateur ne supporte pas l\'accès à la caméra.</div>';
+    return;
+  }
+  try{
+    await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+  }catch(e){
+    zone.innerHTML='<div style="text-align:center;color:var(--red);padding:20px;font-size:13px;">Accès caméra refusé. Autorisez la caméra dans les paramètres du navigateur.</div>';
+    return;
+  }
+  try{
+    const qr=new Html5Qrcode(prefix+'-qr-zone');
+    _modalQrInstances[prefix]=qr;
+    await qr.start(
+      {facingMode:'environment'},
+      {fps:10,qrbox:{width:220,height:220},aspectRatio:1.0},
+      async(text)=>{
+        if(_modalQrInstances[prefix])try{await _modalQrInstances[prefix].pause(true);}catch(e){}
+        onDecode(text.trim());
+        setTimeout(async()=>{if(_modalQrInstances[prefix])try{await _modalQrInstances[prefix].resume();}catch(e){}},1500);
+      },
+      ()=>{}
+    );
+    const s=document.getElementById('btn-'+prefix+'-qr-start');if(s)s.style.display='none';
+    const st=document.getElementById('btn-'+prefix+'-qr-stop');if(st)st.style.display='';
+  }catch(e){
+    _modalQrInstances[prefix]=null;
+    zone.innerHTML='<div style="text-align:center;color:var(--red);padding:20px;font-size:13px;">Impossible de démarrer la caméra : '+e+'</div>';
+  }
+}
+
+function stopModalQR(prefix){
+  const inst=_modalQrInstances[prefix];
+  if(inst){
+    try{inst.stop().then(()=>{inst.clear();const z=document.getElementById(prefix+'-qr-zone');if(z)z.innerHTML='';}).catch(()=>{});}catch(e){}
+    _modalQrInstances[prefix]=null;
+  }
+  const s=document.getElementById('btn-'+prefix+'-qr-start');if(s)s.style.display='';
+  const st=document.getElementById('btn-'+prefix+'-qr-stop');if(st)st.style.display='none';
+}
+
 function startCmdQR(){
-  const zone=document.getElementById('cmd-qr-zone');if(!zone)return;
-  zone.innerHTML='<div style="text-align:center;color:var(--text2);padding:20px;font-size:13px;">📷 Scanner QR non disponible ici — utilisez la page <strong>Scanner QR</strong> pour ajouter des articles.</div>';
-  document.getElementById('btn-cmd-qr-start').style.display='none';
+  startModalQR('cmd',(text)=>{
+    const art=stock.find(a=>a.id===text);
+    if(art){
+      if(CLIENT_MODE&&!isArticleVisibleClient(art)){showToast('❌ Article non disponible');return;}
+      addCmdItem(art.id);
+    } else {
+      showToast('❌ QR inconnu : '+text);
+    }
+  });
 }
 function stopCmdQR(){
-  const zone=document.getElementById('cmd-qr-zone');
-  if(zone)zone.innerHTML='';
-  const s=document.getElementById('btn-cmd-qr-start');if(s)s.style.display='';
-  const st=document.getElementById('btn-cmd-qr-stop');if(st)st.style.display='none';
+  stopModalQR('cmd');
 }
 
 // ==================== CLIENT MODE ====================
