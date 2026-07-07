@@ -1565,15 +1565,15 @@ function fmtDate(ts){
 function getAlerts(){return stock.filter(a=>getStatus(a)!=='ok');}
 function getCmdPending(){
   if(CLIENT_MODE){
-    return commandes.filter(c=>c.statut==='en_attente'&&c.source==='client'&&c.account_email===clientAccountEmail);
+    return commandes.filter(c=>c.statut==='en_attente'&&!c.archived&&c.source==='client'&&c.account_email===clientAccountEmail);
   }
-  return commandes.filter(c=>c.statut==='en_attente');
+  return commandes.filter(c=>c.statut==='en_attente'&&!c.archived);
 }
 function updateBadges(){
   const a=getAlerts().length,p=getCmdPending().length;
   const reliquats=CLIENT_MODE
-    ?commandes.filter(c=>c.statut==='approuvee_partielle'&&c.source==='client'&&c.account_email===clientAccountEmail).length
-    :commandes.filter(c=>c.statut==='approuvee_partielle').length;
+    ?commandes.filter(c=>c.statut==='approuvee_partielle'&&!c.archived&&c.source==='client'&&c.account_email===clientAccountEmail).length
+    :commandes.filter(c=>c.statut==='approuvee_partielle'&&!c.archived).length;
   const sa=document.getElementById('sb-alert-count'),sc=document.getElementById('sb-cmd-count');
   if(sa){sa.textContent=a;sa.style.display=a>0?'':'none';}
   if(sc){sc.textContent=p+reliquats;sc.style.display=(p+reliquats)>0?'':'none';}
@@ -2637,11 +2637,11 @@ async function printEtiquettes(){
     try{
       const canvas=await getQRCanvas(art.id,150);
       const src=canvas.toDataURL('image/png');
-      labelsHtml+=`<div class="label"><h2>${escH(art.categorie)}</h2><p>Ø ${escH(String(art.diametre))}</p><img src="${src}"><p><strong>${escH(art.id)}</strong></p></div>`;
+      labelsHtml+=`<div class="label"><h2>${escH(art.categorie)}</h2><p class="diam">Ø ${escH(String(art.diametre))}</p><img src="${src}"><p class="ref">${escH(art.id)}</p></div>`;
     }catch(e){/* article ignoré si QR échoue */}
   }
   const html='<!DOCTYPE html><html><head><title>Étiquettes QR</title>'
-    +'<style>body{font-family:sans-serif;margin:0;padding:16px;}.sheet{display:flex;flex-wrap:wrap;gap:12px;}.label{border:2px solid #333;border-radius:8px;padding:12px;width:170px;text-align:center;page-break-inside:avoid;}h2{font-size:12px;margin:0 0 2px;}p{font-size:10px;color:#555;margin:2px 0;}img{width:130px;height:130px;}</style>'
+    +'<style>body{font-family:sans-serif;margin:0;padding:16px;}.sheet{display:flex;flex-wrap:wrap;gap:14px;}.label{border:2px solid #333;border-radius:8px;padding:14px;width:210px;text-align:center;page-break-inside:avoid;}h2{font-size:14px;margin:0 0 4px;}.diam{font-size:26px;font-weight:800;color:#111;margin:2px 0;}img{width:150px;height:150px;}.ref{font-size:22px;font-weight:800;margin:6px 0 0;letter-spacing:.02em;}</style>'
     +'</head><body><div class="sheet">'+labelsHtml+'</div><script>window.onload=function(){window.print();};<\/script></body></html>';
   const w=window.open('','_blank');
   if(!w){showToast('⚠ Bloqué par le navigateur — autorisez les pop-ups pour ce site');return;}
@@ -2655,7 +2655,7 @@ async function downloadEtiquettes(){
   showToast('Génération du PNG…');
   const cols=Math.min(4,Math.max(1,Math.ceil(Math.sqrt(arts.length))));
   const rows=Math.ceil(arts.length/cols);
-  const cellW=220,cellH=260,pad=16;
+  const cellW=260,cellH=330,pad=16;
   const canvas=document.createElement('canvas');
   canvas.width=cols*cellW+pad*2;
   canvas.height=rows*cellH+pad*2;
@@ -2667,16 +2667,16 @@ async function downloadEtiquettes(){
     const x=pad+col*cellW,y=pad+row*cellH;
     ctx.strokeStyle='#333';ctx.lineWidth=2;
     ctx.strokeRect(x+8,y+8,cellW-16,cellH-16);
-    ctx.fillStyle='#1a1917';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+    ctx.fillStyle='#1a1917';ctx.font='bold 15px sans-serif';ctx.textAlign='center';
     ctx.fillText(String(art.categorie),x+cellW/2,y+30);
-    ctx.font='11px sans-serif';ctx.fillStyle='#555';
-    ctx.fillText('Ø '+art.diametre,x+cellW/2,y+48);
+    ctx.font='bold 30px sans-serif';ctx.fillStyle='#111';
+    ctx.fillText('Ø '+art.diametre,x+cellW/2,y+66);
     try{
-      const qrCanvas=await getQRCanvas(art.id,150);
-      ctx.drawImage(qrCanvas,x+(cellW-150)/2,y+58,150,150);
+      const qrCanvas=await getQRCanvas(art.id,160);
+      ctx.drawImage(qrCanvas,x+(cellW-160)/2,y+80,160,160);
     }catch(e){/* zone QR laissée vide si échec */}
-    ctx.font='bold 12px sans-serif';ctx.fillStyle='#1a1917';
-    ctx.fillText(art.id,x+cellW/2,y+232);
+    ctx.font='bold 26px sans-serif';ctx.fillStyle='#1a1917';
+    ctx.fillText(art.id,x+cellW/2,y+275);
   }
   const url=canvas.toDataURL('image/png');
   const a=document.createElement('a');
