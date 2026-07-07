@@ -2538,30 +2538,39 @@ async function exportChantierExcel(nom){
 function renderEtiquettes(){
   const pills=document.getElementById('etiq-cat-pills');
   if(!pills)return;
-  let html='<div class="cat-pill active" onclick="selectEtiqParent(this,\'\',[])">Toutes</div>';
+  _etiqPillsCats=[];
+  let html='<div class="cat-pill active" onclick="selectEtiqParentIdx(this,-1,\'\')">Toutes</div>';
   if(famillesTree.length>0){
     famillesTree.forEach(f=>{
       const fCats=(f.categories||[]);
       if((f.enfants||[]).length){
         f.enfants.forEach(sf=>{
           if((sf.categories||[]).length){
-            const sc=JSON.stringify(sf.categories||[]).replace(/"/g,'&quot;');
-            html+=`<div class="cat-pill" onclick="selectEtiqParent(this,'${sf.nom.replace(/'/g,"\'")}',${JSON.stringify(sf.categories||[])})">📁 ${sf.nom}</div>`;
+            const idx=_etiqPillsCats.push(sf.categories||[])-1;
+            html+=`<div class="cat-pill" onclick="selectEtiqParentIdx(this,${idx},'${escH(sf.nom)}')">📁 ${escH(sf.nom)}</div>`;
           }
         });
-        if(fCats.length) html+=`<div class="cat-pill" onclick="selectEtiqParent(this,'${f.nom.replace(/'/g,"\'")}',${JSON.stringify(fCats)})">📁 ${f.nom}</div>`;
+        if(fCats.length){
+          const idx=_etiqPillsCats.push(fCats)-1;
+          html+=`<div class="cat-pill" onclick="selectEtiqParentIdx(this,${idx},'${escH(f.nom)}')">📁 ${escH(f.nom)}</div>`;
+        }
       } else if(fCats.length){
-        html+=`<div class="cat-pill" onclick="selectEtiqParent(this,'${f.nom.replace(/'/g,"\'")}',${JSON.stringify(fCats)})">📁 ${f.nom}</div>`;
+        const idx=_etiqPillsCats.push(fCats)-1;
+        html+=`<div class="cat-pill" onclick="selectEtiqParentIdx(this,${idx},'${escH(f.nom)}')">📁 ${escH(f.nom)}</div>`;
       }
     });
   } else {
     const parents=['Toutes',...categories.filter(c=>!c.includes(' > ')).sort()];
-    html=parents.map(c=>`<div class="cat-pill ${(c==='Toutes'&&etiqSelectedCat==='')||c===etiqSelectedCat?'active':''}" onclick="selectEtiqParent(this,'${c==='Toutes'?'':c}',[])">${c}</div>`).join('');
+    html=parents.map(c=>`<div class="cat-pill ${(c==='Toutes'&&etiqSelectedCat==='')||c===etiqSelectedCat?'active':''}" onclick="selectEtiqParent(this,'${escH(c==='Toutes'?'':c)}',[])">${escH(c)}</div>`).join('');
   }
   pills.innerHTML=html;
   renderEtiqGrid();
 }
 let etiqSelectedCats=[];
+let _etiqPillsCats=[];
+function selectEtiqParentIdx(el,idx,key){
+  selectEtiqParent(el,key,idx>=0?_etiqPillsCats[idx]:[]);
+}
 function selectEtiqParent(el,key,cats){
   document.querySelectorAll('#etiq-cat-pills .cat-pill').forEach(p=>p.classList.remove('active'));
   if(el)el.classList.add('active');
