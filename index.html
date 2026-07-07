@@ -2584,14 +2584,106 @@ function renderEtiqGrid(){
   if(!etiqSelectedCat){filtered=stock;}
   else if(etiqSelectedCats.length){filtered=stock.filter(a=>etiqSelectedCats.includes(a.categorie));}
   else{filtered=stock.filter(a=>a.categorie===etiqSelectedCat);}
-  grid.innerHTML=filtered.map(a=>{const checked=etiqSelected.has(a.id);return `<div onclick="toggleEtiq('${a.id}',this)" style="border:2px solid ${checked?'var(--green)':'var(--border)'};border-radius:10px;padding:10px;cursor:pointer;text-align:center;background:${checked?'#e6f5ef':'var(--surface)'}"><div style="font-size:10px;font-weight:600;">${a.categorie}</div><div style="font-weight:700;font-size:13px;">${a.id}</div><div style="font-size:11px;">O ${a.diametre}</div><div>${checked?'OK':' '}</div></div>`;}).join('');
+  grid.innerHTML=filtered.map(a=>{const checked=etiqSelected.has(a.id);return `<div onclick="toggleEtiq('${a.id}',this)" style="border:2px solid ${checked?'var(--green)':'var(--border)'};border-radius:10px;padding:10px;cursor:pointer;text-align:center;background:${checked?'#e6f5ef':'var(--surface)'}"><div style="font-size:10px;font-weight:600;">${a.categorie}</div><div class="etiq-qr-thumb" data-id="${a.id}" style="width:70px;height:70px;margin:4px auto;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:9px;">…</div><div style="font-weight:700;font-size:13px;">${a.id}</div><div style="font-size:11px;">Ø ${a.diametre}</div><div>${checked?'✅':' '}</div></div>`;}).join('');
   const el=document.getElementById('etiq-count');if(el)el.textContent=etiqSelected.size+' selectionne(s)';
+  // Générer les aperçus QR de façon asynchrone (ne bloque pas l'affichage initial)
+  requestAnimationFrame(async()=>{
+    for(const a of filtered){
+      const thumb=grid.querySelector(`.etiq-qr-thumb[data-id="${CSS.escape(a.id)}"]`);
+      if(!thumb)continue;
+      try{
+        const canvas=await getQRCanvas(a.id,70);
+        thumb.innerHTML='';thumb.appendChild(canvas);
+      }catch(e){thumb.textContent='?';}
+    }
+  });
 }
 function toggleEtiq(id,el){if(etiqSelected.has(id)){etiqSelected.delete(id);}else{etiqSelected.add(id);}renderEtiqGrid();}
 function selectAllEtiquettes(val){const f=etiqSelectedCat===''?stock:stock.filter(a=>a.categorie===etiqSelectedCat);f.forEach(a=>{if(val)etiqSelected.add(a.id);else etiqSelected.delete(a.id);});renderEtiqGrid();}
 function updateEtiqCount(){const el=document.getElementById('etiq-count');if(el)el.textContent=etiqSelected.size+' selectionne(s)';}
-function printEtiquettes(){showToast('Impression non disponible - utilisez le bouton QR individuel');}
-function downloadEtiquettes(){showToast('Telechargement non disponible');}
+
+// Génère un QR code (canvas) pour un texte donné, sans l'afficher à l'écran
+function getQRCanvas(text,size){
+  return new Promise((resolve,reject)=>{
+    try{
+      const tempDiv=document.createElement('div');
+      tempDiv.style.cssText='position:absolute;left:-9999px;top:-9999px;';
+      document.body.appendChild(tempDiv);
+      new QRCode(tempDiv,{text,width:size,height:size,colorDark:'#1a1917',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+      setTimeout(()=>{
+        const canvas=tempDiv.querySelector('canvas');
+        const img=tempDiv.querySelector('img');
+        let result=null;
+        if(canvas){
+          result=canvas;
+        } else if(img){
+          const c=document.createElement('canvas');c.width=size;c.height=size;
+          c.getContext('2d').drawImage(img,0,0,size,size);
+          result=c;
+        }
+        document.body.removeChild(tempDiv);
+        if(result)resolve(result);else reject('QR non généré');
+      },60);
+    }catch(e){reject(e);}
+  });
+}
+
+async function printEtiquettes(){
+  const arts=stock.filter(a=>etiqSelected.has(a.id));
+  if(!arts.length){showToast('⚠ Sélectionnez au moins un article');return;}
+  showToast('Génération des étiquettes…');
+  let labelsHtml='';
+  for(const art of arts){
+    try{
+      const canvas=await getQRCanvas(art.id,150);
+      const src=canvas.toDataURL('image/png');
+      labelsHtml+=`<div class="label"><h2>${escH(art.categorie)}</h2><p>Ø ${escH(String(art.diametre))}</p><img src="${src}"><p><strong>${escH(art.id)}</strong></p></div>`;
+    }catch(e){/* article ignoré si QR échoue */}
+  }
+  const html='<!DOCTYPE html><html><head><title>Étiquettes QR</title>'
+    +'<style>body{font-family:sans-serif;margin:0;padding:16px;}.sheet{display:flex;flex-wrap:wrap;gap:12px;}.label{border:2px solid #333;border-radius:8px;padding:12px;width:170px;text-align:center;page-break-inside:avoid;}h2{font-size:12px;margin:0 0 2px;}p{font-size:10px;color:#555;margin:2px 0;}img{width:130px;height:130px;}</style>'
+    +'</head><body><div class="sheet">'+labelsHtml+'</div><script>window.onload=function(){window.print();};<\/script></body></html>';
+  const w=window.open('','_blank');
+  if(!w){showToast('⚠ Bloqué par le navigateur — autorisez les pop-ups pour ce site');return;}
+  w.document.write(html);
+  w.document.close();
+}
+
+async function downloadEtiquettes(){
+  const arts=stock.filter(a=>etiqSelected.has(a.id));
+  if(!arts.length){showToast('⚠ Sélectionnez au moins un article');return;}
+  showToast('Génération du PNG…');
+  const cols=Math.min(4,Math.max(1,Math.ceil(Math.sqrt(arts.length))));
+  const rows=Math.ceil(arts.length/cols);
+  const cellW=220,cellH=260,pad=16;
+  const canvas=document.createElement('canvas');
+  canvas.width=cols*cellW+pad*2;
+  canvas.height=rows*cellH+pad*2;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  for(let i=0;i<arts.length;i++){
+    const art=arts[i];
+    const col=i%cols,row=Math.floor(i/cols);
+    const x=pad+col*cellW,y=pad+row*cellH;
+    ctx.strokeStyle='#333';ctx.lineWidth=2;
+    ctx.strokeRect(x+8,y+8,cellW-16,cellH-16);
+    ctx.fillStyle='#1a1917';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+    ctx.fillText(String(art.categorie),x+cellW/2,y+30);
+    ctx.font='11px sans-serif';ctx.fillStyle='#555';
+    ctx.fillText('Ø '+art.diametre,x+cellW/2,y+48);
+    try{
+      const qrCanvas=await getQRCanvas(art.id,150);
+      ctx.drawImage(qrCanvas,x+(cellW-150)/2,y+58,150,150);
+    }catch(e){/* zone QR laissée vide si échec */}
+    ctx.font='bold 12px sans-serif';ctx.fillStyle='#1a1917';
+    ctx.fillText(art.id,x+cellW/2,y+232);
+  }
+  const url=canvas.toDataURL('image/png');
+  const a=document.createElement('a');
+  a.href=url;a.download='etiquettes-qr-'+new Date().toISOString().slice(0,10)+'.png';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  showToast('✅ PNG téléchargé ('+arts.length+' étiquette(s))');
+}
 function exportChantiers(){showToast('Export non disponible');}
 function openNewChantier(){openModal('modal-chantier');}
 function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';document.getElementById('chantier-heures').value=c.heures||'';openModal('modal-chantier');}
