@@ -2165,7 +2165,7 @@ function printCmd(id){
     const pu=art[pKey]||0;const ligne=sorti*pu;printTotal+=ligne;
     return{...i,art,sorti,reliquat,pu,ligne};
   });
-  const colCount=hasAnyReliquat?6:4;
+  const colCount=hasAnyReliquat?7:5;
   function famRow(label,bg){return`<tr><td colspan="${colCount}" style="padding:7px 12px;background:${bg};font-weight:700;font-size:12px;border-bottom:2px solid #ddd;">${label}</td></tr>`;}
   function artRow(iw){
     const puStr=iw.pu>0?iw.pu.toFixed(2).replace('.',',')+' \u20ac':'—';
