@@ -876,6 +876,14 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div class="form-row"><label class="form-label">Adresse mail</label><input type="email" id="cmd-email" placeholder="votre@email.com" autocomplete="email"></div>
         <div class="form-row"><label class="form-label">Téléphone</label><input type="tel" id="cmd-telephone" placeholder="06 12 34 56 78" autocomplete="tel"></div>
       </div>
+      <div class="form-grid col2 admin-only" id="cmd-admin-flags-row">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="cmd-a-livrer"> À livrer
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="cmd-deja-recupere"> Déjà récupéré
+        </label>
+      </div>
       <div class="section-header" style="margin-top:6px;">
         <div class="section-title">Articles à commander</div>
         <div style="display:flex;gap:6px;">
@@ -1304,6 +1312,7 @@ function openCmdModal(){
     const inp=document.getElementById('cmd-chantier');if(inp)inp.value='';
   }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   if(CLIENT_MODE&&clientAccountEmail){const em=document.getElementById('cmd-email');if(em)em.value=clientAccountEmail;}
+  ['cmd-a-livrer','cmd-deja-recupere'].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});
   document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
   document.getElementById('art-modal-title').textContent='Ajouter un article';
@@ -3839,13 +3848,15 @@ async function saveCommande(){
   const notes=document.getElementById('cmd-notes')?.value?.trim()||'';
   const email=document.getElementById('cmd-email')?.value?.trim()||'';
   const telephone=document.getElementById('cmd-telephone')?.value?.trim()||'';
+  const aLivrer=CLIENT_MODE?false:!!document.getElementById('cmd-a-livrer')?.checked;
+  const dejaRecupere=CLIENT_MODE?false:!!document.getElementById('cmd-deja-recupere')?.checked;
   if(!chantier){showToast('⚠ Renseignez le chantier');return;}
   if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const num=(cmdCounter||0)+1;
   const source=CLIENT_MODE?'client':'admin';
   const deviceId=CLIENT_MODE?getClientDeviceId():null;
   const accountEmail=CLIENT_MODE?clientAccountEmail:null;
-  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail};
+  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere};
   let result;
   if(editingCmdId){
     result=await db.from('commandes').update(payload).eq('id',editingCmdId);
@@ -3877,6 +3888,8 @@ function editCmd(id){
   const email=document.getElementById('cmd-email');if(email)email.value=c.email||'';
   const tel=document.getElementById('cmd-telephone');if(tel)tel.value=c.telephone||'';
   const urg=document.getElementById('cmd-urgence');if(urg)urg.value=c.urgence||'normale';
+  const aLivrer=document.getElementById('cmd-a-livrer');if(aLivrer)aLivrer.checked=!!c.a_livrer;
+  const dejaRecupere=document.getElementById('cmd-deja-recupere');if(dejaRecupere)dejaRecupere.checked=!!c.deja_recupere;
   renderCmdItems();
   switchAddMode('search');
   buildCatPills();
