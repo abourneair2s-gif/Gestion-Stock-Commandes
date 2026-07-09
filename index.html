@@ -873,10 +873,10 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div class="form-row"><label class="form-label">Notes / Motif</label><input type="text" id="cmd-notes" placeholder="Raison, précisions…"></div>
       </div>
       <div class="form-grid col2 admin-only" id="cmd-admin-flags-row" style="margin-bottom:12px;">
-        <label id="cmd-a-livrer-box" onclick="event.preventDefault();const c=document.getElementById('cmd-a-livrer');c.checked=!c.checked;updateAdminFlagBox('cmd-a-livrer-box',c.checked);" style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;border:2px solid var(--border2);border-radius:var(--radius-sm);padding:10px 12px;transition:.15s;">
+        <label id="cmd-a-livrer-box" onclick="event.preventDefault();const c=document.getElementById('cmd-a-livrer');c.checked=true;document.getElementById('cmd-deja-recupere').checked=false;updateAdminFlagBox('cmd-a-livrer-box',true);updateAdminFlagBox('cmd-deja-recupere-box',false);" style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;border:2px solid var(--border2);border-radius:var(--radius-sm);padding:10px 12px;transition:.15s;">
           <input type="checkbox" id="cmd-a-livrer" style="width:auto;flex:none;pointer-events:none;"> 🚚 À livrer
         </label>
-        <label id="cmd-deja-recupere-box" onclick="event.preventDefault();const c=document.getElementById('cmd-deja-recupere');c.checked=!c.checked;updateAdminFlagBox('cmd-deja-recupere-box',c.checked);" style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;border:2px solid var(--border2);border-radius:var(--radius-sm);padding:10px 12px;transition:.15s;">
+        <label id="cmd-deja-recupere-box" onclick="event.preventDefault();const c=document.getElementById('cmd-deja-recupere');c.checked=true;document.getElementById('cmd-a-livrer').checked=false;updateAdminFlagBox('cmd-deja-recupere-box',true);updateAdminFlagBox('cmd-a-livrer-box',false);" style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;border:2px solid var(--border2);border-radius:var(--radius-sm);padding:10px 12px;transition:.15s;">
           <input type="checkbox" id="cmd-deja-recupere" style="width:auto;flex:none;pointer-events:none;"> ✅ Déjà récupéré
         </label>
       </div>
@@ -1312,8 +1312,9 @@ function openCmdModal(){
     const inp=document.getElementById('cmd-chantier');if(inp)inp.value='';
   }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   if(CLIENT_MODE&&clientAccountEmail){const em=document.getElementById('cmd-email');if(em)em.value=clientAccountEmail;}
-  ['cmd-a-livrer','cmd-deja-recupere'].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});
-  updateAdminFlagBox('cmd-a-livrer-box',false);updateAdminFlagBox('cmd-deja-recupere-box',false);
+  const aLivrerDef=document.getElementById('cmd-a-livrer');if(aLivrerDef)aLivrerDef.checked=true;
+  const dejaRecupDef=document.getElementById('cmd-deja-recupere');if(dejaRecupDef)dejaRecupDef.checked=false;
+  updateAdminFlagBox('cmd-a-livrer-box',true);updateAdminFlagBox('cmd-deja-recupere-box',false);
   document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
   document.getElementById('art-modal-title').textContent='Ajouter un article';
