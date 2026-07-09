@@ -226,15 +226,25 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .chip-crit{background:var(--red-bg);color:var(--red);font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px;}
 
 /* ===== CHANTIER CARDS ===== */
-.chantier-card{cursor:pointer;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px 16px;min-width:170px;flex:1;max-width:240px;transition:border-color .15s,box-shadow .15s;}
-.chantier-card:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(0,0,0,.08);}
+.chantier-card{position:relative;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;min-width:190px;flex:1;max-width:260px;transition:transform .15s,box-shadow .15s,border-color .15s;box-shadow:0 1px 2px rgba(0,0,0,.05);overflow:hidden;}
+.chantier-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--green),var(--blue));opacity:0;transition:opacity .15s;}
+.chantier-card:hover{transform:translateY(-3px);box-shadow:0 10px 22px rgba(0,0,0,.10);border-color:var(--blue);}
+.chantier-card:hover::before{opacity:1;}
 .chantier-card.active{border-color:var(--green);background:#f0fbf5;}
-.cc-nom{font-weight:700;font-size:14px;margin-bottom:6px;}
-.cc-kpis{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
-.cc-kpi{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:2px 8px;white-space:nowrap;}
-.cc-val{font-size:12px;color:var(--blue);font-weight:700;}
-
-.chantier-card.archived{opacity:.55;border-style:dashed;background:var(--bg);}
+.chantier-card.active::before{opacity:1;background:var(--green);}
+.cc-icon{width:36px;height:36px;border-radius:10px;background:var(--green-bg);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;}
+.cc-nom{font-weight:700;font-size:14.5px;margin-bottom:4px;padding-right:22px;line-height:1.3;}
+.cc-kpis{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px;}
+.cc-kpi{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 8px;white-space:nowrap;font-weight:600;color:var(--text2);}
+.cc-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:10px;border-top:1px solid var(--border);}
+.cc-val{font-size:13px;color:var(--blue);font-weight:700;}
+.cc-arrow{font-size:12px;color:var(--text3);transition:transform .15s;}
+.chantier-card:hover .cc-arrow{transform:translateX(3px);color:var(--blue);}
+.cc-delete{position:absolute;top:10px;right:10px;width:24px;height:24px;border:none;background:transparent;border-radius:6px;color:var(--text3);font-size:12px;cursor:pointer;opacity:0;transition:opacity .15s,background .15s,color .15s;display:flex;align-items:center;justify-content:center;}
+.chantier-card:hover .cc-delete{opacity:1;}
+.cc-delete:hover{background:var(--red-bg);color:var(--red);}
+.chantier-card.archived{opacity:.6;border-style:dashed;background:var(--bg);}
+.chantier-card.archived .cc-icon{background:#e5e3dc;}
 .badge-archived{background:#e5e3dc;color:#888;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;}
 .archives-section{margin-top:20px;border-top:1px solid var(--border);padding-top:14px;}
 .archives-toggle{cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;user-select:none;margin-bottom:10px;}
@@ -2329,10 +2339,15 @@ function chantierCardHTML(c,archived){
   const valStr=d.valAchat>0?d.valAchat.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f\u20ac':'—';
   const ne=c.nom.replace(/'/g,"\\'");
   return`<div class="chantier-card${archived?' archived':''}" onclick="showChantierDetail('${ne}')">
-    <div class="cc-nom">${archived?'📦':'🏗'} ${escH(c.nom)}${archived?' <span class="badge-archived">Archivé</span>':''}</div>
+    <button class="cc-delete" onclick="event.stopPropagation();deleteChantier('${ne}')" title="Supprimer ce chantier">🗑</button>
+    <div class="cc-icon">${archived?'📦':'🏗'}</div>
+    <div class="cc-nom">${escH(c.nom)}</div>
+    ${archived?'<span class="badge-archived">Archivé</span>':''}
     <div class="cc-kpis"><span class="cc-kpi">📦 ${d.qtyTot} unités</span><span class="cc-kpi">📋 ${d.cmdsApprouv.length} cmd</span>${c.heures?`<span class="cc-kpi">⏱ ${c.heures}h</span>`:''}</div>
-    <div class="cc-val">${valStr}</div>
-    <div style="font-size:11px;color:${archived?'var(--text3)':'var(--blue)'};margin-top:4px;">${archived?'Consulter →':'Voir détail →'}</div>
+    <div class="cc-footer">
+      <span class="cc-val">${valStr}</span>
+      <span class="cc-arrow">${archived?'Consulter →':'Voir détail →'}</span>
+    </div>
   </div>`;
 }
 function renderChantiers(){
