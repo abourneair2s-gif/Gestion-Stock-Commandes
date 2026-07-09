@@ -2198,7 +2198,7 @@ function printCmd(id){
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Commande #${String(c.num).padStart(3,'0')}</title>
   <style>
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px;color:#1a1917;font-size:14px;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px;color:#1a1917;font-size:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
     .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #e8e6e0;}
     .header-left h1{font-size:20px;margin:0 0 4px 0;font-weight:700;}
     .header-left .num{font-size:13px;color:#666;}
