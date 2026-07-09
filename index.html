@@ -3013,15 +3013,12 @@ function peuplerFamilleSelect(){
       grp.appendChild(o);
     });
     (f.enfants||[]).forEach(sf=>{
-      const sg=document.createElement('optgroup');
-      sg.label='  📁 '+sf.nom;
       (sf.categories||[]).forEach(cat=>{
         const o=document.createElement('option');
-        o.value=cat;o.textContent=cat;
+        o.value=cat;o.textContent='  ↳ '+sf.nom+(cat!==sf.nom?' — '+cat:'');
         if(cat===cur)o.selected=true;
-        sg.appendChild(o);
+        grp.appendChild(o);
       });
-      if(sg.children.length)sel.appendChild(sg);
     });
     if(grp.children.length)sel.appendChild(grp);
   });
