@@ -2119,6 +2119,7 @@ function viewCmd(id){
     '<div style="font-size:13px;margin-bottom:14px;line-height:1.7;">'
     +'<strong>Date :</strong> '+date+' &nbsp;|&nbsp; <strong>Demandeur :</strong> '+(c.nom||'—')+'<br>'
     +'<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'
+    +(CLIENT_MODE?'':(c.a_livrer?'<br><strong>Logistique :</strong> <span style="color:var(--blue);font-weight:700;">🚚 À livrer</span>':(c.deja_recupere?'<br><strong>Logistique :</strong> <span style="color:var(--green);font-weight:700;">✅ Déjà récupéré</span>':'')))
     +((c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):'')
     +(c.notes?'<br><strong>Notes :</strong> '+c.notes:'')+'</div>'
     +'<table style="width:100%;font-size:13px;border-collapse:collapse;">'
@@ -2236,6 +2237,7 @@ function printCmd(id){
     <strong>Demandeur :</strong> ${c.nom||'—'} &nbsp;|&nbsp;
     <strong>Urgence :</strong> ${c.urgence||'—'} &nbsp;|&nbsp;
     <strong>Statut :</strong> ${statLabel}
+    ${c.a_livrer?'<br><strong>Logistique :</strong> 🚚 À livrer':(c.deja_recupere?'<br><strong>Logistique :</strong> ✅ Déjà récupéré':'')}
     ${(c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):''}
     ${c.notes?'<br><strong>Notes :</strong> '+c.notes:''}
   </div>
