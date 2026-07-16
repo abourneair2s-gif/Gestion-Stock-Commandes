@@ -311,7 +311,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <button class="nav-btn" onclick="showPage('familles',this)" data-page="familles"><span class="nav-icon">🗂</span>Familles</button>
   <button class="nav-btn" onclick="showPage('parametres',this)" data-page="parametres"><span class="nav-icon">⚙️</span>Paramètres</button>
   <button class="nav-btn" onclick="showPage('inventaire',this)" data-page="inventaire"><span class="nav-icon">📋</span>Inventaire</button>
-  <button class="nav-btn" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);" title="Export global : stock + alertes + historique"><span class="nav-icon">📥</span>Export global</button>
+  <button class="nav-btn admin-only" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);" title="Export global : stock + alertes + historique"><span class="nav-icon">📥</span>Export global</button>
 </div>
 
 <div id="main">
@@ -899,7 +899,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div style="display:flex;gap:6px;">
           <button class="btn btn-xs btn-primary" onclick="switchAddMode('search')">🔍 Recherche</button>
           <button class="btn btn-xs" onclick="switchAddMode('cat')">📂 Par famille</button>
-          <button class="btn btn-xs" onclick="switchAddMode('qr')">📷 Scanner QR</button>
+          <button class="btn btn-xs admin-only" onclick="switchAddMode('qr')">📷 Scanner QR</button>
         </div>
       </div>
       <div id="add-mode-search">
