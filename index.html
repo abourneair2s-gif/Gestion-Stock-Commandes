@@ -3054,6 +3054,7 @@ function peuplerFamilleSelect(){
   const cur=sel.value;
   sel.innerHTML='<option value="">Toutes familles</option>';
   famillesTree.forEach(f=>{
+    if(CLIENT_MODE&&!isFamilleVisibleClient(f))return;
     const grp=document.createElement('optgroup');
     grp.label='📁 '+f.nom;
     (f.categories||[]).forEach(cat=>{
@@ -3063,6 +3064,7 @@ function peuplerFamilleSelect(){
       grp.appendChild(o);
     });
     (f.enfants||[]).forEach(sf=>{
+      if(CLIENT_MODE&&!isSousFamilleVisibleClient(f,sf))return;
       (sf.categories||[]).forEach(cat=>{
         const o=document.createElement('option');
         o.value=cat;o.textContent='  ↳ '+sf.nom+(cat!==sf.nom?' — '+cat:'');
@@ -3072,17 +3074,19 @@ function peuplerFamilleSelect(){
     });
     if(grp.children.length)sel.appendChild(grp);
   });
-  // Catégories non classées
-  const allCatsInTree=[];
-  famillesTree.forEach(f=>{
-    (f.categories||[]).forEach(c=>allCatsInTree.push(c));
-    (f.enfants||[]).forEach(sf=>(sf.categories||[]).forEach(c=>allCatsInTree.push(c)));
-  });
-  const unclassed=categories.filter(c=>!allCatsInTree.includes(c));
-  if(unclassed.length){
-    const sg=document.createElement('optgroup');sg.label='— Non classées';
-    unclassed.sort().forEach(cat=>{const o=document.createElement('option');o.value=cat;o.textContent=cat;if(cat===cur)o.selected=true;sg.appendChild(o);});
-    sel.appendChild(sg);
+  // Catégories non classées (masquées en mode client)
+  if(!CLIENT_MODE){
+    const allCatsInTree=[];
+    famillesTree.forEach(f=>{
+      (f.categories||[]).forEach(c=>allCatsInTree.push(c));
+      (f.enfants||[]).forEach(sf=>(sf.categories||[]).forEach(c=>allCatsInTree.push(c)));
+    });
+    const unclassed=categories.filter(c=>!allCatsInTree.includes(c));
+    if(unclassed.length){
+      const sg=document.createElement('optgroup');sg.label='— Non classées';
+      unclassed.sort().forEach(cat=>{const o=document.createElement('option');o.value=cat;o.textContent=cat;if(cat===cur)o.selected=true;sg.appendChild(o);});
+      sel.appendChild(sg);
+    }
   }
 }
 
