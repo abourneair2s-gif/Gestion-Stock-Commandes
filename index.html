@@ -1290,7 +1290,8 @@ function isFamilleVisibleClient(f){return f&&f.visible_client!==false;}
 // Vérifie si une sous-famille est visible côté client (la famille parente doit aussi être visible)
 function isSousFamilleVisibleClient(f,sf){return isFamilleVisibleClient(f)&&sf&&sf.visible_client!==false;}
 // Vérifie si un article est visible côté client, selon la famille/sous-famille à laquelle sa catégorie est rattachée.
-// Un article non rattaché à une famille (catégorie orpheline) reste visible par défaut.
+// Un article non rattaché à une famille (catégorie orpheline / "non classé") est masqué côté client,
+// puisqu'il n'existe aucune case à cocher admin pour l'autoriser explicitement.
 function isArticleVisibleClient(a){
   if(!CLIENT_MODE)return true;
   for(const f of famillesTree){
@@ -1299,7 +1300,7 @@ function isArticleVisibleClient(a){
       if((sf.categories||[]).includes(a.categorie))return isSousFamilleVisibleClient(f,sf);
     }
   }
-  return true;
+  return false;
 }
 let scanSelectedArt = null;
 let editingCmdId = null;
@@ -3162,8 +3163,8 @@ function renderStockAccordion(filtered,isFiltered){
       </div>
     </div>`;
   });
-  // Non classés
-  const unclassed=filtered.filter(a=>!rendered.has(a.id));
+  // Non classés (masqué en mode client : pas de case à cocher admin pour ces articles)
+  const unclassed=CLIENT_MODE?[]:filtered.filter(a=>!rendered.has(a.id));
   if(unclassed.length){
     const ucOpen=_stockOpen.has('__unclassed');
     html+=`<div class="stock-fam-block">
