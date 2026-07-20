@@ -3109,6 +3109,7 @@ function renderStockAccordion(filtered,isFiltered){
   const rendered=new Set();
   let html='';
   famillesTree.forEach(f=>{
+    if(CLIENT_MODE&&!isFamilleVisibleClient(f))return;
     // Collecter articles directs (en une seule passe sur filtered, déjà trié, pour garder l'ordre croissant même si plusieurs catégories sont rattachées à cette famille)
     const famCats=f.categories||[];
     const famDirect=filtered.filter(a=>famCats.includes(a.categorie)&&!rendered.has(a.id)).sort(diamCompare);
@@ -3116,6 +3117,7 @@ function renderStockAccordion(filtered,isFiltered){
     // Collecter par sous-famille
     const sfGroups=[];
     (f.enfants||[]).forEach(sf=>{
+      if(CLIENT_MODE&&!isSousFamilleVisibleClient(f,sf))return;
       const sfCats=sf.categories||[];
       const sfArts=filtered.filter(a=>sfCats.includes(a.categorie)&&!rendered.has(a.id)).sort(diamCompare);
       sfArts.forEach(a=>rendered.add(a.id));
@@ -3229,6 +3231,7 @@ function sarRow(a,indented){
 }
 
 function renderStockFlatList(filtered){
+  if(CLIENT_MODE)filtered=filtered.filter(a=>isArticleVisibleClient(a));
   if(!filtered.length)return'';
   const fmt=(a)=>sarRow(a,false);
   // Grouper par famille même en mode filtre
