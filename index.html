@@ -366,10 +366,11 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
           <option value="">Tous statuts</option>
           <option value="ok">OK</option><option value="warn">Bas</option><option value="danger">Critique</option>
         </select>
-        <select id="filter-prix" class="admin-only" onchange="renderStock()">
+        <select id="filter-prix" class="admin-only" onchange="renderStock();toggleExportPrixBtn();">
           <option value="">Tous les prix</option>
           <option value="missing">⚠ Prix manquant (achat ou vente)</option>
         </select>
+        <button class="btn btn-sm admin-only" id="btn-export-prix" onclick="exportMissingPricesExcel()" style="display:none;">📥 Export Excel</button>
         <button class="btn btn-primary btn-sm" onclick="openNewArticle()">+ Nouvel article</button>
       </div>
       <div id="stock-accordion"></div>
@@ -1753,6 +1754,31 @@ function populateCatFilter(){
     });
   }
 }
+function toggleExportPrixBtn(){
+  const btn=document.getElementById('btn-export-prix');
+  const val=document.getElementById('filter-prix')?.value||'';
+  if(btn)btn.style.display=val==='missing'?'':'none';
+}
+
+function exportMissingPricesExcel(){
+  if(typeof XLSX==='undefined'){showToast('❌ Bibliothèque Excel non chargée');return;}
+  const missing=stock.filter(a=>!a.prixUnitaire||!a.prixVente);
+  if(!missing.length){showToast('✅ Aucun article avec un prix manquant');return;}
+  const wb=XLSX.utils.book_new();
+  const dateStr=new Date().toISOString().slice(0,10);
+  const data=[
+    ['Référence','Catégorie','Diamètre','Stock actuel','Prix achat €','Prix vente €'],
+    ...missing.map(a=>[a.id,a.categorie,String(a.diametre),a.stock,
+      a.prixUnitaire?Number(a.prixUnitaire.toFixed(2)):'',
+      a.prixVente?Number(a.prixVente.toFixed(2)):'']),
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[{wch:12},{wch:20},{wch:10},{wch:12},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Prix manquants');
+  XLSX.writeFile(wb,'StockPro_prix_manquants_'+dateStr+'.xlsx');
+  showToast('✅ Export Excel généré ('+missing.length+' article(s))');
+}
+
 function renderStock(){
   if(famillesTree.length>0)peuplerFamilleSelect();else populateCatFilter();
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
