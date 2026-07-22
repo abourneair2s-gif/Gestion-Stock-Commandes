@@ -3032,6 +3032,7 @@ function peuplerFamilleSelect(){
   const cur=sel.value;
   sel.innerHTML='<option value="">Toutes familles</option>';
   famillesTree.forEach(f=>{
+    if(CLIENT_MODE&&!isFamilleVisibleClient(f))return;
     const grp=document.createElement('optgroup');
     grp.label='📁 '+f.nom;
     (f.categories||[]).forEach(cat=>{
@@ -3041,6 +3042,7 @@ function peuplerFamilleSelect(){
       grp.appendChild(o);
     });
     (f.enfants||[]).forEach(sf=>{
+      if(CLIENT_MODE&&!isSousFamilleVisibleClient(f,sf))return;
       (sf.categories||[]).forEach(cat=>{
         const o=document.createElement('option');
         o.value=cat;o.textContent='  ↳ '+sf.nom+(cat!==sf.nom?' — '+cat:'');
