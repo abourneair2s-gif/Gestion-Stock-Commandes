@@ -2127,7 +2127,7 @@ function viewCmd(id){
     +'<strong>Date :</strong> '+date+' &nbsp;|&nbsp; <strong>Demandeur :</strong> '+(c.nom||'—')+'<br>'
     +'<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'
     +(CLIENT_MODE?'':(c.a_livrer?'<br><strong>Logistique :</strong> <span style="color:var(--blue);font-weight:700;">🚚 À livrer</span>':(c.deja_recupere?'<br><strong>Logistique :</strong> <span style="color:var(--green);font-weight:700;">✅ Déjà récupéré</span>':'')))
-    +(c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km, '+(c.zone_livraison==='moins30'?'< 30 km':'> 30 km')+') — <strong>'+(c.frais_livraison??'?')+' €</strong>':'')
+    +(c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km) — <strong>'+(c.frais_livraison>0?c.frais_livraison+' €':'Gratuite')+'</strong>':'')
     +((c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):'')
     +(c.notes?'<br><strong>Notes :</strong> '+c.notes:'')+'</div>'
     +'<table style="width:100%;font-size:13px;border-collapse:collapse;">'
@@ -2246,7 +2246,7 @@ function printCmd(id){
     <strong>Urgence :</strong> ${c.urgence||'—'} &nbsp;|&nbsp;
     <strong>Statut :</strong> ${statLabel}
     ${c.a_livrer?'<br><strong>Logistique :</strong> 🚚 À livrer':(c.deja_recupere?'<br><strong>Logistique :</strong> ✅ Déjà récupéré':'')}
-    ${c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km, '+(c.zone_livraison==='moins30'?'< 30 km':'> 30 km')+') — '+(c.frais_livraison??'?')+' €':''}
+    ${c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km) — '+(c.frais_livraison>0?c.frais_livraison+' €':'Gratuite'):''}
     ${(c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):''}
     ${c.notes?'<br><strong>Notes :</strong> '+c.notes:''}
   </div>
@@ -3859,6 +3859,8 @@ function renderCmdItems(){
   } else if(totalRow){
     totalRow.remove();
   }
+  cmdOrderTotal=totalClient;
+  if(cmdLivraisonData)updateLivraisonInfoDisplay();
 }
 
 function changeCmdItemQty(i,delta){
@@ -3868,8 +3870,11 @@ function removeCmdItem(i){cmdItems.splice(i,1);renderCmdItems();}
 
 // ===== Frais de livraison =====
 const DEPOT_LAT=47.398,DEPOT_LNG=-2.091;
-const FRAIS_LIVRAISON_MOINS30=20,FRAIS_LIVRAISON_PLUS30=40;
+const FRAIS_ZONE1=30,FRAIS_ZONE2=50,FRAIS_ZONE3=100;
+const SEUIL_ZONE1=30,SEUIL_ZONE2=65,SEUIL_ZONE3=130;
+const SEUIL_GRATUIT=1000;
 let cmdLivraisonData=null;
+let cmdOrderTotal=0;
 let livraisonGeocodeTimer=null;
 function haversineKm(lat1,lng1,lat2,lng2){
   const R=6371;
@@ -3883,6 +3888,27 @@ function onAdresseLivraisonInput(val){
   const info=document.getElementById('cmd-livraison-info');
   if(!val||val.trim().length<6){if(info)info.style.display='none';cmdLivraisonData=null;return;}
   livraisonGeocodeTimer=setTimeout(()=>geocodeLivraison(val.trim()),700);
+}
+function zoneFraisFromDistance(distKm){
+  if(distKm<=SEUIL_ZONE1)return{zone:'zone1',frais:FRAIS_ZONE1,label:'≤ '+SEUIL_ZONE1+' km',horsZone:false};
+  if(distKm<=SEUIL_ZONE2)return{zone:'zone2',frais:FRAIS_ZONE2,label:SEUIL_ZONE1+'-'+SEUIL_ZONE2+' km',horsZone:false};
+  if(distKm<=SEUIL_ZONE3)return{zone:'zone3',frais:FRAIS_ZONE3,label:SEUIL_ZONE2+'-'+SEUIL_ZONE3+' km',horsZone:false};
+  return{zone:'zone3',frais:FRAIS_ZONE3,label:'> '+SEUIL_ZONE3+' km',horsZone:true};
+}
+function updateLivraisonInfoDisplay(){
+  const info=document.getElementById('cmd-livraison-info');
+  if(!info||!cmdLivraisonData)return;
+  const z=zoneFraisFromDistance(cmdLivraisonData.distance_km);
+  const gratuit=cmdOrderTotal>=SEUIL_GRATUIT;
+  const frais=gratuit?0:z.frais;
+  cmdLivraisonData.zone=z.zone;cmdLivraisonData.frais=frais;cmdLivraisonData.hors_zone=z.horsZone;
+  info.style.background=gratuit?'var(--green-bg)':(z.horsZone?'var(--amber-bg)':'var(--blue-bg)');
+  info.style.color=gratuit?'var(--green-dark)':(z.horsZone?'var(--amber)':'var(--blue)');
+  info.style.borderColor=gratuit?'var(--green)':(z.horsZone?'var(--amber)':'var(--blue)');
+  const distanceNote=cmdLivraisonData.viaRoute?'distance routière':'estimation (itinéraire indisponible)';
+  info.innerHTML='📍 '+cmdLivraisonData.adresse+'<br>Distance : <strong>'+cmdLivraisonData.distance_km+' km</strong> ('+distanceNote+') — '+z.label
+    +(gratuit?'<br>🎉 <strong>Livraison gratuite</strong> (commande ≥ '+SEUIL_GRATUIT+' €)':'<br>Frais de livraison estimés : <strong>'+frais+' €</strong>')
+    +(z.horsZone&&!gratuit?'<br><span style="font-size:11px;">Distance importante — le tarif sera confirmé avec vous avant expédition.</span>':'');
 }
 async function geocodeLivraison(adresse){
   const info=document.getElementById('cmd-livraison-info');
@@ -3899,14 +3925,16 @@ async function geocodeLivraison(adresse){
     }
     const[lng,lat]=data.features[0].geometry.coordinates;
     const label=data.features[0].properties.label;
-    const dist=haversineKm(DEPOT_LAT,DEPOT_LNG,lat,lng);
-    const zone=dist<=30?'moins30':'plus30';
-    const frais=zone==='moins30'?FRAIS_LIVRAISON_MOINS30:FRAIS_LIVRAISON_PLUS30;
-    cmdLivraisonData={adresse:label,distance_km:Math.round(dist*10)/10,zone,frais};
-    info.style.background=zone==='moins30'?'var(--green-bg)':'var(--amber-bg)';
-    info.style.color=zone==='moins30'?'var(--green-dark)':'var(--amber)';
-    info.style.borderColor=zone==='moins30'?'var(--green)':'var(--amber)';
-    info.innerHTML='📍 '+label+'<br>Distance estimée (à vol d\'oiseau) : <strong>'+cmdLivraisonData.distance_km+' km</strong> — '+(zone==='moins30'?'zone < 30 km':'zone > 30 km')+' — Frais de livraison estimés : <strong>'+frais+' €</strong>';
+    info.textContent='📍 Calcul de l\'itinéraire…';
+    let distKm=null,viaRoute=true;
+    try{
+      const rres=await fetch('https://router.project-osrm.org/route/v1/driving/'+DEPOT_LNG+','+DEPOT_LAT+';'+lng+','+lat+'?overview=false');
+      const rdata=await rres.json();
+      if(rdata.routes&&rdata.routes.length){distKm=rdata.routes[0].distance/1000;}
+    }catch(e){}
+    if(distKm==null){distKm=haversineKm(DEPOT_LAT,DEPOT_LNG,lat,lng)*1.3;viaRoute=false;}
+    cmdLivraisonData={adresse:label,distance_km:Math.round(distKm*10)/10,viaRoute};
+    updateLivraisonInfoDisplay();
   }catch(e){
     info.style.background='var(--red-bg)';info.style.color='var(--red)';info.style.borderColor='var(--red)';
     info.textContent='⚠ Erreur de connexion, réessayez';
@@ -3967,15 +3995,8 @@ function editCmd(id){
   const adrLivr=document.getElementById('cmd-adresse-livraison');if(adrLivr)adrLivr.value=c.adresse_livraison||'';
   const livrInfo=document.getElementById('cmd-livraison-info');
   if(c.adresse_livraison&&c.frais_livraison!=null){
-    cmdLivraisonData={adresse:c.adresse_livraison,distance_km:c.distance_livraison_km,zone:c.zone_livraison,frais:c.frais_livraison};
-    if(livrInfo){
-      livrInfo.style.display='block';
-      const zoneOk=c.zone_livraison==='moins30';
-      livrInfo.style.background=zoneOk?'var(--green-bg)':'var(--amber-bg)';
-      livrInfo.style.color=zoneOk?'var(--green-dark)':'var(--amber)';
-      livrInfo.style.borderColor=zoneOk?'var(--green)':'var(--amber)';
-      livrInfo.innerHTML='📍 '+c.adresse_livraison+'<br>Distance estimée (à vol d\'oiseau) : <strong>'+c.distance_livraison_km+' km</strong> — '+(zoneOk?'zone < 30 km':'zone > 30 km')+' — Frais de livraison estimés : <strong>'+c.frais_livraison+' €</strong>';
-    }
+    cmdLivraisonData={adresse:c.adresse_livraison,distance_km:c.distance_livraison_km,zone:c.zone_livraison,frais:c.frais_livraison,viaRoute:true};
+    updateLivraisonInfoDisplay();
   }else{
     cmdLivraisonData=null;
     if(livrInfo)livrInfo.style.display='none';
