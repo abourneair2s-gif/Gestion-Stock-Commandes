@@ -1763,7 +1763,7 @@ function renderStock(){
   const status=document.getElementById('filter-status')?.value||'';
   const filtered=stock.filter(a=>{
     const mq=!q||a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).toLowerCase().includes(q);
-    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
+    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status)&&(!CLIENT_MODE||isArticleVisibleClient(a));
   });
   document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
   renderStockAccordion(filtered,!!(q||cat||status));
@@ -3088,6 +3088,7 @@ function renderStockAccordion(filtered,isFiltered){
   const rendered=new Set();
   let html='';
   famillesTree.forEach(f=>{
+    if(CLIENT_MODE&&!isFamilleVisibleClient(f))return;
     // Collecter articles directs (en une seule passe sur filtered, déjà trié, pour garder l'ordre croissant même si plusieurs catégories sont rattachées à cette famille)
     const famCats=f.categories||[];
     const famDirect=filtered.filter(a=>famCats.includes(a.categorie)&&!rendered.has(a.id)).sort(diamCompare);
@@ -3095,6 +3096,7 @@ function renderStockAccordion(filtered,isFiltered){
     // Collecter par sous-famille
     const sfGroups=[];
     (f.enfants||[]).forEach(sf=>{
+      if(CLIENT_MODE&&!isSousFamilleVisibleClient(f,sf))return;
       const sfCats=sf.categories||[];
       const sfArts=filtered.filter(a=>sfCats.includes(a.categorie)&&!rendered.has(a.id)).sort(diamCompare);
       sfArts.forEach(a=>rendered.add(a.id));
