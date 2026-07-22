@@ -3059,7 +3059,7 @@ function peuplerFamilleSelect(){
     (f.enfants||[]).forEach(sf=>(sf.categories||[]).forEach(c=>allCatsInTree.push(c)));
   });
   const unclassed=categories.filter(c=>!allCatsInTree.includes(c));
-  if(unclassed.length){
+  if(unclassed.length&&!CLIENT_MODE){
     const sg=document.createElement('optgroup');sg.label='— Non classées';
     unclassed.sort().forEach(cat=>{const o=document.createElement('option');o.value=cat;o.textContent=cat;if(cat===cur)o.selected=true;sg.appendChild(o);});
     sel.appendChild(sg);
@@ -3145,7 +3145,7 @@ function renderStockAccordion(filtered,isFiltered){
   });
   // Non classés
   const unclassed=filtered.filter(a=>!rendered.has(a.id));
-  if(unclassed.length){
+  if(unclassed.length&&!CLIENT_MODE){
     const ucOpen=_stockOpen.has('__unclassed');
     html+=`<div class="stock-fam-block">
       <div class="stock-fam-header" onclick="toggleStockFam('__unclassed',this)" style="opacity:.7;">
