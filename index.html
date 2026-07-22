@@ -366,11 +366,6 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
           <option value="">Tous statuts</option>
           <option value="ok">OK</option><option value="warn">Bas</option><option value="danger">Critique</option>
         </select>
-        <select id="filter-prix" class="admin-only" onchange="renderStock();toggleExportPrixBtn();">
-          <option value="">Tous les prix</option>
-          <option value="missing">⚠ Prix manquant (achat ou vente)</option>
-        </select>
-        <button class="btn btn-sm admin-only" id="btn-export-prix" onclick="exportMissingPricesExcel()" style="display:none;">📥 Export Excel</button>
         <button class="btn btn-primary btn-sm" onclick="openNewArticle()">+ Nouvel article</button>
       </div>
       <div id="stock-accordion"></div>
@@ -899,6 +894,11 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div class="form-row"><label class="form-label">Adresse mail</label><input type="email" id="cmd-email" placeholder="votre@email.com" autocomplete="email"></div>
         <div class="form-row"><label class="form-label">Téléphone</label><input type="tel" id="cmd-telephone" placeholder="06 12 34 56 78" autocomplete="tel"></div>
       </div>
+      <div class="form-row" id="cmd-livraison-row" style="display:none;">
+        <label class="form-label">Adresse de livraison</label>
+        <input type="text" id="cmd-adresse-livraison" placeholder="N°, rue, code postal, ville…" oninput="onAdresseLivraisonInput(this.value)" autocomplete="street-address">
+        <div id="cmd-livraison-info" style="font-size:12px;margin-top:6px;display:none;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);"></div>
+      </div>
       <div class="section-header" style="margin-top:6px;">
         <div class="section-title">Articles à commander</div>
         <div style="display:flex;gap:6px;">
@@ -1290,8 +1290,7 @@ function isFamilleVisibleClient(f){return f&&f.visible_client!==false;}
 // Vérifie si une sous-famille est visible côté client (la famille parente doit aussi être visible)
 function isSousFamilleVisibleClient(f,sf){return isFamilleVisibleClient(f)&&sf&&sf.visible_client!==false;}
 // Vérifie si un article est visible côté client, selon la famille/sous-famille à laquelle sa catégorie est rattachée.
-// Un article non rattaché à une famille (catégorie orpheline / "non classé") est masqué côté client,
-// puisqu'il n'existe aucune case à cocher admin pour l'autoriser explicitement.
+// Un article non rattaché à une famille (catégorie orpheline) reste visible par défaut.
 function isArticleVisibleClient(a){
   if(!CLIENT_MODE)return true;
   for(const f of famillesTree){
@@ -1300,7 +1299,7 @@ function isArticleVisibleClient(a){
       if((sf.categories||[]).includes(a.categorie))return isSousFamilleVisibleClient(f,sf);
     }
   }
-  return false;
+  return true;
 }
 let scanSelectedArt = null;
 let editingCmdId = null;
@@ -1326,7 +1325,9 @@ function openCmdModal(){
     }
   } else {
     const inp=document.getElementById('cmd-chantier');if(inp)inp.value='';
-  }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone','cmd-adresse-livraison'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  cmdLivraisonData=null;
+  const livrInfo=document.getElementById('cmd-livraison-info');if(livrInfo)livrInfo.style.display='none';
   if(CLIENT_MODE&&clientAccountEmail){const em=document.getElementById('cmd-email');if(em)em.value=clientAccountEmail;}
   const aLivrerDef=document.getElementById('cmd-a-livrer');if(aLivrerDef)aLivrerDef.checked=true;
   const dejaRecupDef=document.getElementById('cmd-deja-recupere');if(dejaRecupDef)dejaRecupDef.checked=false;
@@ -1755,44 +1756,17 @@ function populateCatFilter(){
     });
   }
 }
-function toggleExportPrixBtn(){
-  const btn=document.getElementById('btn-export-prix');
-  const val=document.getElementById('filter-prix')?.value||'';
-  if(btn)btn.style.display=val==='missing'?'':'none';
-}
-
-function exportMissingPricesExcel(){
-  if(typeof XLSX==='undefined'){showToast('❌ Bibliothèque Excel non chargée');return;}
-  const missing=stock.filter(a=>!a.prixUnitaire||!a.prixVente);
-  if(!missing.length){showToast('✅ Aucun article avec un prix manquant');return;}
-  const wb=XLSX.utils.book_new();
-  const dateStr=new Date().toISOString().slice(0,10);
-  const data=[
-    ['Référence','Catégorie','Diamètre','Stock actuel','Prix achat €','Prix vente €'],
-    ...missing.map(a=>[a.id,a.categorie,String(a.diametre),a.stock,
-      a.prixUnitaire?Number(a.prixUnitaire.toFixed(2)):'',
-      a.prixVente?Number(a.prixVente.toFixed(2)):'']),
-  ];
-  const ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[{wch:12},{wch:20},{wch:10},{wch:12},{wch:12},{wch:12}];
-  XLSX.utils.book_append_sheet(wb,ws,'Prix manquants');
-  XLSX.writeFile(wb,'StockPro_prix_manquants_'+dateStr+'.xlsx');
-  showToast('✅ Export Excel généré ('+missing.length+' article(s))');
-}
-
 function renderStock(){
   if(famillesTree.length>0)peuplerFamilleSelect();else populateCatFilter();
   const q=(document.getElementById('search-input')?.value||'').toLowerCase();
   const cat=document.getElementById('filter-cat')?.value||'';
   const status=document.getElementById('filter-status')?.value||'';
-  const prixFilter=document.getElementById('filter-prix')?.value||'';
   const filtered=stock.filter(a=>{
     const mq=!q||a.id.toLowerCase().includes(q)||a.categorie.toLowerCase().includes(q)||String(a.diametre).toLowerCase().includes(q);
-    const mp=!prixFilter||(prixFilter==='missing'&&(!a.prixUnitaire||!a.prixVente));
-    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status)&&mp;
+    return mq&&(!cat||a.categorie===cat)&&(!status||getStatus(a)===status);
   });
   document.getElementById('stock-empty').style.display=filtered.length===0?'':'none';
-  renderStockAccordion(filtered,!!(q||cat||status||prixFilter));
+  renderStockAccordion(filtered,!!(q||cat||status));
 }
 
 // ==================== PARETO ====================
@@ -2153,6 +2127,7 @@ function viewCmd(id){
     +'<strong>Date :</strong> '+date+' &nbsp;|&nbsp; <strong>Demandeur :</strong> '+(c.nom||'—')+'<br>'
     +'<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'
     +(CLIENT_MODE?'':(c.a_livrer?'<br><strong>Logistique :</strong> <span style="color:var(--blue);font-weight:700;">🚚 À livrer</span>':(c.deja_recupere?'<br><strong>Logistique :</strong> <span style="color:var(--green);font-weight:700;">✅ Déjà récupéré</span>':'')))
+    +(c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km, '+(c.zone_livraison==='moins30'?'< 30 km':'> 30 km')+') — <strong>'+(c.frais_livraison??'?')+' €</strong>':'')
     +((c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):'')
     +(c.notes?'<br><strong>Notes :</strong> '+c.notes:'')+'</div>'
     +'<table style="width:100%;font-size:13px;border-collapse:collapse;">'
@@ -2271,6 +2246,7 @@ function printCmd(id){
     <strong>Urgence :</strong> ${c.urgence||'—'} &nbsp;|&nbsp;
     <strong>Statut :</strong> ${statLabel}
     ${c.a_livrer?'<br><strong>Logistique :</strong> 🚚 À livrer':(c.deja_recupere?'<br><strong>Logistique :</strong> ✅ Déjà récupéré':'')}
+    ${c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km, '+(c.zone_livraison==='moins30'?'< 30 km':'> 30 km')+') — '+(c.frais_livraison??'?')+' €':''}
     ${(c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):''}
     ${c.notes?'<br><strong>Notes :</strong> '+c.notes:''}
   </div>
@@ -3054,7 +3030,6 @@ function peuplerFamilleSelect(){
   const cur=sel.value;
   sel.innerHTML='<option value="">Toutes familles</option>';
   famillesTree.forEach(f=>{
-    if(CLIENT_MODE&&!isFamilleVisibleClient(f))return;
     const grp=document.createElement('optgroup');
     grp.label='📁 '+f.nom;
     (f.categories||[]).forEach(cat=>{
@@ -3064,7 +3039,6 @@ function peuplerFamilleSelect(){
       grp.appendChild(o);
     });
     (f.enfants||[]).forEach(sf=>{
-      if(CLIENT_MODE&&!isSousFamilleVisibleClient(f,sf))return;
       (sf.categories||[]).forEach(cat=>{
         const o=document.createElement('option');
         o.value=cat;o.textContent='  ↳ '+sf.nom+(cat!==sf.nom?' — '+cat:'');
@@ -3074,19 +3048,17 @@ function peuplerFamilleSelect(){
     });
     if(grp.children.length)sel.appendChild(grp);
   });
-  // Catégories non classées (masquées en mode client)
-  if(!CLIENT_MODE){
-    const allCatsInTree=[];
-    famillesTree.forEach(f=>{
-      (f.categories||[]).forEach(c=>allCatsInTree.push(c));
-      (f.enfants||[]).forEach(sf=>(sf.categories||[]).forEach(c=>allCatsInTree.push(c)));
-    });
-    const unclassed=categories.filter(c=>!allCatsInTree.includes(c));
-    if(unclassed.length){
-      const sg=document.createElement('optgroup');sg.label='— Non classées';
-      unclassed.sort().forEach(cat=>{const o=document.createElement('option');o.value=cat;o.textContent=cat;if(cat===cur)o.selected=true;sg.appendChild(o);});
-      sel.appendChild(sg);
-    }
+  // Catégories non classées
+  const allCatsInTree=[];
+  famillesTree.forEach(f=>{
+    (f.categories||[]).forEach(c=>allCatsInTree.push(c));
+    (f.enfants||[]).forEach(sf=>(sf.categories||[]).forEach(c=>allCatsInTree.push(c)));
+  });
+  const unclassed=categories.filter(c=>!allCatsInTree.includes(c));
+  if(unclassed.length){
+    const sg=document.createElement('optgroup');sg.label='— Non classées';
+    unclassed.sort().forEach(cat=>{const o=document.createElement('option');o.value=cat;o.textContent=cat;if(cat===cur)o.selected=true;sg.appendChild(o);});
+    sel.appendChild(sg);
   }
 }
 
@@ -3114,7 +3086,6 @@ function renderStockAccordion(filtered,isFiltered){
   const rendered=new Set();
   let html='';
   famillesTree.forEach(f=>{
-    if(CLIENT_MODE&&!isFamilleVisibleClient(f))return;
     // Collecter articles directs (en une seule passe sur filtered, déjà trié, pour garder l'ordre croissant même si plusieurs catégories sont rattachées à cette famille)
     const famCats=f.categories||[];
     const famDirect=filtered.filter(a=>famCats.includes(a.categorie)&&!rendered.has(a.id)).sort(diamCompare);
@@ -3122,7 +3093,6 @@ function renderStockAccordion(filtered,isFiltered){
     // Collecter par sous-famille
     const sfGroups=[];
     (f.enfants||[]).forEach(sf=>{
-      if(CLIENT_MODE&&!isSousFamilleVisibleClient(f,sf))return;
       const sfCats=sf.categories||[];
       const sfArts=filtered.filter(a=>sfCats.includes(a.categorie)&&!rendered.has(a.id)).sort(diamCompare);
       sfArts.forEach(a=>rendered.add(a.id));
@@ -3167,8 +3137,8 @@ function renderStockAccordion(filtered,isFiltered){
       </div>
     </div>`;
   });
-  // Non classés (masqué en mode client : pas de case à cocher admin pour ces articles)
-  const unclassed=CLIENT_MODE?[]:filtered.filter(a=>!rendered.has(a.id));
+  // Non classés
+  const unclassed=filtered.filter(a=>!rendered.has(a.id));
   if(unclassed.length){
     const ucOpen=_stockOpen.has('__unclassed');
     html+=`<div class="stock-fam-block">
@@ -3236,7 +3206,6 @@ function sarRow(a,indented){
 }
 
 function renderStockFlatList(filtered){
-  if(CLIENT_MODE)filtered=filtered.filter(a=>isArticleVisibleClient(a));
   if(!filtered.length)return'';
   const fmt=(a)=>sarRow(a,false);
   // Grouper par famille même en mode filtre
@@ -3897,6 +3866,53 @@ function changeCmdItemQty(i,delta){
 }
 function removeCmdItem(i){cmdItems.splice(i,1);renderCmdItems();}
 
+// ===== Frais de livraison =====
+const DEPOT_LAT=47.398,DEPOT_LNG=-2.091;
+const FRAIS_LIVRAISON_MOINS30=20,FRAIS_LIVRAISON_PLUS30=40;
+let cmdLivraisonData=null;
+let livraisonGeocodeTimer=null;
+function haversineKm(lat1,lng1,lat2,lng2){
+  const R=6371;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function onAdresseLivraisonInput(val){
+  clearTimeout(livraisonGeocodeTimer);
+  const info=document.getElementById('cmd-livraison-info');
+  if(!val||val.trim().length<6){if(info)info.style.display='none';cmdLivraisonData=null;return;}
+  livraisonGeocodeTimer=setTimeout(()=>geocodeLivraison(val.trim()),700);
+}
+async function geocodeLivraison(adresse){
+  const info=document.getElementById('cmd-livraison-info');
+  if(!info)return;
+  info.style.display='block';info.style.background='var(--bg)';info.style.color='var(--text2)';info.style.borderColor='var(--border)';
+  info.textContent='📍 Recherche de l\'adresse…';
+  try{
+    const res=await fetch('https://api-adresse.data.gouv.fr/search/?q='+encodeURIComponent(adresse)+'&limit=1');
+    const data=await res.json();
+    if(!data.features||!data.features.length){
+      info.style.background='var(--red-bg)';info.style.color='var(--red)';info.style.borderColor='var(--red)';
+      info.textContent='⚠ Adresse introuvable, vérifiez la saisie';
+      cmdLivraisonData=null;return;
+    }
+    const[lng,lat]=data.features[0].geometry.coordinates;
+    const label=data.features[0].properties.label;
+    const dist=haversineKm(DEPOT_LAT,DEPOT_LNG,lat,lng);
+    const zone=dist<=30?'moins30':'plus30';
+    const frais=zone==='moins30'?FRAIS_LIVRAISON_MOINS30:FRAIS_LIVRAISON_PLUS30;
+    cmdLivraisonData={adresse:label,distance_km:Math.round(dist*10)/10,zone,frais};
+    info.style.background=zone==='moins30'?'var(--green-bg)':'var(--amber-bg)';
+    info.style.color=zone==='moins30'?'var(--green-dark)':'var(--amber)';
+    info.style.borderColor=zone==='moins30'?'var(--green)':'var(--amber)';
+    info.innerHTML='📍 '+label+'<br>Distance estimée (à vol d\'oiseau) : <strong>'+cmdLivraisonData.distance_km+' km</strong> — '+(zone==='moins30'?'zone < 30 km':'zone > 30 km')+' — Frais de livraison estimés : <strong>'+frais+' €</strong>';
+  }catch(e){
+    info.style.background='var(--red-bg)';info.style.color='var(--red)';info.style.borderColor='var(--red)';
+    info.textContent='⚠ Erreur de connexion, réessayez';
+    cmdLivraisonData=null;
+  }
+}
 async function saveCommande(){
   const chantier=document.getElementById('cmd-chantier')?.value?.trim()||'';
   const nom=document.getElementById('cmd-nom')?.value?.trim()||'';
@@ -3906,13 +3922,14 @@ async function saveCommande(){
   const telephone=document.getElementById('cmd-telephone')?.value?.trim()||'';
   const aLivrer=CLIENT_MODE?false:!!document.getElementById('cmd-a-livrer')?.checked;
   const dejaRecupere=CLIENT_MODE?false:!!document.getElementById('cmd-deja-recupere')?.checked;
+  const adresseLivraison=document.getElementById('cmd-adresse-livraison')?.value?.trim()||'';
   if(!chantier){showToast('⚠ Renseignez le chantier');return;}
   if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const num=(cmdCounter||0)+1;
   const source=CLIENT_MODE?'client':'admin';
   const deviceId=CLIENT_MODE?getClientDeviceId():null;
   const accountEmail=CLIENT_MODE?clientAccountEmail:null;
-  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere};
+  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null};
   let result;
   if(editingCmdId){
     result=await db.from('commandes').update(payload).eq('id',editingCmdId);
@@ -3947,6 +3964,22 @@ function editCmd(id){
   const aLivrer=document.getElementById('cmd-a-livrer');if(aLivrer)aLivrer.checked=!!c.a_livrer;
   const dejaRecupere=document.getElementById('cmd-deja-recupere');if(dejaRecupere)dejaRecupere.checked=!!c.deja_recupere;
   updateAdminFlagBox('cmd-a-livrer-box',!!c.a_livrer);updateAdminFlagBox('cmd-deja-recupere-box',!!c.deja_recupere);
+  const adrLivr=document.getElementById('cmd-adresse-livraison');if(adrLivr)adrLivr.value=c.adresse_livraison||'';
+  const livrInfo=document.getElementById('cmd-livraison-info');
+  if(c.adresse_livraison&&c.frais_livraison!=null){
+    cmdLivraisonData={adresse:c.adresse_livraison,distance_km:c.distance_livraison_km,zone:c.zone_livraison,frais:c.frais_livraison};
+    if(livrInfo){
+      livrInfo.style.display='block';
+      const zoneOk=c.zone_livraison==='moins30';
+      livrInfo.style.background=zoneOk?'var(--green-bg)':'var(--amber-bg)';
+      livrInfo.style.color=zoneOk?'var(--green-dark)':'var(--amber)';
+      livrInfo.style.borderColor=zoneOk?'var(--green)':'var(--amber)';
+      livrInfo.innerHTML='📍 '+c.adresse_livraison+'<br>Distance estimée (à vol d\'oiseau) : <strong>'+c.distance_livraison_km+' km</strong> — '+(zoneOk?'zone < 30 km':'zone > 30 km')+' — Frais de livraison estimés : <strong>'+c.frais_livraison+' €</strong>';
+    }
+  }else{
+    cmdLivraisonData=null;
+    if(livrInfo)livrInfo.style.display='none';
+  }
   renderCmdItems();
   switchAddMode('search');
   buildCatPills();
@@ -4048,6 +4081,8 @@ function applyClientMode(){
   // Afficher les champs mail / téléphone (mode client uniquement)
   const contactRow=document.getElementById('cmd-client-contact-row');
   if(contactRow)contactRow.style.display='';
+  const livrRow=document.getElementById('cmd-livraison-row');
+  if(livrRow)livrRow.style.display='';
   // Badge compte connecté + déconnexion (sous le logo)
   const connInd=document.getElementById('conn-indicator');
   if(connInd&&!document.getElementById('client-account-badge')){
