@@ -892,7 +892,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
       </div>
       <div class="form-grid col2" id="cmd-client-contact-row" style="display:none;">
         <div class="form-row"><label class="form-label">Adresse mail</label><input type="email" id="cmd-email" placeholder="votre@email.com" autocomplete="email"></div>
-        <div class="form-row"><label class="form-label">Téléphone</label><input type="tel" id="cmd-telephone" placeholder="06 12 34 56 78" autocomplete="tel"></div>
+        <div class="form-row"><label class="form-label">Téléphone *</label><input type="tel" id="cmd-telephone" placeholder="06 12 34 56 78" autocomplete="tel" required></div>
       </div>
       <div class="form-row" id="cmd-livraison-row" style="display:none;">
         <label class="form-label">Adresse de livraison</label>
@@ -3958,6 +3958,7 @@ async function saveCommande(){
   const dejaRecupere=CLIENT_MODE?false:!!document.getElementById('cmd-deja-recupere')?.checked;
   const adresseLivraison=document.getElementById('cmd-adresse-livraison')?.value?.trim()||'';
   if(!chantier){showToast('⚠ Renseignez le chantier');return;}
+  if(CLIENT_MODE&&!telephone){showToast('⚠ Renseignez votre numéro de téléphone');return;}
   if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const num=(cmdCounter||0)+1;
   const source=CLIENT_MODE?'client':'admin';
