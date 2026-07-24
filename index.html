@@ -894,6 +894,10 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div class="form-row"><label class="form-label">Adresse mail</label><input type="email" id="cmd-email" placeholder="votre@email.com" autocomplete="email"></div>
         <div class="form-row"><label class="form-label">Téléphone *</label><input type="tel" id="cmd-telephone" placeholder="06 12 34 56 78" autocomplete="tel" required></div>
       </div>
+      <div class="form-row" id="cmd-num-interne-row" style="display:none;">
+        <label class="form-label">N° de commande interne *</label>
+        <input type="text" id="cmd-num-interne" placeholder="Ex: PO-2026-0142" required>
+      </div>
       <div class="form-row" id="cmd-livraison-row" style="display:none;">
         <label class="form-label">Adresse de livraison</label>
         <input type="text" id="cmd-adresse-livraison" placeholder="N°, rue, code postal, ville…" oninput="onAdresseLivraisonInput(this.value)" autocomplete="street-address">
@@ -1325,7 +1329,7 @@ function openCmdModal(){
     }
   } else {
     const inp=document.getElementById('cmd-chantier');if(inp)inp.value='';
-  }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone','cmd-adresse-livraison'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone','cmd-adresse-livraison','cmd-num-interne'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   cmdLivraisonData=null;
   const livrInfo=document.getElementById('cmd-livraison-info');if(livrInfo)livrInfo.style.display='none';
   if(CLIENT_MODE&&clientAccountEmail){const em=document.getElementById('cmd-email');if(em)em.value=clientAccountEmail;}
@@ -2124,7 +2128,7 @@ function viewCmd(id){
     +'</tr>';
   document.getElementById('cmd-detail-body').innerHTML=
     '<div style="font-size:13px;margin-bottom:14px;line-height:1.7;">'
-    +'<strong>Date :</strong> '+date+' &nbsp;|&nbsp; <strong>Demandeur :</strong> '+(c.nom||'—')+'<br>'
+    +'<strong>Date :</strong> '+date+' &nbsp;|&nbsp; <strong>Demandeur :</strong> '+(c.nom||'—')+(c.numero_commande_interne?' &nbsp;|&nbsp; <strong>N° interne :</strong> '+c.numero_commande_interne:'')+'<br>'
     +'<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'
     +(CLIENT_MODE?'':(c.a_livrer?'<br><strong>Logistique :</strong> <span style="color:var(--blue);font-weight:700;">🚚 À livrer</span>':(c.deja_recupere?'<br><strong>Logistique :</strong> <span style="color:var(--green);font-weight:700;">✅ Déjà récupéré</span>':'')))
     +(c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km) — <strong>'+(c.frais_livraison>0?c.frais_livraison+' €':'Gratuite')+'</strong>':'')
@@ -2246,6 +2250,7 @@ function printCmd(id){
     <strong>Demandeur :</strong> ${c.nom||'—'} &nbsp;|&nbsp;
     <strong>Urgence :</strong> ${c.urgence||'—'} &nbsp;|&nbsp;
     <strong>Statut :</strong> ${statLabel}
+    ${c.numero_commande_interne?'<br><strong>N° commande interne :</strong> '+c.numero_commande_interne:''}
     ${c.a_livrer?'<br><strong>Logistique :</strong> 🚚 À livrer':(c.deja_recupere?'<br><strong>Logistique :</strong> ✅ Déjà récupéré':'')}
     ${c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km) — '+(c.frais_livraison>0?c.frais_livraison+' €':'Gratuite'):''}
     ${(c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):''}
@@ -3957,14 +3962,16 @@ async function saveCommande(){
   const aLivrer=CLIENT_MODE?false:!!document.getElementById('cmd-a-livrer')?.checked;
   const dejaRecupere=CLIENT_MODE?false:!!document.getElementById('cmd-deja-recupere')?.checked;
   const adresseLivraison=document.getElementById('cmd-adresse-livraison')?.value?.trim()||'';
+  const numInterne=document.getElementById('cmd-num-interne')?.value?.trim()||'';
   if(!chantier){showToast('⚠ Renseignez le chantier');return;}
   if(CLIENT_MODE&&!telephone){showToast('⚠ Renseignez votre numéro de téléphone');return;}
+  if(CLIENT_MODE&&!numInterne){showToast('⚠ Renseignez votre n° de commande interne');return;}
   if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const num=(cmdCounter||0)+1;
   const source=CLIENT_MODE?'client':'admin';
   const deviceId=CLIENT_MODE?getClientDeviceId():null;
   const accountEmail=CLIENT_MODE?clientAccountEmail:null;
-  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null};
+  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null,numero_commande_interne:numInterne||null};
   let result;
   if(editingCmdId){
     result=await db.from('commandes').update(payload).eq('id',editingCmdId);
@@ -3995,6 +4002,7 @@ function editCmd(id){
   const notes=document.getElementById('cmd-notes');if(notes)notes.value=c.notes||'';
   const email=document.getElementById('cmd-email');if(email)email.value=c.email||'';
   const tel=document.getElementById('cmd-telephone');if(tel)tel.value=c.telephone||'';
+  const numInt=document.getElementById('cmd-num-interne');if(numInt)numInt.value=c.numero_commande_interne||'';
   const urg=document.getElementById('cmd-urgence');if(urg)urg.value=c.urgence||'normale';
   const aLivrer=document.getElementById('cmd-a-livrer');if(aLivrer)aLivrer.checked=!!c.a_livrer;
   const dejaRecupere=document.getElementById('cmd-deja-recupere');if(dejaRecupere)dejaRecupere.checked=!!c.deja_recupere;
@@ -4111,6 +4119,8 @@ function applyClientMode(){
   if(contactRow)contactRow.style.display='';
   const livrRow=document.getElementById('cmd-livraison-row');
   if(livrRow)livrRow.style.display='';
+  const numIntRow=document.getElementById('cmd-num-interne-row');
+  if(numIntRow)numIntRow.style.display='';
   // Badge compte connecté + déconnexion (sous le logo)
   const connInd=document.getElementById('conn-indicator');
   if(connInd&&!document.getElementById('client-account-badge')){
