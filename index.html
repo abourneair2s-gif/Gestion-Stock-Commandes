@@ -885,11 +885,11 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
       <div class="form-row admin-only" id="cmd-statut-row" style="display:none;">
         <label class="form-label">Statut</label>
         <select id="cmd-statut" style="max-width:220px;">
-          <option value="approuvee">Approuvée (ne pas changer)</option>
+          <option value="__keep__">Ne pas changer</option>
           <option value="en_attente">Remettre en attente</option>
           <option value="refusee">Refuser</option>
         </select>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Remettre en attente ou refuser restituera automatiquement le stock sorti pour cette commande.</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Remettre en attente ou refuser restituera automatiquement le stock déjà sorti pour cette commande.</div>
       </div>
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Demandeur</label><input type="text" id="cmd-nom" placeholder="Votre nom"></div>
@@ -2099,7 +2099,8 @@ function renderCommandes(){
         <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
         ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
         <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
-        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✕</button>`:c.statut==='approuvee'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>`:c.statut==='approuvee_partielle'?`<button class="btn btn-xs" style="margin-left:3px;border-color:#888;color:#555;" onclick="abandonnerReliquat('${c.id}')">✖ Abandon</button>`:''}
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✕</button>`:c.statut==='approuvee'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>`:c.statut==='approuvee_partielle'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
+        <button class="btn btn-xs" style="margin-left:3px;border-color:#888;color:#555;" onclick="abandonnerReliquat('${c.id}')">✖ Abandon</button>`:''}
         ${c.statut!=='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;color:var(--blue);border-color:var(--blue);" onclick="archiverCmd('${c.id}')" title="Archiver cette commande">📦 Archiver</button>`:''}
         <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">🗑</button>
       </td>`:`<td style="text-align:right;"><button class="btn btn-xs" onclick="viewCmd('${c.id}')">Voir</button></td>`}
@@ -2179,6 +2180,7 @@ function viewCmd(id){
       `<button class="btn btn-danger btn-sm" onclick="refuserCmd('${cid}');closeModal('modal-cmd-detail');">✕ Refuser</button>`+
       `<button class="btn btn-primary btn-sm" onclick="approuverCmd('${cid}');closeModal('modal-cmd-detail');">✓ Approuver</button>`;
     else if(c.statut==='approuvee_partielle') footer+=
+      `<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">✏ Modifier</button>`+
       `<button class="btn btn-sm" style="background:var(--amber);color:#fff;border-color:var(--amber);" onclick="honorerReliquat('${cid}');">📦 Honorer le reliquat</button>`+
       `<button class="btn btn-sm" style="border-color:var(--red);color:var(--red);" onclick="abandonnerReliquat('${cid}');" title="Clôture le reliquat sans livrer le reste — conserve la commande et ce qui a été sorti">✖ Abandonner le reliquat</button>`+
       `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
@@ -4064,9 +4066,9 @@ async function saveCommande(){
     // Toujours garder le numéro d'origine, sauf si l'admin l'a explicitement changé dans le champ
     const original=commandes.find(x=>x.id===editingCmdId);
     num=(!CLIENT_MODE&&numFieldVal>0)?numFieldVal:(original?.num??numFieldVal??0);
-    if(!CLIENT_MODE&&original&&original.statut==='approuvee'){
-      const chosen=document.getElementById('cmd-statut')?.value||'approuvee';
-      if(chosen!=='approuvee'){statutOverride=chosen;restockNeeded=true;originalForRestock=original;}
+    if(!CLIENT_MODE&&original&&(original.statut==='approuvee'||original.statut==='approuvee_partielle')){
+      const chosen=document.getElementById('cmd-statut')?.value||'__keep__';
+      if(chosen!=='__keep__'){statutOverride=chosen;restockNeeded=true;originalForRestock=original;}
     }
   }else{
     // Relire le compteur en base au moment de l'enregistrement pour limiter les collisions entre sessions
@@ -4149,9 +4151,9 @@ function editCmd(id){
   const statutRow=document.getElementById('cmd-statut-row');
   const statutFld=document.getElementById('cmd-statut');
   if(statutRow&&statutFld){
-    if(!CLIENT_MODE&&c.statut==='approuvee'){
+    if(!CLIENT_MODE&&(c.statut==='approuvee'||c.statut==='approuvee_partielle')){
       statutRow.style.display='';
-      statutFld.value='approuvee';
+      statutFld.value='__keep__';
     }else{
       statutRow.style.display='none';
     }
