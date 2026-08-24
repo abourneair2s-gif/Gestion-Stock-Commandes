@@ -882,6 +882,15 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <label class="form-label">N° commande</label>
         <input type="number" id="cmd-num" min="1" style="max-width:140px;">
       </div>
+      <div class="form-row admin-only" id="cmd-statut-row" style="display:none;">
+        <label class="form-label">Statut</label>
+        <select id="cmd-statut" style="max-width:220px;">
+          <option value="approuvee">Approuvée (ne pas changer)</option>
+          <option value="en_attente">Remettre en attente</option>
+          <option value="refusee">Refuser</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Remettre en attente ou refuser restituera automatiquement le stock sorti pour cette commande.</div>
+      </div>
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Demandeur</label><input type="text" id="cmd-nom" placeholder="Votre nom"></div>
         <div class="form-row"><label class="form-label">Notes / Motif</label><input type="text" id="cmd-notes" placeholder="Raison, précisions…"></div>
@@ -1347,6 +1356,7 @@ function openCmdModal(){
   const dejaRecupDef=document.getElementById('cmd-deja-recupere');if(dejaRecupDef)dejaRecupDef.checked=false;
   updateAdminFlagBox('cmd-a-livrer-box',true);updateAdminFlagBox('cmd-deja-recupere-box',false);
   const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=(cmdCounter||0)+1;
+  const statutRow=document.getElementById('cmd-statut-row');if(statutRow)statutRow.style.display='none';
   document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
   document.getElementById('art-modal-title').textContent='Ajouter un article';
@@ -2089,7 +2099,7 @@ function renderCommandes(){
         <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
         ${c.statut==='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>
         <button class="btn btn-xs" style="color:var(--green);border-color:var(--green);margin-left:3px;" onclick="approuverCmd('${c.id}')">✓</button>
-        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✕</button>`:c.statut==='approuvee_partielle'?`<button class="btn btn-xs" style="margin-left:3px;border-color:#888;color:#555;" onclick="abandonnerReliquat('${c.id}')">✖ Abandon</button>`:''}
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="refuserCmd('${c.id}')">✕</button>`:c.statut==='approuvee'?`<button class="btn btn-xs" style="margin-left:3px;" onclick="editCmd('${c.id}')">✏</button>`:c.statut==='approuvee_partielle'?`<button class="btn btn-xs" style="margin-left:3px;border-color:#888;color:#555;" onclick="abandonnerReliquat('${c.id}')">✖ Abandon</button>`:''}
         ${c.statut!=='en_attente'?`<button class="btn btn-xs" style="margin-left:3px;color:var(--blue);border-color:var(--blue);" onclick="archiverCmd('${c.id}')" title="Archiver cette commande">📦 Archiver</button>`:''}
         <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">🗑</button>
       </td>`:`<td style="text-align:right;"><button class="btn btn-xs" onclick="viewCmd('${c.id}')">Voir</button></td>`}
@@ -2171,6 +2181,10 @@ function viewCmd(id){
     else if(c.statut==='approuvee_partielle') footer+=
       `<button class="btn btn-sm" style="background:var(--amber);color:#fff;border-color:var(--amber);" onclick="honorerReliquat('${cid}');">📦 Honorer le reliquat</button>`+
       `<button class="btn btn-sm" style="border-color:var(--red);color:var(--red);" onclick="abandonnerReliquat('${cid}');" title="Clôture le reliquat sans livrer le reste — conserve la commande et ce qui a été sorti">✖ Abandonner le reliquat</button>`+
+      `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
+    else if(c.statut==='approuvee') footer+=
+      `<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">✏ Modifier</button>`+
+      `<button class="btn btn-sm" style="color:var(--blue);border-color:var(--blue);" onclick="archiverCmd('${cid}');">📦 Archiver</button>`+
       `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
     else footer+=`<button class="btn btn-sm" style="color:var(--blue);border-color:var(--blue);" onclick="archiverCmd('${cid}');">📦 Archiver</button>`+`<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
   }
@@ -4045,10 +4059,15 @@ async function saveCommande(){
   if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const numFieldVal=parseInt(document.getElementById('cmd-num')?.value,10);
   let num;
+  let statutOverride=null,restockNeeded=false,originalForRestock=null;
   if(editingCmdId){
     // Toujours garder le numéro d'origine, sauf si l'admin l'a explicitement changé dans le champ
     const original=commandes.find(x=>x.id===editingCmdId);
     num=(!CLIENT_MODE&&numFieldVal>0)?numFieldVal:(original?.num??numFieldVal??0);
+    if(!CLIENT_MODE&&original&&original.statut==='approuvee'){
+      const chosen=document.getElementById('cmd-statut')?.value||'approuvee';
+      if(chosen!=='approuvee'){statutOverride=chosen;restockNeeded=true;originalForRestock=original;}
+    }
   }else{
     // Relire le compteur en base au moment de l'enregistrement pour limiter les collisions entre sessions
     const{data:cfgRow}=await db.from('config').select('value').eq('key','cmd_counter').single();
@@ -4060,7 +4079,28 @@ async function saveCommande(){
   const accountEmail=CLIENT_MODE?clientAccountEmail:null;
   const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null,numero_commande_interne:numInterne||null,document_interne_url:cmdDocInterneUrl||null,document_interne_nom:cmdDocInterneNom||null};
   if(editingCmdId){
-    delete payload.statut; // ne pas réinitialiser le statut d'une commande existante lors d'une modification
+    if(statutOverride){
+      payload.statut=statutOverride;
+      payload.items=cmdItems.map(i=>({id:i.id,qty:i.qty})); // repasse en forme "en attente" (sans qtySorti/qtyReliquat)
+    }else{
+      delete payload.statut; // ne pas réinitialiser le statut d'une commande existante lors d'une modification
+    }
+  }
+  if(restockNeeded&&originalForRestock){
+    for(const item of originalForRestock.items||[]){
+      const sorti=item.qtySorti||0;
+      if(sorti<=0)continue;
+      const art=stock.find(a=>a.id===item.id);
+      if(!art)continue;
+      const newStock=(art.stock||0)+sorti;
+      await db.from('stock').update({stock:newStock}).eq('id',item.id);
+      art.stock=newStock;
+      await db.from('historique').insert({
+        type:'in',article_id:item.id,categorie:art.categorie,diametre:art.diametre,
+        qty:sorti,new_stock:newStock,equipe:'Commande',
+        note:'Annulation approbation Cmd #'+String(originalForRestock.num).padStart(3,'0')+' — '+originalForRestock.chantier
+      });
+    }
   }
   let result;
   if(editingCmdId){
@@ -4073,12 +4113,14 @@ async function saveCommande(){
     }
   }
   if(result.error){showToast('❌ Erreur: '+result.error.message);return;}
+  const wasEditing=!!editingCmdId;
   editingCmdId=null;
   closeModal('modal-commande');
   const {data}=await db.from('commandes').select('*').order('created_at',{ascending:false});
   if(data)commandes=data;
   renderCommandes();updateBadges();
-  showToast(editingCmdId?'Commande modifiée':'✅ Commande soumise #'+String(num).padStart(3,'0'));
+  if(restockNeeded)renderStock();
+  showToast(wasEditing?(restockNeeded?'Commande modifiée et remise en '+(statutOverride==='refusee'?'refusée':'attente')+' — stock restitué':'Commande modifiée'):'✅ Commande soumise #'+String(num).padStart(3,'0'));
 }
 
 function editCmd(id){
@@ -4104,6 +4146,16 @@ function editCmd(id){
   }
   const urg=document.getElementById('cmd-urgence');if(urg)urg.value=c.urgence||'normale';
   const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=c.num||'';
+  const statutRow=document.getElementById('cmd-statut-row');
+  const statutFld=document.getElementById('cmd-statut');
+  if(statutRow&&statutFld){
+    if(!CLIENT_MODE&&c.statut==='approuvee'){
+      statutRow.style.display='';
+      statutFld.value='approuvee';
+    }else{
+      statutRow.style.display='none';
+    }
+  }
   const aLivrer=document.getElementById('cmd-a-livrer');if(aLivrer)aLivrer.checked=!!c.a_livrer;
   const dejaRecupere=document.getElementById('cmd-deja-recupere');if(dejaRecupere)dejaRecupere.checked=!!c.deja_recupere;
   updateAdminFlagBox('cmd-a-livrer-box',!!c.a_livrer);updateAdminFlagBox('cmd-deja-recupere-box',!!c.deja_recupere);
