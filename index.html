@@ -878,6 +878,10 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
           <select id="cmd-urgence"><option value="normale">Normale</option><option value="urgent">Urgent</option><option value="critique">Critique</option></select>
         </div>
       </div>
+      <div class="form-row admin-only" id="cmd-num-row">
+        <label class="form-label">N° commande</label>
+        <input type="number" id="cmd-num" min="1" style="max-width:140px;">
+      </div>
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Demandeur</label><input type="text" id="cmd-nom" placeholder="Votre nom"></div>
         <div class="form-row"><label class="form-label">Notes / Motif</label><input type="text" id="cmd-notes" placeholder="Raison, précisions…"></div>
@@ -1342,6 +1346,7 @@ function openCmdModal(){
   const aLivrerDef=document.getElementById('cmd-a-livrer');if(aLivrerDef)aLivrerDef.checked=true;
   const dejaRecupDef=document.getElementById('cmd-deja-recupere');if(dejaRecupDef)dejaRecupDef.checked=false;
   updateAdminFlagBox('cmd-a-livrer-box',true);updateAdminFlagBox('cmd-deja-recupere-box',false);
+  const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=(cmdCounter||0)+1;
   document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
   document.getElementById('art-modal-title').textContent='Ajouter un article';
@@ -4038,17 +4043,31 @@ async function saveCommande(){
   if(CLIENT_MODE&&!telephone){showToast('⚠ Renseignez votre numéro de téléphone');return;}
   if(CLIENT_MODE&&!numInterne){showToast('⚠ Renseignez votre n° de commande interne');return;}
   if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
-  const num=(cmdCounter||0)+1;
+  const numFieldVal=parseInt(document.getElementById('cmd-num')?.value,10);
+  let num;
+  if(editingCmdId){
+    // Toujours garder le numéro d'origine, sauf si l'admin l'a explicitement changé dans le champ
+    const original=commandes.find(x=>x.id===editingCmdId);
+    num=(!CLIENT_MODE&&numFieldVal>0)?numFieldVal:(original?.num??numFieldVal??0);
+  }else{
+    // Relire le compteur en base au moment de l'enregistrement pour limiter les collisions entre sessions
+    const{data:cfgRow}=await db.from('config').select('value').eq('key','cmd_counter').single();
+    const freshCounter=cfgRow?.value??cmdCounter??0;
+    num=(!CLIENT_MODE&&numFieldVal>0)?numFieldVal:freshCounter+1;
+  }
   const source=CLIENT_MODE?'client':'admin';
   const deviceId=CLIENT_MODE?getClientDeviceId():null;
   const accountEmail=CLIENT_MODE?clientAccountEmail:null;
   const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null,numero_commande_interne:numInterne||null,document_interne_url:cmdDocInterneUrl||null,document_interne_nom:cmdDocInterneNom||null};
+  if(editingCmdId){
+    delete payload.statut; // ne pas réinitialiser le statut d'une commande existante lors d'une modification
+  }
   let result;
   if(editingCmdId){
     result=await db.from('commandes').update(payload).eq('id',editingCmdId);
   } else {
     result=await db.from('commandes').insert(payload);
-    if(!result.error){
+    if(!result.error&&num>(cmdCounter||0)){
       cmdCounter=num;
       await db.from('config').upsert({key:'cmd_counter',value:num},{onConflict:'key'});
     }
@@ -4084,6 +4103,7 @@ function editCmd(id){
     }
   }
   const urg=document.getElementById('cmd-urgence');if(urg)urg.value=c.urgence||'normale';
+  const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=c.num||'';
   const aLivrer=document.getElementById('cmd-a-livrer');if(aLivrer)aLivrer.checked=!!c.a_livrer;
   const dejaRecupere=document.getElementById('cmd-deja-recupere');if(dejaRecupere)dejaRecupere.checked=!!c.deja_recupere;
   updateAdminFlagBox('cmd-a-livrer-box',!!c.a_livrer);updateAdminFlagBox('cmd-deja-recupere-box',!!c.deja_recupere);
