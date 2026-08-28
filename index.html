@@ -3889,8 +3889,9 @@ function renderCmdItems(){
   el.innerHTML=cmdItems.map((item,i)=>{
     const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:0};
     const dispo=typeof art.stock==='number'?art.stock:0;
-    const sorti=Math.min(dispo,item.qty);
-    const reliquat=item.qty-sorti;
+    const alreadyProcessed=item.qtySorti!==undefined&&item.qtySorti!==null;
+    const sorti=alreadyProcessed?item.qtySorti:Math.min(dispo,item.qty);
+    const reliquat=alreadyProcessed?(item.qtyReliquat||0):(item.qty-sorti);
     const hasRel=reliquat>0;
     const stockColor=dispo===0?'var(--red)':dispo<item.qty?'var(--amber)':'var(--green)';
     let prixHtml='';
@@ -3912,7 +3913,7 @@ function renderCmdItems(){
       </div>
       ${hasRel?`<div style="display:flex;gap:12px;padding:4px 10px 6px;background:#fff8f0;border-top:1px dashed #ffb74d;font-size:11px;">
         <span style="color:var(--green);">✅ Sorti : <strong>${sorti}</strong></span>
-        <span style="color:#e65100;">⚠ Reliquat prévu : <strong>${reliquat}</strong></span>
+        <span style="color:#e65100;">⚠ ${alreadyProcessed?'Reliquat':'Reliquat prévu'} : <strong>${reliquat}</strong></span>
       </div>`:''}
     </div>`;
   }).join('');
