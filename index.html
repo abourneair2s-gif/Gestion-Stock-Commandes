@@ -2316,6 +2316,7 @@ function printCmd(id){
 }
 async function approuverCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
+  try{
   const itemsDetail=[];
   let hasReliquat=false;
   for(const item of c.items||[]){
@@ -2325,25 +2326,44 @@ async function approuverCmd(id){
     const reliquat=item.qty-sorti;
     if(reliquat>0)hasReliquat=true;
     if(sorti>0&&art){
-      await db.from('stock').update({stock:art.stock-sorti}).eq('id',item.id);
+      const upd=await db.from('stock').update({stock:art.stock-sorti}).eq('id',item.id);
+      if(upd.error){
+        showToast('❌ Approbation interrompue sur '+item.id+' (stock) : '+upd.error.message+'. Articles précédents déjà traités — vérifiez avant de réessayer.');
+        renderCommandes();renderStock();updateBadges();
+        return;
+      }
       art.stock=art.stock-sorti;
     }
     if(sorti>0){
-      await db.from('historique').insert({
+      const hist=await db.from('historique').insert({
         type:'out',article_id:item.id,
         categorie:art?art.categorie:'?',diametre:art?art.diametre:'?',
         qty:sorti,new_stock:art?art.stock:0,
         equipe:'Commande',note:'Cmd #'+String(c.num).padStart(3,'0')+' — '+c.chantier
       });
+      if(hist.error){
+        showToast('❌ Approbation interrompue sur '+item.id+' (historique) : '+hist.error.message+'. Stock déjà déduit pour cet article — vérifiez avant de réessayer.');
+        renderCommandes();renderStock();updateBadges();
+        return;
+      }
     }
     itemsDetail.push({...item,qtySorti:sorti,qtyReliquat:reliquat});
   }
   const newStatut=hasReliquat?'approuvee_partielle':'approuvee';
-  await db.from('commandes').update({statut:newStatut,items:itemsDetail}).eq('id',id);
+  const upd=await db.from('commandes').update({statut:newStatut,items:itemsDetail}).eq('id',id);
+  if(upd.error){
+    showToast('❌ Stock et historique mis à jour, mais échec de l\'enregistrement final de la commande : '+upd.error.message+'. Réessayez ou contactez le support — ne pas approuver une seconde fois sans vérifier.');
+    renderCommandes();renderStock();updateBadges();
+    return;
+  }
   const idx=commandes.findIndex(x=>x.id===id);
   if(idx>-1){commandes[idx].statut=newStatut;commandes[idx].items=itemsDetail;}
   renderCommandes();renderStock();updateBadges();
   showToast(hasReliquat?'⚠ Approuvée avec reliquat':'✅ Commande approuvée');
+  }catch(e){
+    showToast('❌ Connexion interrompue pendant l\'approbation. Vérifiez le stock et l\'historique avant de réessayer — ne relancez pas l\'approbation sans vérifier.');
+    renderCommandes();renderStock();updateBadges();
+  }
 }
 async function refuserCmd(id){
   await db.from('commandes').update({statut:'refusee'}).eq('id',id);
