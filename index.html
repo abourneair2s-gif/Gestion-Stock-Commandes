@@ -883,8 +883,16 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <input type="number" id="cmd-num" min="1" style="max-width:140px;">
       </div>
       <div class="form-row admin-only">
+        <label class="form-label">Mode d'affichage des prix</label>
+        <select id="cmd-mode-facturation" style="max-width:260px;" onchange="renderCmdItems()">
+          <option value="achat">Prix d'achat (interne)</option>
+          <option value="vente">Prix de vente (facturation client)</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Passez en "prix de vente" pour créer ou facturer une commande côté client, sans passer par le portail client.</div>
+      </div>
+      <div class="form-row admin-only">
         <label class="form-label">Frais de gestion (€) — optionnel</label>
-        <input type="number" id="cmd-frais-gestion" min="0" step="0.01" placeholder="Ex: 15" style="max-width:140px;">
+        <input type="number" id="cmd-frais-gestion" min="0" step="0.01" placeholder="Ex: 15" style="max-width:140px;" oninput="renderCmdItems()">
         <div style="font-size:11px;color:var(--text3);margin-top:4px;">À utiliser au cas par cas, pas systématiquement. Laisser vide si aucun frais.</div>
       </div>
       <div class="form-row admin-only" id="cmd-statut-row" style="display:none;">
@@ -1371,6 +1379,7 @@ function openCmdModal(){
   updateAdminFlagBox('cmd-a-livrer-box',true);updateAdminFlagBox('cmd-deja-recupere-box',false);
   const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=(cmdCounter||0)+1;
   const fraisGestFld=document.getElementById('cmd-frais-gestion');if(fraisGestFld)fraisGestFld.value='';
+  const modeFactFld=document.getElementById('cmd-mode-facturation');if(modeFactFld)modeFactFld.value='achat';
   const statutRow=document.getElementById('cmd-statut-row');if(statutRow)statutRow.style.display='none';
   document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
@@ -2131,8 +2140,8 @@ function viewCmd(id){
   // Tableau articles : masquer colonne Stock en mode client
   const thStock=CLIENT_MODE?'':'<th>Stock</th>';
   const tdStock=CLIENT_MODE?'':(art)=>'<td>'+art.stock+'</td>';
-  const prixKey=CLIENT_MODE?'prixVente':'prixUnitaire';
-  const prixLabel=CLIENT_MODE?'P.U. vente HT':'P.U. achat';
+  const prixKey=(CLIENT_MODE||c.mode_facturation==='vente')?'prixVente':'prixUnitaire';
+  const prixLabel=(CLIENT_MODE||c.mode_facturation==='vente')?'P.U. vente HT':'P.U. achat';
   const hasReliquat=(c.items||[]).some(i=>i.qtyReliquat>0);
   let total=0;
   const rows=(c.items||[]).map(i=>{
@@ -2214,8 +2223,8 @@ function printCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
   const date=c.created_at?new Date(c.created_at).toLocaleString('fr-FR'):'';
   const statLabel={'en_attente':'En attente','approuvee':'Approuvée','refusee':'Refusée'}[c.statut]||c.statut;
-  const pKey=CLIENT_MODE?'prixVente':'prixUnitaire';
-  const pLabel=CLIENT_MODE?'P.U. vente HT':'P.U. achat';
+  const pKey=(CLIENT_MODE||c.mode_facturation==='vente')?'prixVente':'prixUnitaire';
+  const pLabel=(CLIENT_MODE||c.mode_facturation==='vente')?'P.U. vente HT':'P.U. achat';
   let printTotal=0;
   // Calculer reliquats prévus basés sur stock actuel (si commande en attente)
   const isPending=c.statut==='en_attente';
@@ -3894,6 +3903,7 @@ function renderCmdItems(){
   const empty=document.getElementById('cmd-items-empty');
   if(!el)return;
   if(empty)empty.style.display=cmdItems.length?'none':'';
+  const modeVente=CLIENT_MODE||document.getElementById('cmd-mode-facturation')?.value==='vente';
   let totalClient=0;
   el.innerHTML=cmdItems.map((item,i)=>{
     const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:0};
@@ -3904,7 +3914,7 @@ function renderCmdItems(){
     const hasRel=reliquat>0;
     const stockColor=dispo===0?'var(--red)':dispo<item.qty?'var(--amber)':'var(--green)';
     let prixHtml='';
-    if(CLIENT_MODE){
+    if(modeVente){
       const ligneTotal=(art.prixVente||0)*item.qty;
       totalClient+=ligneTotal;
       prixHtml=`<span style="font-size:11px;font-weight:700;color:var(--blue);">${ligneTotal.toFixed(2)} €</span>`;
@@ -3927,14 +3937,20 @@ function renderCmdItems(){
     </div>`;
   }).join('');
   const totalRow=document.getElementById('cmd-items-total');
-  if(CLIENT_MODE&&cmdItems.length){
+  if(modeVente&&cmdItems.length){
     if(!totalRow){
       const wrap=document.createElement('div');
       wrap.id='cmd-items-total';
       wrap.style.cssText='text-align:right;font-size:13px;font-weight:700;padding:8px 10px;color:var(--blue);border-top:1px solid var(--border);';
       el.after(wrap);
     }
-    document.getElementById('cmd-items-total').textContent='Total : '+totalClient.toFixed(2)+' €';
+    const fraisGestionLive=parseFloat(document.getElementById('cmd-frais-gestion')?.value)||0;
+    const fraisLivraisonLive=cmdLivraisonData?.frais||0;
+    const grandTotal=totalClient+fraisGestionLive+fraisLivraisonLive;
+    document.getElementById('cmd-items-total').innerHTML='Articles : '+totalClient.toFixed(2)+' €'
+      +(fraisGestionLive>0?'<br>Frais de gestion : '+fraisGestionLive.toFixed(2)+' €':'')
+      +(fraisLivraisonLive>0?'<br>Frais de livraison : '+fraisLivraisonLive.toFixed(2)+' €':'')
+      +'<br><span style="font-size:15px;">Total : '+grandTotal.toFixed(2)+' €</span>';
   } else if(totalRow){
     totalRow.remove();
   }
@@ -4119,7 +4135,8 @@ async function saveCommande(){
   const deviceId=CLIENT_MODE?getClientDeviceId():null;
   const accountEmail=CLIENT_MODE?clientAccountEmail:null;
   const fraisGestionVal=CLIENT_MODE?null:(parseFloat(document.getElementById('cmd-frais-gestion')?.value)||null);
-  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null,numero_commande_interne:numInterne||null,document_interne_url:cmdDocInterneUrl||null,document_interne_nom:cmdDocInterneNom||null,frais_gestion:fraisGestionVal};
+  const modeFacturation=CLIENT_MODE?'vente':(document.getElementById('cmd-mode-facturation')?.value||'achat');
+  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null,numero_commande_interne:numInterne||null,document_interne_url:cmdDocInterneUrl||null,document_interne_nom:cmdDocInterneNom||null,frais_gestion:fraisGestionVal,mode_facturation:modeFacturation};
   if(CLIENT_MODE&&editingCmdId){
     const original=commandes.find(x=>x.id===editingCmdId);
     payload.frais_gestion=original?.frais_gestion??null; // le client ne peut pas toucher ce champ
@@ -4201,6 +4218,7 @@ function editCmd(id){
   const urg=document.getElementById('cmd-urgence');if(urg)urg.value=c.urgence||'normale';
   const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=c.num||'';
   const fraisGestFld=document.getElementById('cmd-frais-gestion');if(fraisGestFld)fraisGestFld.value=c.frais_gestion||'';
+  const modeFactFld=document.getElementById('cmd-mode-facturation');if(modeFactFld)modeFactFld.value=c.mode_facturation||'achat';
   const statutRow=document.getElementById('cmd-statut-row');
   const statutFld=document.getElementById('cmd-statut');
   if(statutRow&&statutFld){
