@@ -2192,7 +2192,7 @@ function renderCommandes(){
     const internalOrders=sorted.filter(c=>!isClientOrder(c));
     let html='';
     if(clientOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">👤 Commandes clients (${clientOrders.length})</td></tr>`+clientOrders.map(cmdRowHTML).join('');
-    if(internalOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:var(--bg);color:var(--text2);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">🏗 Commandes internes (${internalOrders.length})</td></tr>`+internalOrders.map(cmdRowHTML).join('');
+    if(internalOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:var(--purple-bg);color:var(--purple);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">🏗 Commandes internes (${internalOrders.length})</td></tr>`+internalOrders.map(cmdRowHTML).join('');
     tbody.innerHTML=html;
   }
 }
