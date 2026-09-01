@@ -459,6 +459,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
             <option value="approuvee_partielle">⚠ Reliquat</option>
             <option value="refusee">Refusées</option>
           </select>
+          <button class="btn btn-primary btn-sm admin-only" onclick="openCmdModal(true)">👤 Commande client</button>
           <button class="btn btn-primary btn-sm" onclick="openCmdModal()">+ Nouvelle demande</button>
         </div>
       </div>
@@ -865,7 +866,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <div class="modal modal-lg">
     <div class="modal-header">
       <div class="modal-title" id="cmd-modal-title">Nouvelle demande de matériel</div>
-      <button class="btn btn-xs" onclick="stopCmdQR();closeModal('modal-commande')">✕</button>
+      <button class="btn btn-xs" onclick="cmdActingAsClient=false;stopCmdQR();closeModal('modal-commande')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-grid col2">
@@ -996,7 +997,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <div class="modal-footer" style="flex-direction:column;gap:8px;padding-top:12px;border-top:2px dashed var(--border);">
       <div style="font-size:11px;color:var(--text3);text-align:center;">— Vérifiez la liste des articles avant de soumettre —</div>
       <div style="display:flex;gap:8px;width:100%;">
-        <button class="btn" onclick="stopCmdQR();closeModal('modal-commande')" style="flex:1;">Annuler</button>
+        <button class="btn" onclick="cmdActingAsClient=false;stopCmdQR();closeModal('modal-commande')" style="flex:1;">Annuler</button>
         <button class="btn btn-primary" onclick="saveCommande()" style="flex:2;background:var(--blue);">📤 Soumettre la commande</button>
       </div>
     </div>
@@ -1344,6 +1345,8 @@ function isArticleVisibleClient(a){
 let scanSelectedArt = null;
 let editingCmdId = null;
 let cmdItemsLocked = false;
+let cmdActingAsClient = false;
+let _cmdChantierSelectHTML = null;
 let editingFamilleIdx = null;
 let editingSFIdx = null;
 let currentMvArticle = null;
@@ -1356,30 +1359,42 @@ let editingCat = null;
 // Adapte les colonnes Supabase → format interne JS
 function openModal(id){const m=document.getElementById(id);if(m){m.classList.add('open');m.style.display='flex';}}
 function closeModal(id){const m=document.getElementById(id);if(m){m.classList.remove('open');m.style.display='';}}
-function openCmdModal(){
+function openCmdModal(asClient){
   editingCmdId=null;cmdItems=[];cmdItemsLocked=false;
+  cmdActingAsClient=!CLIENT_MODE&&!!asClient;
+  const title=document.getElementById('cmd-modal-title');if(title)title.textContent=cmdActingAsClient?'Nouvelle commande client':'Nouvelle demande de matériel';
   const notice=document.getElementById('cmd-locked-notice');if(notice)notice.style.display='none';
   const modesBtns=document.getElementById('cmd-add-modes-btns');if(modesBtns)modesBtns.style.display='';
   const addZone=document.getElementById('cmd-add-article-zone');if(addZone)addZone.style.display='';
-  if(!CLIENT_MODE){
+  const actingClient=CLIENT_MODE||cmdActingAsClient;
+  const row=document.getElementById('cmd-chantier-row');
+  if(actingClient){
+    if(row)row.innerHTML='<label class="form-label">Nom de l\'entreprise / chantier</label><input type="text" id="cmd-chantier" placeholder="Ex: Dupont Construction, Chantier Nantes…" autocomplete="organization">';
+  }else{
     const selC=document.getElementById('cmd-chantier');
     if(selC&&selC.tagName==='SELECT'){
       selC.innerHTML='<option value="">Sélectionner un chantier</option>';
       chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});
+    }else if(row){
+      row.innerHTML='<label class="form-label">Chantier</label><select id="cmd-chantier"><option value="">Sélectionner un chantier</option></select>';
+      const selC2=document.getElementById('cmd-chantier');
+      chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC2.appendChild(o);});
     }
-  } else {
-    const inp=document.getElementById('cmd-chantier');if(inp)inp.value='';
-  }['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone','cmd-adresse-livraison','cmd-num-interne'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  }
+  ['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone','cmd-adresse-livraison','cmd-num-interne'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   removeDocInterne();
   cmdLivraisonData=null;
   const livrInfo=document.getElementById('cmd-livraison-info');if(livrInfo)livrInfo.style.display='none';
   if(CLIENT_MODE&&clientAccountEmail){const em=document.getElementById('cmd-email');if(em)em.value=clientAccountEmail;}
+  const contactRow=document.getElementById('cmd-client-contact-row');if(contactRow)contactRow.style.display=actingClient?'':'none';
+  const livrRow=document.getElementById('cmd-livraison-row');if(livrRow)livrRow.style.display=actingClient?'':'none';
+  const numIntRow=document.getElementById('cmd-num-interne-row');if(numIntRow)numIntRow.style.display=actingClient?'':'none';
   const aLivrerDef=document.getElementById('cmd-a-livrer');if(aLivrerDef)aLivrerDef.checked=true;
   const dejaRecupDef=document.getElementById('cmd-deja-recupere');if(dejaRecupDef)dejaRecupDef.checked=false;
   updateAdminFlagBox('cmd-a-livrer-box',true);updateAdminFlagBox('cmd-deja-recupere-box',false);
   const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=(cmdCounter||0)+1;
   const fraisGestFld=document.getElementById('cmd-frais-gestion');if(fraisGestFld)fraisGestFld.value='';
-  const modeFactFld=document.getElementById('cmd-mode-facturation');if(modeFactFld)modeFactFld.value='achat';
+  const modeFactFld=document.getElementById('cmd-mode-facturation');if(modeFactFld)modeFactFld.value=cmdActingAsClient?'vente':'achat';
   const statutRow=document.getElementById('cmd-statut-row');if(statutRow)statutRow.style.display='none';
   document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
@@ -4100,6 +4115,7 @@ function printDocInterne(url,nom){
   w.document.close();
 }
 async function saveCommande(){
+  const actingClient=CLIENT_MODE||cmdActingAsClient;
   const chantier=document.getElementById('cmd-chantier')?.value?.trim()||'';
   const nom=document.getElementById('cmd-nom')?.value?.trim()||'';
   const urgence=document.getElementById('cmd-urgence')?.value||'normale';
@@ -4111,8 +4127,8 @@ async function saveCommande(){
   const adresseLivraison=document.getElementById('cmd-adresse-livraison')?.value?.trim()||'';
   const numInterne=document.getElementById('cmd-num-interne')?.value?.trim()||'';
   if(!chantier){showToast('⚠ Renseignez le chantier');return;}
-  if(CLIENT_MODE&&!telephone){showToast('⚠ Renseignez votre numéro de téléphone');return;}
-  if(CLIENT_MODE&&!numInterne){showToast('⚠ Renseignez votre n° de commande interne');return;}
+  if(actingClient&&!telephone){showToast('⚠ Renseignez le numéro de téléphone du client');return;}
+  if(actingClient&&!numInterne){showToast('⚠ Renseignez le n° de commande interne du client');return;}
   if(!cmdItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const numFieldVal=parseInt(document.getElementById('cmd-num')?.value,10);
   let num;
@@ -4182,6 +4198,7 @@ async function saveCommande(){
   if(result.error){showToast('❌ Erreur: '+result.error.message);return;}
   const wasEditing=!!editingCmdId;
   editingCmdId=null;
+  cmdActingAsClient=false;
   closeModal('modal-commande');
   const {data}=await db.from('commandes').select('*').order('created_at',{ascending:false});
   if(data)commandes=data;
@@ -4193,6 +4210,7 @@ async function saveCommande(){
 function editCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
   editingCmdId=id;
+  cmdActingAsClient=false;
   cmdItems=[...(c.items||[])];
   cmdItemsLocked=(c.statut==='approuvee'||c.statut==='approuvee_partielle');
   const notice=document.getElementById('cmd-locked-notice');if(notice)notice.style.display=cmdItemsLocked?'':'none';
@@ -4200,12 +4218,25 @@ function editCmd(id){
   const addZone=document.getElementById('cmd-add-article-zone');if(addZone)addZone.style.display=cmdItemsLocked?'none':'';
   const title=document.getElementById('cmd-modal-title');if(title)title.textContent='Modifier commande #'+String(c.num).padStart(3,'0');
   const selC=document.getElementById('cmd-chantier');
-  if(selC){if(CLIENT_MODE){selC.value=c.chantier||'';}else{selC.innerHTML='<option value="">Sélectionner</option>';chantiers.forEach(ch=>{const o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom;selC.appendChild(o);});selC.value=c.chantier||'';}}
+  if(selC){
+    if(CLIENT_MODE){
+      selC.value=c.chantier||'';
+    }else if(selC.tagName==='SELECT'){
+      selC.innerHTML='<option value="">Sélectionner</option>';chantiers.forEach(ch=>{const o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom;selC.appendChild(o);});selC.value=c.chantier||'';
+    }else{
+      const row=document.getElementById('cmd-chantier-row');
+      if(row){row.innerHTML='<label class="form-label">Chantier</label><select id="cmd-chantier"><option value="">Sélectionner</option></select>';const selC2=document.getElementById('cmd-chantier');chantiers.forEach(ch=>{const o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom;selC2.appendChild(o);});selC2.value=c.chantier||'';}
+    }
+  }
   const nom=document.getElementById('cmd-nom');if(nom)nom.value=c.nom||'';
   const notes=document.getElementById('cmd-notes');if(notes)notes.value=c.notes||'';
   const email=document.getElementById('cmd-email');if(email)email.value=c.email||'';
   const tel=document.getElementById('cmd-telephone');if(tel)tel.value=c.telephone||'';
   const numInt=document.getElementById('cmd-num-interne');if(numInt)numInt.value=c.numero_commande_interne||'';
+  const showClientFields=CLIENT_MODE||c.source==='client';
+  const contactRow=document.getElementById('cmd-client-contact-row');if(contactRow)contactRow.style.display=showClientFields?'':'none';
+  const livrRow2=document.getElementById('cmd-livraison-row');if(livrRow2)livrRow2.style.display=showClientFields?'':'none';
+  const numIntRow=document.getElementById('cmd-num-interne-row');if(numIntRow)numIntRow.style.display=showClientFields?'':'none';
   removeDocInterne();
   if(c.document_interne_url){
     cmdDocInterneUrl=c.document_interne_url;cmdDocInterneNom=c.document_interne_nom||'document';
