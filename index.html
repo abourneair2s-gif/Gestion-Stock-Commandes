@@ -2083,6 +2083,7 @@ function printQR(){
   w.document.close();
 }
 // ==================== RENDER COMMANDES ====================
+function isClientOrder(c){return c.source==='client'||c.mode_facturation==='vente';}
 function renderCommandes(){
   const tbody=document.getElementById('cmd-table');if(!tbody)return;
   const statutFilt=document.getElementById('cmd-filter-statut')?.value||'';
@@ -2104,9 +2105,9 @@ function renderCommandes(){
     arcTable.innerHTML=archived.sort((a,b)=>b.num-a.num).map(c=>{
       const statLabel={'en_attente':'⏳ En attente','approuvee':'✅ Approuvée','refusee':'❌ Refusée','approuvee_partielle':'⚠ Reliquat'}[c.statut]||c.statut;
       const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
-      return`<tr class="cmd-archived-row">
+      return`<tr class="cmd-archived-row" style="${!CLIENT_MODE?`border-left:3px solid ${isClientOrder(c)?'var(--blue)':'var(--border2)'};`:''}">
         <td><strong>#${String(c.num).padStart(3,'0')}</strong></td>
-        <td>${date}</td><td>${c.chantier||''}</td><td>${c.nom||''}</td>
+        <td>${date}</td><td>${c.chantier||''}${!CLIENT_MODE&&isClientOrder(c)?` <span style="font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);border-radius:6px;padding:1px 6px;margin-left:4px;">👤</span>`:''}</td><td>${c.nom||''}</td>
         <td>${c.urgence||''}</td><td>${(c.items||[]).length} art.</td>
         <td>${statLabel}</td>
         <td style="white-space:nowrap;">
@@ -2121,15 +2122,16 @@ function renderCommandes(){
     tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;">'+(CLIENT_MODE?'Aucune demande soumise.':'Aucune commande.')+'</td></tr>';
     return;
   }
-  tbody.innerHTML=filtered.sort((a,b)=>b.num-a.num).map(c=>{
+  const cmdRowHTML=(c)=>{
     const urgColor=c.urgence==='critique'?'var(--red)':c.urgence==='urgent'?'var(--amber)':'var(--green)';
     const statLabel={'en_attente':'En attente ⏳','approuvee':'✅ Approuvée','refusee':'❌ Refusée','approuvee_partielle':'⚠ Reliquat'}[c.statut]||c.statut;
     const statColor={'en_attente':'var(--amber)','approuvee':'var(--green)','refusee':'var(--red)','approuvee_partielle':'#e65100'}[c.statut]||'';
     const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
     const nbArt=(c.items||[]).length;
-    return`<tr>
+    const isClient=isClientOrder(c);
+    return`<tr style="${!CLIENT_MODE?`border-left:3px solid ${isClient?'var(--blue)':'var(--border2)'};`:''}">
       <td><strong>#${String(c.num).padStart(3,'0')}</strong></td>
-      <td>${date}</td><td><strong>${c.chantier||''}</strong></td>
+      <td>${date}</td><td><strong>${c.chantier||''}</strong>${!CLIENT_MODE&&isClient?` <span style="font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);border-radius:6px;padding:1px 6px;margin-left:4px;">👤 CLIENT</span>`:''}</td>
       <td>${c.nom||''}</td>
       <td><span style="color:${urgColor};font-weight:600;">${c.urgence||''}</span></td>
       <td>${nbArt} article(s)</td>
@@ -2144,7 +2146,18 @@ function renderCommandes(){
         <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteCmd('${c.id}')">🗑</button>
       </td>`:`<td style="text-align:right;"><button class="btn btn-xs" onclick="viewCmd('${c.id}')">Voir</button></td>`}
     </tr>`;
-  }).join('');
+  };
+  const sorted=filtered.sort((a,b)=>b.num-a.num);
+  if(CLIENT_MODE){
+    tbody.innerHTML=sorted.map(cmdRowHTML).join('');
+  }else{
+    const clientOrders=sorted.filter(isClientOrder);
+    const internalOrders=sorted.filter(c=>!isClientOrder(c));
+    let html='';
+    if(clientOrders.length)html+=`<tr class="cmd-group-header"><td colspan="7" style="background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">👤 Commandes clients (${clientOrders.length})</td></tr>`+clientOrders.map(cmdRowHTML).join('');
+    if(internalOrders.length)html+=`<tr class="cmd-group-header"><td colspan="7" style="background:var(--bg);color:var(--text2);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">🏗 Commandes internes (${internalOrders.length})</td></tr>`+internalOrders.map(cmdRowHTML).join('');
+    tbody.innerHTML=html;
+  }
 }
 function viewCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
