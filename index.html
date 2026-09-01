@@ -2413,18 +2413,24 @@ async function approuverCmd(id){
   let hasReliquat=false;
   for(const item of c.items||[]){
     const art=stock.find(a=>a.id===item.id);
-    const dispo=art?art.stock:0;
+    // Toujours relire le stock réel en base juste avant de calculer, pour éviter tout décalage
+    // si le navigateur est resté ouvert longtemps ou a manqué une mise à jour temps réel.
+    let dispo=art?art.stock:0;
+    if(art){
+      const fresh=await db.from('stock').select('stock').eq('id',item.id).single();
+      if(!fresh.error&&fresh.data){dispo=fresh.data.stock;art.stock=dispo;}
+    }
     const sorti=Math.min(dispo,item.qty);
     const reliquat=item.qty-sorti;
     if(reliquat>0)hasReliquat=true;
     if(sorti>0&&art){
-      const upd=await db.from('stock').update({stock:art.stock-sorti}).eq('id',item.id);
+      const upd=await db.from('stock').update({stock:dispo-sorti}).eq('id',item.id);
       if(upd.error){
         showToast('❌ Approbation interrompue sur '+item.id+' (stock) : '+upd.error.message+'. Articles précédents déjà traités — vérifiez avant de réessayer.');
         renderCommandes();renderStock();updateBadges();
         return;
       }
-      art.stock=art.stock-sorti;
+      art.stock=dispo-sorti;
     }
     if(sorti>0){
       const hist=await db.from('historique').insert({
@@ -4860,13 +4866,22 @@ async function honorerReliquat(id){
     const rel=item.qtyReliquat||0;
     if(rel<=0){updatedItems.push(item);continue;}
     const art=stock.find(a=>a.id===item.id);
-    const dispo=art?art.stock:0;
+    let dispo=art?art.stock:0;
+    if(art){
+      const fresh=await db.from('stock').select('stock').eq('id',item.id).single();
+      if(!fresh.error&&fresh.data){dispo=fresh.data.stock;art.stock=dispo;}
+    }
     const sorti=Math.min(dispo,rel);
     const newRel=rel-sorti;
     if(newRel>0)restReliquat=true;
     if(sorti>0&&art){
-      await db.from('stock').update({stock:art.stock-sorti}).eq('id',item.id);
-      art.stock=art.stock-sorti;
+      await db.from('stock').update({stock:dispo-sorti}).eq('id',item.id);
+      art.stock=dispo-sorti;
+      await db.from('historique').insert({
+        type:'out',article_id:item.id,categorie:art.categorie,diametre:art.diametre,
+        qty:sorti,new_stock:art.stock,equipe:'Commande',
+        note:'Cmd #'+String(c.num).padStart(3,'0')+' — '+c.chantier+' (reliquat honoré)'
+      });
     }
     updatedItems.push({...item,qtySorti:(item.qtySorti||0)+sorti,qtyReliquat:newRel});
   }
