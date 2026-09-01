@@ -882,6 +882,11 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <label class="form-label">N° commande</label>
         <input type="number" id="cmd-num" min="1" style="max-width:140px;">
       </div>
+      <div class="form-row admin-only">
+        <label class="form-label">Frais de gestion (€) — optionnel</label>
+        <input type="number" id="cmd-frais-gestion" min="0" step="0.01" placeholder="Ex: 15" style="max-width:140px;">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">À utiliser au cas par cas, pas systématiquement. Laisser vide si aucun frais.</div>
+      </div>
       <div class="form-row admin-only" id="cmd-statut-row" style="display:none;">
         <label class="form-label">Statut</label>
         <select id="cmd-statut" style="max-width:220px;">
@@ -1365,6 +1370,7 @@ function openCmdModal(){
   const dejaRecupDef=document.getElementById('cmd-deja-recupere');if(dejaRecupDef)dejaRecupDef.checked=false;
   updateAdminFlagBox('cmd-a-livrer-box',true);updateAdminFlagBox('cmd-deja-recupere-box',false);
   const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=(cmdCounter||0)+1;
+  const fraisGestFld=document.getElementById('cmd-frais-gestion');if(fraisGestFld)fraisGestFld.value='';
   const statutRow=document.getElementById('cmd-statut-row');if(statutRow)statutRow.style.display='none';
   document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
@@ -2163,6 +2169,7 @@ function viewCmd(id){
     +'<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'
     +(CLIENT_MODE?'':(c.a_livrer?'<br><strong>Logistique :</strong> <span style="color:var(--blue);font-weight:700;">🚚 À livrer</span>':(c.deja_recupere?'<br><strong>Logistique :</strong> <span style="color:var(--green);font-weight:700;">✅ Déjà récupéré</span>':'')))
     +(c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km) — <strong>'+(c.frais_livraison>0?c.frais_livraison+' €':'Gratuite')+'</strong>':'')
+    +(c.frais_gestion>0?'<br><strong>Frais de gestion :</strong> '+c.frais_gestion.toFixed(2)+' €':'')
     +((c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):'')
     +(c.notes?'<br><strong>Notes :</strong> '+c.notes:'')
     +(c.document_interne_url?'<br><strong>Document joint :</strong> <a href="#" onclick="event.preventDefault();printDocInterne(\''+c.document_interne_url+'\',\''+(c.document_interne_nom||'').replace(/'/g,"")+'\');" style="color:var(--blue);font-weight:600;">📄 '+(c.document_interne_nom||'Voir le document')+'</a>':'')+'</div>'
@@ -2255,7 +2262,8 @@ function printCmd(id){
   }
   const _r=''
   const fraisLivraison=c.frais_livraison||0;
-  const printTotalStr=(printTotal+fraisLivraison)>0?(printTotal+fraisLivraison).toFixed(2).replace('.',',')+' €':'—';
+  const fraisGestion=c.frais_gestion||0;
+  const printTotalStr=(printTotal+fraisLivraison+fraisGestion)>0?(printTotal+fraisLivraison+fraisGestion).toFixed(2).replace('.',',')+' €':'—';
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Commande #${String(c.num).padStart(3,'0')}</title>
   <style>
@@ -2306,6 +2314,7 @@ function printCmd(id){
     <tbody>
       ${rows}
       ${c.adresse_livraison?`<tr><td colspan="${hasAnyReliquat?5:3}" style="padding:6px 10px;border-bottom:1px solid #ddd;">🚚 Frais de livraison <span style="color:#888;font-size:11px;">(${c.adresse_livraison}, ${c.distance_livraison_km??'?'} km)</span></td><td></td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;font-weight:700;">${fraisLivraison>0?fraisLivraison.toFixed(2).replace('.',',')+' €':'Gratuite'}</td></tr>`:''}
+      ${fraisGestion>0?`<tr><td colspan="${hasAnyReliquat?5:3}" style="padding:6px 10px;border-bottom:1px solid #ddd;">🧾 Frais de gestion</td><td></td><td style="padding:6px 10px;border-bottom:1px solid #ddd;text-align:right;font-weight:700;">${fraisGestion.toFixed(2).replace('.',',')+' €'}</td></tr>`:''}
       <tr style="background:#f5f4f0;">
         <td colspan="${hasAnyReliquat?5:3}" style="padding:8px 10px;font-weight:700;text-align:right;">${hasAnyReliquat?'TOTAL SORTI':'TOTAL'}</td>
         <td></td>
@@ -4109,7 +4118,12 @@ async function saveCommande(){
   const source=CLIENT_MODE?'client':'admin';
   const deviceId=CLIENT_MODE?getClientDeviceId():null;
   const accountEmail=CLIENT_MODE?clientAccountEmail:null;
-  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null,numero_commande_interne:numInterne||null,document_interne_url:cmdDocInterneUrl||null,document_interne_nom:cmdDocInterneNom||null};
+  const fraisGestionVal=CLIENT_MODE?null:(parseFloat(document.getElementById('cmd-frais-gestion')?.value)||null);
+  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null,numero_commande_interne:numInterne||null,document_interne_url:cmdDocInterneUrl||null,document_interne_nom:cmdDocInterneNom||null,frais_gestion:fraisGestionVal};
+  if(CLIENT_MODE&&editingCmdId){
+    const original=commandes.find(x=>x.id===editingCmdId);
+    payload.frais_gestion=original?.frais_gestion??null; // le client ne peut pas toucher ce champ
+  }
   if(editingCmdId){
     if(statutOverride){
       payload.statut=statutOverride;
@@ -4186,6 +4200,7 @@ function editCmd(id){
   }
   const urg=document.getElementById('cmd-urgence');if(urg)urg.value=c.urgence||'normale';
   const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=c.num||'';
+  const fraisGestFld=document.getElementById('cmd-frais-gestion');if(fraisGestFld)fraisGestFld.value=c.frais_gestion||'';
   const statutRow=document.getElementById('cmd-statut-row');
   const statutFld=document.getElementById('cmd-statut');
   if(statutRow&&statutFld){
