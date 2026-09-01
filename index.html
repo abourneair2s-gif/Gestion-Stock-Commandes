@@ -883,6 +883,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <label class="form-label">N° commande</label>
         <input type="number" id="cmd-num" min="1" style="max-width:140px;">
       </div>
+      <div id="cmd-billing-fields" style="display:none;">
       <div class="form-row admin-only">
         <label class="form-label">Mode d'affichage des prix</label>
         <select id="cmd-mode-facturation" style="max-width:260px;" onchange="renderCmdItems()">
@@ -895,6 +896,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <label class="form-label">Frais de gestion (€) — optionnel</label>
         <input type="number" id="cmd-frais-gestion" min="0" step="0.01" placeholder="Ex: 15" style="max-width:140px;" oninput="renderCmdItems()">
         <div style="font-size:11px;color:var(--text3);margin-top:4px;">À utiliser au cas par cas, pas systématiquement. Laisser vide si aucun frais.</div>
+      </div>
       </div>
       <div class="form-row admin-only" id="cmd-statut-row" style="display:none;">
         <label class="form-label">Statut</label>
@@ -1395,6 +1397,7 @@ function openCmdModal(asClient){
   const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=(cmdCounter||0)+1;
   const fraisGestFld=document.getElementById('cmd-frais-gestion');if(fraisGestFld)fraisGestFld.value='';
   const modeFactFld=document.getElementById('cmd-mode-facturation');if(modeFactFld)modeFactFld.value=cmdActingAsClient?'vente':'achat';
+  const billingFields=document.getElementById('cmd-billing-fields');if(billingFields)billingFields.style.display=cmdActingAsClient?'':'none';
   const statutRow=document.getElementById('cmd-statut-row');if(statutRow)statutRow.style.display='none';
   document.getElementById('cmd-urgence').value='normale';renderCmdItems();switchAddMode('search');buildCatPills();openModal('modal-commande');}
 function openNewArticle(){
@@ -4263,6 +4266,7 @@ function editCmd(id){
   const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=c.num||'';
   const fraisGestFld=document.getElementById('cmd-frais-gestion');if(fraisGestFld)fraisGestFld.value=c.frais_gestion||'';
   const modeFactFld=document.getElementById('cmd-mode-facturation');if(modeFactFld)modeFactFld.value=c.mode_facturation||'achat';
+  const billingFields=document.getElementById('cmd-billing-fields');if(billingFields)billingFields.style.display=isClientOrder(c)?'':'none';
   const statutRow=document.getElementById('cmd-statut-row');
   const statutFld=document.getElementById('cmd-statut');
   if(statutRow&&statutFld){
