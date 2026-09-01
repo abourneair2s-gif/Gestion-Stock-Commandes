@@ -2089,15 +2089,43 @@ function printQR(){
 }
 // ==================== RENDER COMMANDES ====================
 function isClientOrder(c){return c.source==='client'||c.mode_facturation==='vente';}
-function closeCmdMenus(){document.querySelectorAll('.cmd-row-menu').forEach(m=>m.style.display='none');}
+function closeCmdMenus(){const m=document.getElementById('cmd-global-menu');if(m)m.style.display='none';}
+function cmdMenuHTML(c){
+  return(c.statut==='en_attente'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>
+    <a href="#" onclick="event.preventDefault();closeCmdMenus();approuverCmd('${c.id}')" class="cmd-menu-item" style="color:var(--green);">✓ Approuver</a>
+    <a href="#" onclick="event.preventDefault();closeCmdMenus();refuserCmd('${c.id}')" class="cmd-menu-item" style="color:var(--red);">✕ Refuser</a>`:c.statut==='approuvee'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>`:c.statut==='approuvee_partielle'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>
+    <a href="#" onclick="event.preventDefault();closeCmdMenus();honorerReliquat('${c.id}')" class="cmd-menu-item" style="color:var(--amber);">📦 Honorer le reliquat</a>
+    <a href="#" onclick="event.preventDefault();closeCmdMenus();abandonnerReliquat('${c.id}')" class="cmd-menu-item">✖ Abandonner le reliquat</a>`:'')
+    +(c.statut!=='en_attente'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();archiverCmd('${c.id}')" class="cmd-menu-item" style="color:var(--blue);">📦 Archiver</a>`:'')
+    +`<a href="#" onclick="event.preventDefault();closeCmdMenus();deleteCmd('${c.id}')" class="cmd-menu-item" style="color:var(--red);">🗑 Supprimer</a>`;
+}
 function toggleCmdMenu(ev,id){
   ev.stopPropagation();
-  const menu=document.getElementById('cmd-menu-'+id);
-  const wasOpen=menu&&menu.style.display==='block';
-  closeCmdMenus();
-  if(menu)menu.style.display=wasOpen?'none':'block';
+  let menu=document.getElementById('cmd-global-menu');
+  if(!menu){
+    menu=document.createElement('div');
+    menu.id='cmd-global-menu';
+    menu.style.cssText='display:none;position:fixed;z-index:999;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);box-shadow:var(--shadow);min-width:180px;text-align:left;overflow:hidden;';
+    menu.addEventListener('click',e=>e.stopPropagation());
+    document.body.appendChild(menu);
+  }
+  const wasOpenFor=menu.dataset.openFor;
+  const wasVisible=menu.style.display==='block';
+  if(wasVisible&&wasOpenFor===id){menu.style.display='none';return;}
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  menu.innerHTML=cmdMenuHTML(c);
+  menu.dataset.openFor=id;
+  const btn=ev.currentTarget;
+  const rect=btn.getBoundingClientRect();
+  menu.style.display='block';
+  const menuH=menu.offsetHeight;
+  const spaceBelow=window.innerHeight-rect.bottom;
+  const openUp=spaceBelow<menuH+12;
+  menu.style.left=Math.max(8,Math.min(rect.right-menu.offsetWidth,window.innerWidth-menu.offsetWidth-8))+'px';
+  menu.style.top=(openUp?rect.top-menuH-4:rect.bottom+4)+'px';
 }
 document.addEventListener('click',closeCmdMenus);
+document.addEventListener('scroll',closeCmdMenus,true);
 function renderCommandes(){
   const tbody=document.getElementById('cmd-table');if(!tbody)return;
   const statutFilt=document.getElementById('cmd-filter-statut')?.value||'';
@@ -2152,18 +2180,7 @@ function renderCommandes(){
       <td><span style="color:${statColor};font-weight:600;">${statLabel}</span></td>
       ${!CLIENT_MODE?`<td style="text-align:right;white-space:nowrap;">
         <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
-        <span style="position:relative;display:inline-block;">
-          <button class="btn btn-xs" style="margin-left:3px;" onclick="toggleCmdMenu(event,'${c.id}')">⋯</button>
-          <div class="cmd-row-menu" id="cmd-menu-${c.id}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);z-index:60;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);box-shadow:var(--shadow);min-width:170px;text-align:left;overflow:hidden;">
-            ${c.statut==='en_attente'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>
-            <a href="#" onclick="event.preventDefault();closeCmdMenus();approuverCmd('${c.id}')" class="cmd-menu-item" style="color:var(--green);">✓ Approuver</a>
-            <a href="#" onclick="event.preventDefault();closeCmdMenus();refuserCmd('${c.id}')" class="cmd-menu-item" style="color:var(--red);">✕ Refuser</a>`:c.statut==='approuvee'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>`:c.statut==='approuvee_partielle'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>
-            <a href="#" onclick="event.preventDefault();closeCmdMenus();honorerReliquat('${c.id}')" class="cmd-menu-item" style="color:var(--amber);">📦 Honorer le reliquat</a>
-            <a href="#" onclick="event.preventDefault();closeCmdMenus();abandonnerReliquat('${c.id}')" class="cmd-menu-item">✖ Abandonner le reliquat</a>`:''}
-            ${c.statut!=='en_attente'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();archiverCmd('${c.id}')" class="cmd-menu-item" style="color:var(--blue);">📦 Archiver</a>`:''}
-            <a href="#" onclick="event.preventDefault();closeCmdMenus();deleteCmd('${c.id}')" class="cmd-menu-item" style="color:var(--red);">🗑 Supprimer</a>
-          </div>
-        </span>
+        <button class="btn btn-xs" style="margin-left:3px;" onclick="toggleCmdMenu(event,'${c.id}')">⋯</button>
       </td>`:`<td style="text-align:right;"><button class="btn btn-xs" onclick="viewCmd('${c.id}')">Voir</button></td>`}
     </tr>`;
   };
