@@ -2095,6 +2095,7 @@ function cmdMenuHTML(c){
     <a href="#" onclick="event.preventDefault();closeCmdMenus();approuverCmd('${c.id}')" class="cmd-menu-item" style="color:var(--green);">✓ Approuver</a>
     <a href="#" onclick="event.preventDefault();closeCmdMenus();refuserCmd('${c.id}')" class="cmd-menu-item" style="color:var(--red);">✕ Refuser</a>`:c.statut==='approuvee'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>`:c.statut==='approuvee_partielle'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>
     <a href="#" onclick="event.preventDefault();closeCmdMenus();honorerReliquat('${c.id}')" class="cmd-menu-item" style="color:var(--amber);">📦 Honorer le reliquat</a>
+    <a href="#" onclick="event.preventDefault();closeCmdMenus();reporterReliquatNouvelleCmd('${c.id}')" class="cmd-menu-item" style="color:var(--blue);">📤 Reporter en nouvelle commande</a>
     <a href="#" onclick="event.preventDefault();closeCmdMenus();abandonnerReliquat('${c.id}')" class="cmd-menu-item">✖ Abandonner le reliquat</a>`:'')
     +(c.statut!=='en_attente'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();archiverCmd('${c.id}')" class="cmd-menu-item" style="color:var(--blue);">📦 Archiver</a>`:'')
     +`<a href="#" onclick="event.preventDefault();closeCmdMenus();deleteCmd('${c.id}')" class="cmd-menu-item" style="color:var(--red);">🗑 Supprimer</a>`;
@@ -2272,6 +2273,7 @@ function viewCmd(id){
     else if(c.statut==='approuvee_partielle') footer+=
       `<button class="btn btn-sm" onclick="editCmd('${cid}');closeModal('modal-cmd-detail');">✏ Modifier</button>`+
       `<button class="btn btn-sm" style="background:var(--amber);color:#fff;border-color:var(--amber);" onclick="honorerReliquat('${cid}');">📦 Honorer le reliquat</button>`+
+      `<button class="btn btn-sm" style="border-color:var(--blue);color:var(--blue);" onclick="reporterReliquatNouvelleCmd('${cid}');" title="Clôture cette commande et crée une nouvelle commande en attente avec le reliquat">📤 Reporter en nouvelle commande</button>`+
       `<button class="btn btn-sm" style="border-color:var(--red);color:var(--red);" onclick="abandonnerReliquat('${cid}');" title="Clôture le reliquat sans livrer le reste — conserve la commande et ce qui a été sorti">✖ Abandonner le reliquat</button>`+
       `<button class="btn btn-danger btn-sm" onclick="deleteCmd('${cid}');closeModal('modal-cmd-detail');">🗑 Supprimer</button>`;
     else if(c.statut==='approuvee') footer+=
@@ -4910,6 +4912,45 @@ async function honorerReliquat(id){
   }
 }
 
+async function reporterReliquatNouvelleCmd(id){
+  if(_cmdActionsInFlight.has(id)){showToast('⏳ Traitement déjà en cours pour cette commande, patientez…');return;}
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  const reliquatItems=(c.items||[]).filter(i=>(i.qtyReliquat||0)>0).map(i=>({id:i.id,qty:i.qtyReliquat}));
+  if(!reliquatItems.length){showToast('Aucun reliquat à reporter sur cette commande');return;}
+  if(!confirm('Créer une nouvelle commande en attente avec le reliquat de la #'+String(c.num).padStart(3,'0')+' ('+reliquatItems.length+' article(s)) ?\n\nLa commande #'+String(c.num).padStart(3,'0')+' sera clôturée (son reliquat sera considéré comme reporté, pas abandonné) et une nouvelle commande en attente sera créée avec ces articles.'))return;
+  _cmdActionsInFlight.add(id);
+  showToast('⏳ Création de la nouvelle commande…');
+  try{
+    const {data:cfgRow}=await db.from('config').select('value').eq('key','cmd_counter').single();
+    const freshCounter=cfgRow?.value??cmdCounter??0;
+    const newNum=freshCounter+1;
+    const newPayload={
+      num:newNum,chantier:c.chantier,nom:c.nom,urgence:c.urgence,
+      notes:'Reliquat reporté depuis la commande #'+String(c.num).padStart(3,'0'),
+      items:reliquatItems,statut:'en_attente',source:c.source||'admin',
+      mode_facturation:c.mode_facturation||'achat'
+    };
+    const ins=await db.from('commandes').insert(newPayload);
+    if(ins.error){showToast('❌ Erreur lors de la création de la nouvelle commande : '+ins.error.message);return;}
+    await db.from('config').upsert({key:'cmd_counter',value:newNum},{onConflict:'key'});
+    cmdCounter=newNum;
+    // Clôturer le reliquat sur la commande d'origine (le reste est désormais suivi via la nouvelle commande)
+    const updatedItems=(c.items||[]).map(i=>({...i,qtyReliquat:0}));
+    const upd=await db.from('commandes').update({statut:'approuvee',items:updatedItems}).eq('id',id);
+    if(upd.error){showToast('⚠ Nouvelle commande #'+String(newNum).padStart(3,'0')+' créée, mais échec de la clôture de la #'+String(c.num).padStart(3,'0')+' : '+upd.error.message);}
+    const idx=commandes.findIndex(x=>x.id===id);
+    if(idx>-1&&!upd.error){commandes[idx].statut='approuvee';commandes[idx].items=updatedItems;}
+    closeModal('modal-cmd-detail');
+    const {data}=await db.from('commandes').select('*').order('created_at',{ascending:false});
+    if(data)commandes=data;
+    renderCommandes();updateBadges();
+    showToast('✅ Commande #'+String(newNum).padStart(3,'0')+' créée en attente avec le reliquat');
+  }catch(e){
+    showToast('❌ Connexion interrompue. Vérifiez avant de réessayer.');
+  }finally{
+    _cmdActionsInFlight.delete(id);
+  }
+}
 async function abandonnerReliquat(id){
   if(!confirm('Abandonner le reliquat ?\n\nLe stock déjà sorti reste déduit. Seule la partie non livrée est annulée.\nLa commande sera marquée "Approuvée partiellement clôturée".'))return;
   const c=commandes.find(x=>x.id===id);if(!c)return;
