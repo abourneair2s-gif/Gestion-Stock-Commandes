@@ -2406,8 +2406,12 @@ function printCmd(id){
   </body></html>`);
   w.document.close();
 }
+let _cmdActionsInFlight=new Set();
 async function approuverCmd(id){
-  const c=commandes.find(x=>x.id===id);if(!c)return;
+  if(_cmdActionsInFlight.has(id)){showToast('⏳ Approbation déjà en cours pour cette commande, patientez…');return;}
+  _cmdActionsInFlight.add(id);
+  showToast('⏳ Approbation en cours…');
+  const c=commandes.find(x=>x.id===id);if(!c){_cmdActionsInFlight.delete(id);return;}
   try{
   const itemsDetail=[];
   let hasReliquat=false;
@@ -2461,6 +2465,8 @@ async function approuverCmd(id){
   }catch(e){
     showToast('❌ Connexion interrompue pendant l\'approbation. Vérifiez le stock et l\'historique avant de réessayer — ne relancez pas l\'approbation sans vérifier.');
     renderCommandes();renderStock();updateBadges();
+  }finally{
+    _cmdActionsInFlight.delete(id);
   }
 }
 async function refuserCmd(id){
@@ -4858,8 +4864,12 @@ async function saveChantierHeures(nom, val){
 }
 
 async function honorerReliquat(id){
+  if(_cmdActionsInFlight.has(id)){showToast('⏳ Traitement déjà en cours pour cette commande, patientez…');return;}
+  _cmdActionsInFlight.add(id);
+  showToast('⏳ Traitement en cours…');
   closeModal('modal-cmd-detail');
-  const c=commandes.find(x=>x.id===id);if(!c)return;
+  try{
+  const c=commandes.find(x=>x.id===id);if(!c){return;}
   let restReliquat=false;
   const updatedItems=[];
   for(const item of c.items||[]){
@@ -4892,6 +4902,12 @@ async function honorerReliquat(id){
   renderCommandes();renderStock();updateBadges();
   if(restReliquat){showToast('⚠ Reliquat partiel encore en attente');viewCmd(id);}
   else showToast('✅ Reliquat entièrement honoré !');
+  }catch(e){
+    showToast('❌ Connexion interrompue. Vérifiez le stock et l\'historique avant de réessayer.');
+    renderCommandes();renderStock();updateBadges();
+  }finally{
+    _cmdActionsInFlight.delete(id);
+  }
 }
 
 async function abandonnerReliquat(id){
