@@ -2089,6 +2089,7 @@ function printQR(){
 }
 // ==================== RENDER COMMANDES ====================
 function isClientOrder(c){return c.source==='client'||c.mode_facturation==='vente';}
+function isReliquatFollowUp(c){return!!(c.notes&&c.notes.startsWith('Reliquat reporté depuis'));}
 function closeCmdMenus(){const m=document.getElementById('cmd-global-menu');if(m)m.style.display='none';}
 function cmdMenuHTML(c){
   return(c.statut==='en_attente'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>
@@ -2148,9 +2149,9 @@ function renderCommandes(){
     arcTable.innerHTML=archived.sort((a,b)=>b.num-a.num).map(c=>{
       const statLabel={'en_attente':'⏳ En attente','approuvee':'✅ Approuvée','refusee':'❌ Refusée','approuvee_partielle':'⚠ Reliquat'}[c.statut]||c.statut;
       const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
-      return`<tr class="cmd-archived-row" style="${!CLIENT_MODE?`border-left:3px solid ${isClientOrder(c)?'var(--blue)':'var(--border2)'};`:''}">
+      return`<tr class="cmd-archived-row" style="${!CLIENT_MODE?`border-left:3px solid ${isReliquatFollowUp(c)?'#e65100':isClientOrder(c)?'var(--blue)':'var(--border2)'};`:''}">
         <td><strong>#${String(c.num).padStart(3,'0')}</strong></td>
-        <td>${date}</td><td>${c.chantier||''}${!CLIENT_MODE&&isClientOrder(c)?` <span style="font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);border-radius:6px;padding:1px 6px;margin-left:4px;">👤</span>`:''}</td><td>${c.nom||''}</td>
+        <td>${date}</td><td>${c.chantier||''}${!CLIENT_MODE&&isReliquatFollowUp(c)?` <span style="font-size:10px;font-weight:700;color:#e65100;background:#fff3e0;border-radius:6px;padding:1px 6px;margin-left:4px;">📤 RELIQUAT</span>`:!CLIENT_MODE&&isClientOrder(c)?` <span style="font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);border-radius:6px;padding:1px 6px;margin-left:4px;">👤</span>`:''}</td><td>${c.nom||''}</td>
         <td>${c.urgence||''}</td><td>${(c.items||[]).length} art.</td>
         <td>${statLabel}</td>
         <td style="white-space:nowrap;">
@@ -2172,9 +2173,10 @@ function renderCommandes(){
     const date=c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'';
     const nbArt=(c.items||[]).length;
     const isClient=isClientOrder(c);
-    return`<tr style="${!CLIENT_MODE?`border-left:3px solid ${isClient?'var(--blue)':'var(--border2)'};`:''}">
+    const isReliquat=isReliquatFollowUp(c);
+    return`<tr style="${!CLIENT_MODE?`border-left:3px solid ${isReliquat?'#e65100':isClient?'var(--blue)':'var(--border2)'};`:''}">
       <td><strong>#${String(c.num).padStart(3,'0')}</strong></td>
-      <td>${date}</td><td><strong>${c.chantier||''}</strong>${!CLIENT_MODE&&isClient?` <span style="font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);border-radius:6px;padding:1px 6px;margin-left:4px;">👤 CLIENT</span>`:''}</td>
+      <td>${date}</td><td><strong>${c.chantier||''}</strong>${!CLIENT_MODE&&isReliquat?` <span style="font-size:10px;font-weight:700;color:#e65100;background:#fff3e0;border-radius:6px;padding:1px 6px;margin-left:4px;">📤 RELIQUAT</span>`:!CLIENT_MODE&&isClient?` <span style="font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-bg);border-radius:6px;padding:1px 6px;margin-left:4px;">👤 CLIENT</span>`:''}</td>
       <td>${c.nom||''}</td>
       <td><span style="color:${urgColor};font-weight:600;">${c.urgence||''}</span></td>
       <td>${nbArt} article(s)</td>
@@ -2189,9 +2191,11 @@ function renderCommandes(){
   if(CLIENT_MODE){
     tbody.innerHTML=sorted.map(cmdRowHTML).join('');
   }else{
-    const clientOrders=sorted.filter(isClientOrder);
-    const internalOrders=sorted.filter(c=>!isClientOrder(c));
+    const reliquatOrders=sorted.filter(isReliquatFollowUp);
+    const clientOrders=sorted.filter(c=>!isReliquatFollowUp(c)&&isClientOrder(c));
+    const internalOrders=sorted.filter(c=>!isReliquatFollowUp(c)&&!isClientOrder(c));
     let html='';
+    if(reliquatOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:#fff3e0;color:#e65100;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">📤 Suivi de reliquat (${reliquatOrders.length})</td></tr>`+reliquatOrders.map(cmdRowHTML).join('');
     if(clientOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">👤 Commandes clients (${clientOrders.length})</td></tr>`+clientOrders.map(cmdRowHTML).join('');
     if(internalOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:var(--purple-bg);color:var(--purple);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">🏗 Commandes internes (${internalOrders.length})</td></tr>`+internalOrders.map(cmdRowHTML).join('');
     tbody.innerHTML=html;
