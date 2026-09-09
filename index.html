@@ -949,6 +949,11 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <label class="form-label">Adresse de livraison</label>
         <input type="text" id="cmd-adresse-livraison" placeholder="N°, rue, code postal, ville…" oninput="onAdresseLivraisonInput(this.value)" autocomplete="street-address">
         <div id="cmd-livraison-info" style="font-size:12px;margin-top:6px;display:none;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);"></div>
+        <div class="admin-only" style="margin-top:8px;">
+          <label class="form-label">Frais de livraison (€) — corriger si besoin</label>
+          <input type="number" id="cmd-frais-livraison-override" min="0" step="0.01" placeholder="Auto-calculé" style="max-width:140px;">
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Laisser tel quel pour garder le calcul automatique. Mets 0 pour annuler des frais facturés par erreur.</div>
+        </div>
       </div>
       <div class="section-header" style="margin-top:6px;">
         <div class="section-title">Articles à commander</div>
@@ -1396,7 +1401,7 @@ function openCmdModal(asClient){
       chantiers.forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC2.appendChild(o);});
     }
   }
-  ['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone','cmd-adresse-livraison','cmd-num-interne'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['cmd-nom','cmd-notes','cmd-art-search','cmd-email','cmd-telephone','cmd-adresse-livraison','cmd-num-interne','cmd-frais-livraison-override'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   removeDocInterne();
   cmdLivraisonData=null;
   const livrInfo=document.getElementById('cmd-livraison-info');if(livrInfo)livrInfo.style.display='none';
@@ -4231,7 +4236,9 @@ async function saveCommande(){
   const accountEmail=CLIENT_MODE?clientAccountEmail:null;
   const fraisGestionVal=CLIENT_MODE?null:(parseFloat(document.getElementById('cmd-frais-gestion')?.value)||null);
   const modeFacturation=CLIENT_MODE?'vente':(document.getElementById('cmd-mode-facturation')?.value||'achat');
-  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:cmdLivraisonData?.frais??null,numero_commande_interne:numInterne||null,document_interne_url:cmdDocInterneUrl||null,document_interne_nom:cmdDocInterneNom||null,frais_gestion:fraisGestionVal,mode_facturation:modeFacturation};
+  const fraisLivraisonOverrideVal=document.getElementById('cmd-frais-livraison-override')?.value;
+  const fraisLivraisonFinal=(!CLIENT_MODE&&fraisLivraisonOverrideVal!=='')?(parseFloat(fraisLivraisonOverrideVal)||0):(cmdLivraisonData?.frais??null);
+  const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:fraisLivraisonFinal,numero_commande_interne:numInterne||null,document_interne_url:cmdDocInterneUrl||null,document_interne_nom:cmdDocInterneNom||null,frais_gestion:fraisGestionVal,mode_facturation:modeFacturation};
   if(CLIENT_MODE&&editingCmdId){
     const original=commandes.find(x=>x.id===editingCmdId);
     payload.frais_gestion=original?.frais_gestion??null; // le client ne peut pas toucher ce champ
@@ -4344,6 +4351,7 @@ function editCmd(id){
   const dejaRecupere=document.getElementById('cmd-deja-recupere');if(dejaRecupere)dejaRecupere.checked=!!c.deja_recupere;
   updateAdminFlagBox('cmd-a-livrer-box',!!c.a_livrer);updateAdminFlagBox('cmd-deja-recupere-box',!!c.deja_recupere);
   const adrLivr=document.getElementById('cmd-adresse-livraison');if(adrLivr)adrLivr.value=c.adresse_livraison||'';
+  const fraisLivrOverride=document.getElementById('cmd-frais-livraison-override');if(fraisLivrOverride)fraisLivrOverride.value=(c.frais_livraison!=null?c.frais_livraison:'');
   const livrInfo=document.getElementById('cmd-livraison-info');
   if(c.adresse_livraison&&c.frais_livraison!=null){
     cmdLivraisonData={adresse:c.adresse_livraison,distance_km:c.distance_livraison_km,zone:c.zone_livraison,frais:c.frais_livraison,viaRoute:true};
