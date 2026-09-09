@@ -4305,9 +4305,14 @@ function editCmd(id){
   const addZone=document.getElementById('cmd-add-article-zone');if(addZone)addZone.style.display=cmdItemsLocked?'none':'';
   const title=document.getElementById('cmd-modal-title');if(title)title.textContent='Modifier commande #'+String(c.num).padStart(3,'0');
   const selC=document.getElementById('cmd-chantier');
+  const showClientFields=CLIENT_MODE||isClientOrder(c);
   if(selC){
-    if(CLIENT_MODE){
-      selC.value=c.chantier||'';
+    if(showClientFields){
+      if(selC.tagName==='SELECT'){
+        const row=document.getElementById('cmd-chantier-row');
+        if(row){row.innerHTML='<label class="form-label">Nom de l\'entreprise / chantier</label><input type="text" id="cmd-chantier" placeholder="Ex: Dupont Construction, Chantier Nantes…" autocomplete="organization">';}
+      }
+      const selC2=document.getElementById('cmd-chantier');if(selC2)selC2.value=c.chantier||'';
     }else if(selC.tagName==='SELECT'){
       selC.innerHTML='<option value="">Sélectionner</option>';chantiers.forEach(ch=>{const o=document.createElement('option');o.value=ch.nom;o.textContent=ch.nom;selC.appendChild(o);});selC.value=c.chantier||'';
     }else{
@@ -4320,7 +4325,6 @@ function editCmd(id){
   const email=document.getElementById('cmd-email');if(email)email.value=c.email||'';
   const tel=document.getElementById('cmd-telephone');if(tel)tel.value=c.telephone||'';
   const numInt=document.getElementById('cmd-num-interne');if(numInt)numInt.value=c.numero_commande_interne||'';
-  const showClientFields=CLIENT_MODE||isClientOrder(c);
   const contactRow=document.getElementById('cmd-client-contact-row');if(contactRow)contactRow.style.display=showClientFields?'':'none';
   const livrRow2=document.getElementById('cmd-livraison-row');if(livrRow2)livrRow2.style.display=showClientFields?'':'none';
   const numIntRow=document.getElementById('cmd-num-interne-row');if(numIntRow)numIntRow.style.display=showClientFields?'':'none';
