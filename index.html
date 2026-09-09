@@ -138,6 +138,8 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .cat-list-name{flex:1;font-size:14px;}
 /* Loading overlay */
 #loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;}
+#pin-gate{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+#pin-gate input{max-width:180px;text-align:center;font-size:22px;letter-spacing:8px;font-weight:700;}
 #loading-overlay.hidden{display:none;}
 .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -277,6 +279,13 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
 <body>
 
 <!-- Loading overlay -->
+<div id="pin-gate" style="display:none;">
+  <div style="font-size:17px;font-weight:700;color:var(--green);">🔒 StockPro AIR2S</div>
+  <div style="font-size:13px;color:var(--text2);">Code d'accès admin</div>
+  <input type="password" inputmode="numeric" pattern="[0-9]*" id="pin-input" maxlength="6" autocomplete="off" placeholder="••••">
+  <button class="btn btn-primary" onclick="checkAdminPin()">Déverrouiller</button>
+  <div id="pin-error" style="display:none;color:var(--red);font-size:13px;">Code incorrect</div>
+</div>
 <div id="loading-overlay">
   <div class="spinner"></div>
   <div style="font-size:14px;color:var(--text2);">Connexion à la base de données…</div>
@@ -314,6 +323,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <button class="nav-btn" onclick="showPage('parametres',this)" data-page="parametres"><span class="nav-icon">⚙️</span>Paramètres</button>
   <button class="nav-btn" onclick="showPage('inventaire',this)" data-page="inventaire"><span class="nav-icon">📋</span>Inventaire</button>
   <button class="nav-btn admin-only" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);" title="Export global : stock + alertes + historique"><span class="nav-icon">📥</span>Export global</button>
+  <button class="nav-btn admin-only" onclick="lockAdminAccess()" style="color:var(--text3);" title="Reverrouiller l'accès avec le code PIN"><span class="nav-icon">🔒</span>Verrouiller</button>
 </div>
 
 <div id="main">
@@ -5213,7 +5223,49 @@ async function desarchiverCmd(id){
   showToast('✅ Commande restaurée');
 }
 
-initApp();
+const ADMIN_PIN_STORAGE_KEY='stockpro_admin_unlocked';
+function lockAdminAccess(){
+  localStorage.removeItem(ADMIN_PIN_STORAGE_KEY);
+  location.reload();
+}
+async function checkAdminPin(){
+  const input=document.getElementById('pin-input');
+  const err=document.getElementById('pin-error');
+  const val=(input?.value||'').trim();
+  if(!val){return;}
+  try{
+    const {data,error}=await db.from('config').select('value').eq('key','admin_pin').single();
+    const realPin=data?.value!=null?String(data.value):null;
+    if(realPin===null){
+      // Pas de PIN configuré côté base : on laisse passer pour ne pas bloquer l'accès par erreur de config
+      document.getElementById('pin-gate').style.display='none';
+      localStorage.setItem(ADMIN_PIN_STORAGE_KEY,'1');
+      initApp();
+      return;
+    }
+    if(val===realPin){
+      document.getElementById('pin-gate').style.display='none';
+      localStorage.setItem(ADMIN_PIN_STORAGE_KEY,'1');
+      initApp();
+    }else{
+      if(err)err.style.display='block';
+      if(input){input.value='';input.focus();}
+    }
+  }catch(e){
+    if(err){err.style.display='block';err.textContent='Erreur de connexion, réessayez';}
+  }
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const pinInput=document.getElementById('pin-input');
+  if(pinInput)pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')checkAdminPin();});
+});
+if(!CLIENT_MODE&&localStorage.getItem(ADMIN_PIN_STORAGE_KEY)!=='1'){
+  document.getElementById('loading-overlay').classList.add('hidden');
+  const gate=document.getElementById('pin-gate');
+  if(gate){gate.style.display='flex';setTimeout(()=>document.getElementById('pin-input')?.focus(),100);}
+}else{
+  initApp();
+}
 
 </script>
 </body>
