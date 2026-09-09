@@ -4319,7 +4319,7 @@ function editCmd(id){
   const email=document.getElementById('cmd-email');if(email)email.value=c.email||'';
   const tel=document.getElementById('cmd-telephone');if(tel)tel.value=c.telephone||'';
   const numInt=document.getElementById('cmd-num-interne');if(numInt)numInt.value=c.numero_commande_interne||'';
-  const showClientFields=CLIENT_MODE||c.source==='client';
+  const showClientFields=CLIENT_MODE||isClientOrder(c);
   const contactRow=document.getElementById('cmd-client-contact-row');if(contactRow)contactRow.style.display=showClientFields?'':'none';
   const livrRow2=document.getElementById('cmd-livraison-row');if(livrRow2)livrRow2.style.display=showClientFields?'':'none';
   const numIntRow=document.getElementById('cmd-num-interne-row');if(numIntRow)numIntRow.style.display=showClientFields?'':'none';
