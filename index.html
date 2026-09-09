@@ -1131,6 +1131,37 @@ const SUPABASE_URL = 'https://cjvlqicfjjhxjhtawbnq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdmxxaWNmampoeGpodGF3Ym5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNDc2MTAsImV4cCI6MjA5MjgyMzYxMH0.G-j8H3PDCt2OI2qPiHUeWYJ9zmSwnGNJQyGp4tib8UE';
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Pont en lecture seule vers GestionHPC (heures/planning), projet Supabase distinct
+const HPC_URL = 'https://qaxgiroemawdeuwbphet.supabase.co';
+const HPC_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFheGdpcm9lbWF3ZGV1d2JwaGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MDA3MDMsImV4cCI6MjA5NTk3NjcwM30.1Mq2gX5RVad6Uu0Gvongo_cp2m356BtmDL4qInt0mpQ';
+const dbHpc = createClient(HPC_URL, HPC_KEY);
+const HPC_EMPLOYES = {
+  JDA:'Jordan PEREIRA', ULF:'Ugo LEMAUFF', FCN:'Fabien COTON',
+  GDA:'Giovanny DA SILVA', TBI:'Thomas BALCERSKI', ABE:'Audrey BOURNE', RML:'Romuald LEMAUFF'
+};
+async function fetchChantierHeuresHPC(nom){
+  const target=(nom||'').trim().toLowerCase();
+  if(!target)return{parEmploye:[],totalHeures:0,erreur:null};
+  try{
+    const{data,error}=await dbHpc.from('heures').select('emp_id,c1,h1,c2,h2,c3,h3');
+    if(error)return{parEmploye:[],totalHeures:0,erreur:error.message};
+    const parEmploye={};
+    (data||[]).forEach(row=>{
+      [['c1','h1'],['c2','h2'],['c3','h3']].forEach(([ck,hk])=>{
+        const cval=(row[ck]||'').trim().toLowerCase();
+        const hval=parseFloat(row[hk])||0;
+        if(cval===target&&hval>0){
+          parEmploye[row.emp_id]=(parEmploye[row.emp_id]||0)+hval;
+        }
+      });
+    });
+    const liste=Object.entries(parEmploye).map(([id,heures])=>({id,name:HPC_EMPLOYES[id]||id,heures})).sort((a,b)=>b.heures-a.heures);
+    const totalHeures=liste.reduce((s,e)=>s+e.heures,0);
+    return{parEmploye:liste,totalHeures,erreur:null};
+  }catch(e){
+    return{parEmploye:[],totalHeures:0,erreur:e.message||'Connexion à GestionHPC impossible'};
+  }
+}
 
 // ==================== DONNEES PAR DEFAUT ====================
 const DEFAULT_CATEGORIES = ["Gaines","Coudes 90°","Coudes 45°","RM","Piquage droit","Raccord sur plat","Réduction","Bouchons","Té souche","Té égal","Sifflet","Colliers"];
@@ -2580,7 +2611,7 @@ function renderChantiers(){
   }
 }
 
-function showChantierDetail(nom){
+async function showChantierDetail(nom){
   const d_el=document.getElementById('chantier-detail');if(!d_el)return;
   document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
   // Marquer carte active
@@ -2608,6 +2639,18 @@ function showChantierDetail(nom){
       <div style="font-size:11px;color:var(--text2);">Valeur achat</div>
     </div>
   </div>`;
+
+  // Section Intervenants (chargement asynchrone depuis GestionHPC, affichée en premier avec un état "chargement")
+  const intervenantsHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">👷 Intervenants <span style="font-weight:400;color:var(--text3);font-size:11px;">(heures saisies dans GestionHPC)</span></div>'
+    +'<div id="chantier-intervenants-zone" style="margin-bottom:14px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;color:var(--text3);">⏳ Chargement…</div>';
+
+  // Section Suivi / journal de commentaires
+  const suiviHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">📝 Suivi de chantier</div>'
+    +'<div style="margin-bottom:8px;display:flex;gap:8px;align-items:flex-start;">'
+    +'<textarea id="chantier-comment-input" placeholder="Ajouter une note (avancement, remarque, incident...)" rows="2" style="flex:1;resize:vertical;"></textarea>'
+    +'<button class="btn btn-sm btn-primary" style="white-space:nowrap;" onclick="ajouterCommentaireChantier(\''+nom.replace(/'/g,"\\'")+'\')">Ajouter</button>'
+    +'</div>'
+    +'<div id="chantier-comments-list" style="margin-bottom:14px;"></div>';
 
   // Tableau par famille
   let tableHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">📦 Détail par famille</div>';
@@ -2650,9 +2693,59 @@ function showChantierDetail(nom){
   document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
   // Reconstruire le contenu du detail
   const detail_body=document.getElementById('chantier-detail-body');
-  if(detail_body) detail_body.innerHTML=kpi+tableHtml+exportBtn;
+  if(detail_body) detail_body.innerHTML=kpi+intervenantsHtml+suiviHtml+tableHtml+exportBtn;
   d_el.style.display='';
+  d_el.dataset.chantierNom=nom;
   d_el.scrollIntoView({behavior:'smooth',block:'start'});
+
+  // Chargement asynchrone : intervenants (GestionHPC) + commentaires (StockPro)
+  fetchChantierHeuresHPC(nom).then(res=>{
+    const zone=document.getElementById('chantier-intervenants-zone');
+    if(!zone||d_el.dataset.chantierNom!==nom)return;
+    if(res.erreur){
+      zone.innerHTML='⚠ Impossible de récupérer les heures depuis GestionHPC ('+res.erreur+')';
+      return;
+    }
+    if(!res.parEmploye.length){
+      zone.innerHTML='Aucune heure trouvée pour ce chantier dans GestionHPC (vérifiez que le nom correspond exactement des deux côtés).';
+      return;
+    }
+    zone.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+      +res.parEmploye.map(e=>'<span style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-weight:600;">'+e.name+' <span style="color:var(--blue);">'+e.heures.toFixed(1).replace('.',',')+'h</span></span>').join('')
+      +'</div><div style="margin-top:6px;font-size:11px;color:var(--text3);">Total : '+res.totalHeures.toFixed(1).replace('.',',')+'h</div>';
+  });
+  renderChantierComments(nom);
+}
+async function renderChantierComments(nom){
+  const list=document.getElementById('chantier-comments-list');
+  if(!list)return;
+  list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0;">⏳ Chargement…</div>';
+  const{data,error}=await db.from('chantier_commentaires').select('*').eq('chantier_nom',nom).order('created_at',{ascending:false});
+  const d_el=document.getElementById('chantier-detail');
+  if(!list||!d_el||d_el.dataset.chantierNom!==nom)return;
+  if(error){list.innerHTML='<div style="font-size:12px;color:var(--red);">Erreur de chargement des notes.</div>';return;}
+  if(!data||!data.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0;">Aucune note pour l\'instant.</div>';return;}
+  list.innerHTML=data.map(n=>{
+    const date=n.created_at?new Date(n.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    return'<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;font-size:12.5px;">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:var(--text3);font-size:11px;">'+date+'</span>'
+      +'<a href="#" onclick="event.preventDefault();supprimerCommentaireChantier(\''+n.id+'\',\''+nom.replace(/'/g,"\\'")+'\')" style="color:var(--red);font-size:11px;">Supprimer</a></div>'
+      +'<div style="white-space:pre-wrap;margin-top:2px;">'+escH(n.texte)+'</div></div>';
+  }).join('');
+}
+async function ajouterCommentaireChantier(nom){
+  const input=document.getElementById('chantier-comment-input');
+  const texte=input?.value?.trim();
+  if(!texte)return;
+  const{error}=await db.from('chantier_commentaires').insert({chantier_nom:nom,texte});
+  if(error){showToast('❌ Erreur : '+error.message);return;}
+  if(input)input.value='';
+  renderChantierComments(nom);
+}
+async function supprimerCommentaireChantier(id,nom){
+  if(!confirm('Supprimer cette note ?'))return;
+  await db.from('chantier_commentaires').delete().eq('id',id);
+  renderChantierComments(nom);
 }
 
 function buildChantierFamRows(lignes){
