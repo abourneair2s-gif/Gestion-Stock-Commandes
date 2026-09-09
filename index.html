@@ -2917,7 +2917,7 @@ let etiqSelectedCat='';let etiqSelected=new Set();function renderAlertes(){
     page.querySelector('.table-wrap').innerHTML='<div style="text-align:center;color:var(--green);padding:30px;font-weight:600;font-size:14px;">✅ Tous les stocks sont au-dessus du seuil minimum</div>';
     return;
   }
-  const rows=alerts.map(a=>{
+  const rowHTML=(a)=>{
     const s=getStatus(a);
     const sc=s==='warn'?'stock-warn':'stock-danger';
     const label=s==='warn'?'<span class="badge badge-warn">⚠ Bas</span>':'<span class="badge badge-danger">🔴 Critique</span>';
@@ -2935,11 +2935,38 @@ let etiqSelectedCat='';let etiqSelected=new Set();function renderAlertes(){
       <td>${label}</td>
       <td><button class="btn btn-xs" onclick="openMouvement('${a.id}')">± Réappro</button></td>
     </tr>`;
-  }).join('');
+  };
+  // Grouper les alertes par famille / sous-famille (même logique que la page Stock)
+  const rendered=new Set();
+  let html='';
+  famillesTree.forEach(f=>{
+    const famCats=f.categories||[];
+    const famDirect=alerts.filter(a=>famCats.includes(a.categorie)&&!rendered.has(a.id));
+    famDirect.forEach(a=>rendered.add(a.id));
+    const sfGroups=[];
+    (f.enfants||[]).forEach(sf=>{
+      const sfCats=sf.categories||[];
+      const sfArts=alerts.filter(a=>sfCats.includes(a.categorie)&&!rendered.has(a.id));
+      sfArts.forEach(a=>rendered.add(a.id));
+      if(sfArts.length)sfGroups.push({nom:sf.nom,arts:sfArts});
+    });
+    if(!famDirect.length&&!sfGroups.length)return;
+    html+=`<tr><td colspan="7" style="background:#f0ede7;font-weight:700;font-size:12px;padding:7px 12px;border-bottom:2px solid #ddd;">📁 ${f.nom} (${famDirect.length+sfGroups.reduce((s,g)=>s+g.arts.length,0)})</td></tr>`;
+    html+=famDirect.map(rowHTML).join('');
+    sfGroups.forEach(g=>{
+      html+=`<tr><td colspan="7" style="background:#fafaf8;font-weight:600;font-size:11px;padding:6px 12px;border-bottom:1px dashed #ddd;">  ↳ ${g.nom} (${g.arts.length})</td></tr>`;
+      html+=g.arts.map(rowHTML).join('');
+    });
+  });
+  const unclassed=alerts.filter(a=>!rendered.has(a.id));
+  if(unclassed.length){
+    html+=`<tr><td colspan="7" style="background:#f0ede7;font-weight:700;font-size:12px;padding:7px 12px;border-bottom:2px solid #ddd;">— Non classées (${unclassed.length})</td></tr>`;
+    html+=unclassed.map(rowHTML).join('');
+  }
   page.querySelector('.table-wrap').innerHTML=`<table><thead><tr>
     <th>Référence</th><th>Catégorie</th><th>Ø</th>
     <th>Stock actuel</th><th>Seuil min.</th><th>Statut</th><th></th>
-  </tr></thead><tbody>${rows}</tbody></table>`;
+  </tr></thead><tbody>${html}</tbody></table>`;
 }
 function histSelectFam(){
   const famId=document.getElementById('hist-filter-fam')?.value||'';
