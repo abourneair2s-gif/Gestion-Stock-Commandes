@@ -2645,23 +2645,27 @@ async function showChantierDetail(nom){
   const famRows=buildChantierFamRows(d.lignes);
 
   // KPI bar
-  const benef=d.valVente-d.valAchat;
+  const chPrixVente=(()=>{const ch=chantiers.find(x=>x.nom===nom);return ch&&ch.prix_vente?ch.prix_vente:0;})();
+  const benef=chPrixVente-d.valAchat;
   const fmtSigned=v=>{const s=v<0?'-':'';return s+Math.abs(v).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f€';};
   const kpi=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:140px;text-align:center;">
       <div style="font-size:20px;font-weight:700;">${d.qtyTot} <span style="font-size:13px;font-weight:600;color:var(--text3);">unités</span></div>
       <div style="font-size:11px;color:var(--text2);">${d.cmdsApprouv.length} commande(s) validée(s)</div>
     </div>
-    <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
-      <div style="font-size:18px;font-weight:700;color:var(--green-dark);">${fmtBig(d.valVente)}</div>
-      <div style="font-size:11px;color:var(--text2);">Prix vendu</div>
+    <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:150px;text-align:center;">
+      <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
+        <input type="number" min="0" step="1" value="${chPrixVente||''}" placeholder="0" style="width:90px;padding:3px 6px;font-size:16px;font-weight:700;color:var(--green-dark);text-align:center;background:transparent;border:1px dashed var(--green);" onchange="saveChantierPrixVente('${nom.replace(/'/g,"\\'")}',this.value)" onclick="event.stopPropagation()">
+        <span style="font-size:15px;font-weight:700;color:var(--green-dark);">€</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);">Prix vendu au client</div>
     </div>
     <div style="background:var(--red-bg);border:1px solid var(--red);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
       <div style="font-size:18px;font-weight:700;color:var(--red);">${fmtBig(d.valAchat)}</div>
       <div style="font-size:11px;color:var(--text2);">Coût (achat)</div>
     </div>
     <div style="background:${benef>=0?'var(--blue-bg)':'var(--red-bg)'};border:1px solid ${benef>=0?'var(--blue)':'var(--red)'};border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
-      <div style="font-size:18px;font-weight:700;color:${benef>=0?'var(--blue)':'var(--red)'};">${fmtSigned(benef)}</div>
+      <div style="font-size:18px;font-weight:700;color:${benef>=0?'var(--blue)':'var(--red)'};">${chPrixVente?fmtSigned(benef):'—'}</div>
       <div style="font-size:11px;color:var(--text2);">Bénéfice</div>
     </div>
   </div>`;
@@ -2669,11 +2673,18 @@ async function showChantierDetail(nom){
   // Section Intervenants (chargement asynchrone depuis GestionHPC, affichée en premier avec un état "chargement")
   const chHeuresPrevues=(()=>{const ch=chantiers.find(x=>x.nom===nom);return ch&&ch.heures?ch.heures:null;})();
   const intervenantsHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">👷 Intervenants <span style="font-weight:400;color:var(--text3);font-size:11px;">(heures saisies dans GestionHPC)</span></div>'
-    +'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">'
-    +'<div style="font-size:12px;color:var(--text2);">Heures prévues :</div>'
-    +'<input type="number" min="0" step="0.5" value="'+(chHeuresPrevues||'')+'" placeholder="—" style="width:70px;padding:4px 6px;font-size:12px;text-align:center;" onchange="saveChantierHeures(\''+nom.replace(/'/g,"\\'")+'\',this.value)">'
-    +'<span style="color:var(--text3);">·</span>'
-    +'<div style="font-size:12px;color:var(--text2);">Heures effectuées : <strong id="chantier-heures-effectuees">…</strong></div>'
+    +'<div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;">'
+    +'<div style="background:var(--purple-bg);border:1px solid var(--purple);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:130px;text-align:center;">'
+    +'<div style="display:flex;align-items:center;justify-content:center;gap:4px;">'
+    +'<input type="number" min="0" step="0.5" value="'+(chHeuresPrevues||'')+'" placeholder="0" style="width:70px;padding:3px 6px;font-size:20px;font-weight:700;color:var(--purple);text-align:center;background:transparent;border:1px dashed var(--purple);" onchange="saveChantierHeures(\''+nom.replace(/'/g,"\\'")+'\',this.value)">'
+    +'<span style="font-size:15px;font-weight:700;color:var(--purple);">h</span>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--text2);">Heures prévues</div>'
+    +'</div>'
+    +'<div style="background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:130px;text-align:center;">'
+    +'<div style="font-size:20px;font-weight:700;" id="chantier-heures-effectuees">…</div>'
+    +'<div style="font-size:11px;color:var(--text2);">Heures effectuées</div>'
+    +'</div>'
     +'</div>'
     +'<div id="chantier-intervenants-zone" style="margin-bottom:14px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;color:var(--text3);">⏳ Chargement…</div>';
 
@@ -5128,6 +5139,14 @@ async function saveChantierHeures(nom, val){
   const title=document.getElementById('chantier-detail-title');
   if(title&&title.textContent.includes(nom))showChantierDetail(nom);
   showToast('⏱ Heures mises à jour');
+}
+async function saveChantierPrixVente(nom, val){
+  const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  c.prix_vente=parseFloat(val)||0;
+  await db.from('config').upsert({key:'chantiers',value:chantiers},{onConflict:'key'});
+  const title=document.getElementById('chantier-detail-title');
+  if(title&&title.textContent.includes(nom))showChantierDetail(nom);
+  showToast('💰 Prix vendu mis à jour');
 }
 
 async function honorerReliquat(id){
