@@ -620,10 +620,12 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   </div>
   <!-- Détail chantier sélectionné (affiché ici, avant le tableau) -->
   <!-- Tableau récapitulatif -->
-  <div class="section-header" style="margin-top:4px;">
-    <div class="section-title" style="font-size:13px;color:var(--text2);">Récapitulatif</div>
+  <div class="section-header" style="margin-top:4px;cursor:pointer;" onclick="toggleChantiersRecap()">
+    <div class="section-title" style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;">
+      <span id="chantiers-recap-icon">▶</span> Récapitulatif
+    </div>
   </div>
-  <div class="table-wrap" style="margin-bottom:16px;">
+  <div class="table-wrap" id="chantiers-recap-wrap" style="margin-bottom:16px;display:none;">
     <table><thead><tr><th>Chantier</th><th>Commandes</th><th>Mouvements</th><th>Articles sortis</th><th>Heures</th><th>Valeur achat</th><th></th></tr></thead>
     <tbody id="chantiers-table"></tbody></table>
   </div>
@@ -2611,16 +2613,53 @@ function renderChantiers(){
         </td><td>${fmtV(d.valAchat)}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-xs" onclick="showChantierDetail('${ne}')">Détail</button>
-          <button class="btn btn-xs" onclick="exportChantierExcel('${ne}')">📥</button>
-          ${c.archived
-            ?`<button class="btn btn-xs" style="margin-left:3px;color:var(--green);border-color:var(--green);" onclick="desarchiverChantier('${ne}')">↩ Réactiver</button>`
-            :`<button class="btn btn-xs" style="margin-left:3px;" onclick="archiverChantier('${ne}')">📦 Archiver</button>`}
-          <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteChantier('${ne}')">🗑</button>
+          <button class="btn btn-xs" style="margin-left:3px;" onclick="toggleChantierRowMenu(event,'${ne}')">⋯</button>
         </td></tr>`;
     }).join('');
   }
 }
+function closeChantierMenus(){const m=document.getElementById('chantier-global-menu');if(m)m.style.display='none';}
+function toggleChantierRowMenu(ev,nom){
+  ev.stopPropagation();
+  let menu=document.getElementById('chantier-global-menu');
+  if(!menu){
+    menu=document.createElement('div');
+    menu.id='chantier-global-menu';
+    menu.style.cssText='display:none;position:fixed;z-index:999;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);box-shadow:var(--shadow);min-width:170px;text-align:left;overflow:hidden;';
+    menu.addEventListener('click',e=>e.stopPropagation());
+    document.body.appendChild(menu);
+  }
+  const wasOpenFor=menu.dataset.openFor;
+  const wasVisible=menu.style.display==='block';
+  if(wasVisible&&wasOpenFor===nom){menu.style.display='none';return;}
+  const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  const ne=nom.replace(/'/g,"\\'");
+  menu.innerHTML='<a href="#" onclick="event.preventDefault();closeChantierMenus();exportChantierExcel(\''+ne+'\')" class="cmd-menu-item">📥 Export Excel</a>'
+    +(c.archived
+      ?'<a href="#" onclick="event.preventDefault();closeChantierMenus();desarchiverChantier(\''+ne+'\')" class="cmd-menu-item" style="color:var(--green);">↩ Réactiver</a>'
+      :'<a href="#" onclick="event.preventDefault();closeChantierMenus();archiverChantier(\''+ne+'\')" class="cmd-menu-item">📦 Archiver</a>')
+    +'<a href="#" onclick="event.preventDefault();closeChantierMenus();deleteChantier(\''+ne+'\')" class="cmd-menu-item" style="color:var(--red);">🗑 Supprimer</a>';
+  menu.dataset.openFor=nom;
+  const btn=ev.currentTarget;
+  const rect=btn.getBoundingClientRect();
+  menu.style.display='block';
+  const menuH=menu.offsetHeight;
+  const spaceBelow=window.innerHeight-rect.bottom;
+  const openUp=spaceBelow<menuH+12;
+  menu.style.left=Math.max(8,Math.min(rect.right-menu.offsetWidth,window.innerWidth-menu.offsetWidth-8))+'px';
+  menu.style.top=(openUp?rect.top-menuH-4:rect.bottom+4)+'px';
+}
+document.addEventListener('click',closeChantierMenus);
+document.addEventListener('scroll',closeChantierMenus,true);
 
+function toggleChantiersRecap(){
+  const wrap=document.getElementById('chantiers-recap-wrap');
+  const icon=document.getElementById('chantiers-recap-icon');
+  if(!wrap)return;
+  const opening=wrap.style.display==='none';
+  wrap.style.display=opening?'':'none';
+  if(icon)icon.textContent=opening?'▼':'▶';
+}
 function switchChantierTab(tab){
   const famPanel=document.getElementById('chantier-tab-famille');
   const histoPanel=document.getElementById('chantier-tab-histo');
