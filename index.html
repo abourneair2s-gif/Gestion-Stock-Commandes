@@ -2664,11 +2664,12 @@ async function showChantierDetail(nom){
     +'<textarea id="chantier-comment-input" placeholder="Ajouter une note (avancement, remarque, incident...)" rows="2" style="width:100%;resize:vertical;"></textarea>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'
     +'<div>'
-    +'<input type="file" id="chantier-comment-photo-input" accept="image/*" capture="environment" style="display:none;" onchange="uploadChantierCommentPhoto(this.files[0])">'
-    +'<input type="file" id="chantier-comment-photo-input-gallery" accept="image/*" style="display:none;" onchange="uploadChantierCommentPhoto(this.files[0])">'
+    +'<input type="file" id="chantier-comment-photo-input" accept="image/*" capture="environment" style="display:none;" onchange="uploadChantierCommentPhoto(this.files)">'
+    +'<input type="file" id="chantier-comment-photo-input-gallery" accept="image/*" multiple style="display:none;" onchange="uploadChantierCommentPhoto(this.files)">'
     +'<button class="btn btn-xs" onclick="document.getElementById(\'chantier-comment-photo-input\').click()">📷 Prendre une photo</button>'
-    +'<button class="btn btn-xs" style="margin-left:6px;" onclick="document.getElementById(\'chantier-comment-photo-input-gallery\').click()">🖼 Choisir un fichier</button>'
-    +'<span id="chantier-comment-photo-status" style="font-size:11px;margin-left:8px;display:none;"></span>'
+    +'<button class="btn btn-xs" style="margin-left:6px;" onclick="document.getElementById(\'chantier-comment-photo-input-gallery\').click()">🖼 Choisir des fichiers</button>'
+    +'<span id="chantier-comment-photo-status" style="font-size:11px;margin-left:8px;"></span>'
+    +'<div id="chantier-comment-photo-preview" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>'
     +'</div>'
     +'<button class="btn btn-sm btn-primary" style="white-space:nowrap;" onclick="ajouterCommentaireChantier(\''+nom.replace(/'/g,"\\'")+'\')">Ajouter</button>'
     +'</div>'
@@ -2743,7 +2744,7 @@ async function showChantierDetail(nom){
       +res.parEmploye.map(e=>'<span style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-weight:600;">'+e.name+' <span style="color:var(--blue);">'+e.heures.toFixed(1).replace('.',',')+'h</span></span>').join('')
       +'</div><div style="margin-top:6px;font-size:11px;color:var(--text3);">Total : '+res.totalHeures.toFixed(1).replace('.',',')+'h</div>';
   });
-  _chantierCommentPhotoUrl=null;
+  _chantierCommentPhotoUrls=[];
   renderChantierComments(nom);
 }
 async function renderChantierComments(nom){
@@ -2757,54 +2758,63 @@ async function renderChantierComments(nom){
   if(!data||!data.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0;">Aucune note pour l\'instant.</div>';return;}
   list.innerHTML=data.map(n=>{
     const date=n.created_at?new Date(n.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-    const photoHtml=n.photo_url?'<div style="margin-top:6px;"><a href="'+n.photo_url+'" target="_blank"><img src="'+n.photo_url+'" style="max-width:160px;max-height:160px;border-radius:var(--radius-sm);border:1px solid var(--border);object-fit:cover;"></a></div>':'';
+    const urls=(n.photo_urls&&n.photo_urls.length)?n.photo_urls:(n.photo_url?[n.photo_url]:[]);
+    const photoHtml=urls.length?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">'+urls.map(u=>'<a href="'+u+'" target="_blank"><img src="'+u+'" style="width:100px;height:100px;border-radius:var(--radius-sm);border:1px solid var(--border);object-fit:cover;"></a>').join('')+'</div>':'';
     return'<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;font-size:12.5px;">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:var(--text3);font-size:11px;">'+(n.auteur?'<strong style="color:var(--text2);">'+escH(n.auteur)+'</strong> — ':'')+date+'</span>'
       +'<a href="#" onclick="event.preventDefault();supprimerCommentaireChantier(\''+n.id+'\',\''+nom.replace(/'/g,"\\'")+'\')" style="color:var(--red);font-size:11px;">Supprimer</a></div>'
-      +'<div style="white-space:pre-wrap;margin-top:2px;">'+escH(n.texte)+'</div>'+photoHtml+'</div>';
+      +(n.texte?'<div style="white-space:pre-wrap;margin-top:2px;">'+escH(n.texte)+'</div>':'')+photoHtml+'</div>';
   }).join('');
 }
-let _chantierCommentPhotoUrl=null;
-async function uploadChantierCommentPhoto(file){
-  if(!file)return;
+let _chantierCommentPhotoUrls=[];
+function renderPhotoPreview(){
+  const zone=document.getElementById('chantier-comment-photo-preview');
+  if(!zone)return;
+  zone.innerHTML=_chantierCommentPhotoUrls.map((u,i)=>'<span style="position:relative;display:inline-block;"><img src="'+u+'" style="width:60px;height:60px;border-radius:6px;border:1px solid var(--border);object-fit:cover;"><a href="#" onclick="event.preventDefault();_chantierCommentPhotoUrls.splice('+i+',1);renderPhotoPreview();" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;line-height:18px;text-align:center;font-size:12px;text-decoration:none;">×</a></span>').join('');
+}
+async function uploadChantierCommentPhoto(files){
+  if(!files||!files.length)return;
   const status=document.getElementById('chantier-comment-photo-status');
   if(!status)return;
-  if(file.size>10*1024*1024){
-    status.style.display='inline';status.style.color='var(--red)';
-    status.textContent='⚠ Photo trop volumineuse (max 10 Mo)';
-    return;
+  for(const file of files){
+    if(file.size>10*1024*1024){
+      status.style.color='var(--red)';
+      status.textContent='⚠ '+file.name+' trop volumineuse (max 10 Mo), ignorée';
+      continue;
+    }
+    status.style.color='var(--text2)';
+    status.textContent='⏳ Envoi de '+file.name+'…';
+    const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+    const path='chantier-photos/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
+    try{
+      const{error}=await db.storage.from('commandes-documents').upload(path,file,{upsert:false});
+      if(error)throw error;
+      const{data:pub}=db.storage.from('commandes-documents').getPublicUrl(path);
+      _chantierCommentPhotoUrls.push(pub.publicUrl);
+      renderPhotoPreview();
+    }catch(e){
+      status.style.color='var(--red)';
+      status.textContent='⚠ Échec de l\'envoi de '+file.name+' : '+(e.message||'erreur inconnue');
+    }
   }
-  status.style.display='inline';status.style.color='var(--text2)';
-  status.textContent='⏳ Envoi en cours…';
-  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
-  const path='chantier-photos/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
-  try{
-    const{error}=await db.storage.from('commandes-documents').upload(path,file,{upsert:false});
-    if(error)throw error;
-    const{data:pub}=db.storage.from('commandes-documents').getPublicUrl(path);
-    _chantierCommentPhotoUrl=pub.publicUrl;
-    status.style.color='var(--green-dark)';
-    status.innerHTML='✅ Photo prête <a href="#" onclick="event.preventDefault();_chantierCommentPhotoUrl=null;document.getElementById(\'chantier-comment-photo-status\').style.display=\'none\';document.getElementById(\'chantier-comment-photo-input\').value=\'\';document.getElementById(\'chantier-comment-photo-input-gallery\').value=\'\';" style="color:var(--red);margin-left:6px;">Retirer</a>';
-  }catch(e){
-    status.style.color='var(--red)';
-    status.textContent='⚠ Échec de l\'envoi : '+(e.message||'erreur inconnue');
-    _chantierCommentPhotoUrl=null;
-  }
+  status.style.color='var(--green-dark)';
+  status.textContent=_chantierCommentPhotoUrls.length?_chantierCommentPhotoUrls.length+' photo(s) prête(s)':'';
+  document.getElementById('chantier-comment-photo-input').value='';
+  document.getElementById('chantier-comment-photo-input-gallery').value='';
 }
 async function ajouterCommentaireChantier(nom){
   const input=document.getElementById('chantier-comment-input');
   const auteurInput=document.getElementById('chantier-comment-auteur');
   const texte=input?.value?.trim();
   const auteur=auteurInput?.value?.trim();
-  if(!texte&&!_chantierCommentPhotoUrl){showToast('⚠ Ajoutez du texte ou une photo');return;}
-  const{error}=await db.from('chantier_commentaires').insert({chantier_nom:nom,texte:texte||'',photo_url:_chantierCommentPhotoUrl||null,auteur:auteur||null});
+  if(!texte&&!_chantierCommentPhotoUrls.length){showToast('⚠ Ajoutez du texte ou une photo');return;}
+  const{error}=await db.from('chantier_commentaires').insert({chantier_nom:nom,texte:texte||'',photo_urls:_chantierCommentPhotoUrls.length?_chantierCommentPhotoUrls:null,auteur:auteur||null});
   if(error){showToast('❌ Erreur : '+error.message);return;}
   if(input)input.value='';
   if(auteurInput)auteurInput.value='';
-  _chantierCommentPhotoUrl=null;
-  const status=document.getElementById('chantier-comment-photo-status');if(status){status.style.display='none';status.innerHTML='';}
-  const photoInput=document.getElementById('chantier-comment-photo-input');if(photoInput)photoInput.value='';
-  const photoInputGallery=document.getElementById('chantier-comment-photo-input-gallery');if(photoInputGallery)photoInputGallery.value='';
+  _chantierCommentPhotoUrls=[];
+  renderPhotoPreview();
+  const status=document.getElementById('chantier-comment-photo-status');if(status){status.textContent='';}
   renderChantierComments(nom);
 }
 async function supprimerCommentaireChantier(id,nom){
