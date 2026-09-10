@@ -2660,7 +2660,7 @@ async function showChantierDetail(nom){
   // Section Suivi / journal de commentaires
   const suiviHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">📝 Suivi de chantier</div>'
     +'<div style="margin-bottom:8px;">'
-    +'<input type="text" id="chantier-comment-auteur" placeholder="Votre nom" style="max-width:200px;margin-bottom:6px;">'
+    +'<select id="chantier-comment-auteur" style="max-width:200px;margin-bottom:6px;"><option value="">— Qui écrit ? —</option>'+Object.values(HPC_EMPLOYES).map(n=>'<option value="'+n+'">'+n+'</option>').join('')+'</select>'
     +'<textarea id="chantier-comment-input" placeholder="Ajouter une note (avancement, remarque, incident...)" rows="2" style="width:100%;resize:vertical;"></textarea>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'
     +'<div>'
@@ -2744,8 +2744,6 @@ async function showChantierDetail(nom){
       +'</div><div style="margin-top:6px;font-size:11px;color:var(--text3);">Total : '+res.totalHeures.toFixed(1).replace('.',',')+'h</div>';
   });
   _chantierCommentPhotoUrl=null;
-  const auteurFld=document.getElementById('chantier-comment-auteur');
-  if(auteurFld)auteurFld.value=localStorage.getItem('stockpro_dernier_auteur_chantier')||'';
   renderChantierComments(nom);
 }
 async function renderChantierComments(nom){
@@ -2802,7 +2800,7 @@ async function ajouterCommentaireChantier(nom){
   const{error}=await db.from('chantier_commentaires').insert({chantier_nom:nom,texte:texte||'',photo_url:_chantierCommentPhotoUrl||null,auteur:auteur||null});
   if(error){showToast('❌ Erreur : '+error.message);return;}
   if(input)input.value='';
-  if(auteur)localStorage.setItem('stockpro_dernier_auteur_chantier',auteur);
+  if(auteurInput)auteurInput.value='';
   _chantierCommentPhotoUrl=null;
   const status=document.getElementById('chantier-comment-photo-status');if(status){status.style.display='none';status.innerHTML='';}
   const photoInput=document.getElementById('chantier-comment-photo-input');if(photoInput)photoInput.value='';
