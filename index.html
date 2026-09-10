@@ -228,6 +228,9 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .chip-crit{background:var(--red-bg);color:var(--red);font-size:11px;font-weight:600;padding:2px 7px;border-radius:12px;}
 
 /* ===== CHANTIER CARDS ===== */
+.chantier-tab-btn{background:none;border:none;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+.chantier-tab-btn.active{color:var(--blue);border-bottom-color:var(--blue);}
+.chantier-tab-btn:hover{color:var(--text);}
 .cmd-menu-item{display:block;padding:8px 12px;font-size:12.5px;color:var(--text);text-decoration:none;white-space:nowrap;}
 .cmd-menu-item:hover{background:var(--bg);}
 .chantier-card{position:relative;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;min-width:190px;flex:1;max-width:260px;transition:transform .15s,box-shadow .15s,border-color .15s;box-shadow:0 1px 2px rgba(0,0,0,.05);overflow:hidden;}
@@ -2611,6 +2614,16 @@ function renderChantiers(){
   }
 }
 
+function switchChantierTab(tab){
+  const famPanel=document.getElementById('chantier-tab-famille');
+  const histoPanel=document.getElementById('chantier-tab-histo');
+  const famBtn=document.getElementById('chantier-tab-btn-famille');
+  const histoBtn=document.getElementById('chantier-tab-btn-histo');
+  if(famPanel)famPanel.style.display=tab==='famille'?'':'none';
+  if(histoPanel)histoPanel.style.display=tab==='histo'?'':'none';
+  if(famBtn)famBtn.classList.toggle('active',tab==='famille');
+  if(histoBtn)histoBtn.classList.toggle('active',tab==='histo');
+}
 async function showChantierDetail(nom){
   const d_el=document.getElementById('chantier-detail');if(!d_el)return;
   document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
@@ -2662,14 +2675,18 @@ async function showChantierDetail(nom){
     +'<div id="chantier-comments-list" style="margin-bottom:14px;"></div>';
 
 
-  // Tableau par famille
-  let tableHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">📦 Détail par famille</div>';
-  tableHtml+='<div class="table-wrap" style="margin-bottom:14px;"><table><thead><tr><th>Famille / Article</th><th>Réf.</th><th>Ø</th><th style="text-align:center;">Qté</th><th>P.U. achat</th><th>Total achat</th></tr></thead><tbody>';
+  // Onglets : Détail par famille / Historique
+  let tableHtml='<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:10px;">'
+    +'<button class="chantier-tab-btn active" id="chantier-tab-btn-famille" onclick="switchChantierTab(\'famille\')">📦 Détail par famille</button>'
+    +'<button class="chantier-tab-btn" id="chantier-tab-btn-histo" onclick="switchChantierTab(\'histo\')">📋 Historique des mouvements</button>'
+    +'</div>';
+  tableHtml+='<div id="chantier-tab-famille">';
+  tableHtml+='<div class="table-wrap"><table><thead><tr><th>Famille / Article</th><th>Réf.</th><th>Ø</th><th style="text-align:center;">Qté</th><th>P.U. achat</th><th>Total achat</th></tr></thead><tbody>';
   tableHtml+=famRows;
   tableHtml+='</tbody></table></div>';
+  tableHtml+='</div>';
 
-  // Tableau chronologique
-  tableHtml+='<div style="font-weight:700;font-size:13px;margin-bottom:8px;margin-top:10px;">📋 Historique des mouvements</div>';
+  tableHtml+='<div id="chantier-tab-histo" style="display:none;">';
   tableHtml+='<div class="table-wrap"><table><thead><tr><th>Date</th><th>Source</th><th>Réf.</th><th>Catégorie</th><th>Ø</th><th style="text-align:center;">Qté</th><th>Valeur achat</th></tr></thead><tbody>';
   if(!d.lignes.length){
     tableHtml+='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">Aucun mouvement.</td></tr>';
@@ -2688,6 +2705,7 @@ async function showChantierDetail(nom){
     });
   }
   tableHtml+='</tbody></table></div>';
+  tableHtml+='</div>';
 
   const exportBtn=(()=>{
     const ch=chantiers.find(x=>x.nom===nom);
