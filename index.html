@@ -254,10 +254,6 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .chantier-card.archived .cc-body{background:var(--bg) !important;opacity:.7;}
 #chantier-detail.opening{animation:chantierOpen .28s ease-out;}
 @keyframes chantierOpen{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
-.cahier-page{position:relative;background-image:repeating-linear-gradient(var(--surface) 0px,var(--surface) 25px,var(--border) 26px);border:1px solid var(--border);border-radius:8px;padding:22px 14px 14px 36px;margin-top:16px;margin-bottom:14px;}
-.cahier-page::before{content:'';position:absolute;top:0;bottom:0;left:26px;width:1.5px;background:#e0a3a3;}
-.cahier-spiral{position:absolute;top:-9px;left:16px;right:16px;display:flex;justify-content:space-between;}
-.cahier-spiral span{width:11px;height:11px;border-radius:50%;background:var(--bg);border:2px solid var(--border2);}
 .badge-archived{background:#e5e3dc;color:#888;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;}
 .archives-section{margin-top:20px;border-top:1px solid var(--border);padding-top:14px;}
 .archives-toggle{cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;user-select:none;margin-bottom:10px;}
@@ -2693,12 +2689,10 @@ async function showChantierDetail(nom){
     +'<div id="chantier-intervenants-zone" style="margin-bottom:14px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;color:var(--text3);">⏳ Chargement…</div>';
 
   // Section Suivi / journal de commentaires
-  const suiviSpiralHtml=Array.from({length:10}).map(()=>'<span></span>').join('');
   const suiviHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">📝 Suivi de chantier</div>'
-    +'<div class="cahier-page"><div class="cahier-spiral">'+suiviSpiralHtml+'</div>'
-    +'<div style="margin-bottom:8px;">'
+    +'<div style="margin-bottom:12px;">'
     +'<select id="chantier-comment-auteur" style="max-width:200px;margin-bottom:6px;"><option value="">— Qui écrit ? —</option>'+Object.values(HPC_EMPLOYES).map(n=>'<option value="'+n+'">'+n+'</option>').join('')+'</select>'
-    +'<textarea id="chantier-comment-input" placeholder="Ajouter une note (avancement, remarque, incident...)" rows="2" style="width:100%;resize:vertical;background:transparent;"></textarea>'
+    +'<textarea id="chantier-comment-input" placeholder="Ajouter une note (avancement, remarque, incident...)" rows="2" style="width:100%;resize:vertical;"></textarea>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'
     +'<div>'
     +'<input type="file" id="chantier-comment-photo-input" accept="image/*" capture="environment" style="display:none;" onchange="uploadChantierCommentPhoto(this.files)">'
@@ -2711,8 +2705,7 @@ async function showChantierDetail(nom){
     +'<button class="btn btn-sm btn-primary" style="white-space:nowrap;" onclick="ajouterCommentaireChantier(\''+nom.replace(/'/g,"\\'")+'\')">Ajouter</button>'
     +'</div>'
     +'</div>'
-    +'<div id="chantier-comments-list"></div>'
-    +'</div>';
+    +'<div id="chantier-comments-list" style="margin-bottom:14px;"></div>';
 
 
   // Onglets : Détail par famille / Historique
