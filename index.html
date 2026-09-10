@@ -233,13 +233,16 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .chantier-tab-btn:hover{color:var(--text);}
 .cmd-menu-item{display:block;padding:8px 12px;font-size:12.5px;color:var(--text);text-decoration:none;white-space:nowrap;}
 .cmd-menu-item:hover{background:var(--bg);}
-.chantier-card{position:relative;cursor:pointer;border-radius:3px;padding:16px;min-width:170px;flex:1;max-width:220px;transition:transform .15s ease-out,box-shadow .15s;box-shadow:0 2px 5px rgba(0,0,0,.08);}
-.chantier-card:hover{transform:rotate(0deg) translateY(-3px) scale(1.03) !important;box-shadow:0 8px 18px rgba(0,0,0,.14);z-index:2;}
-.chantier-card::after{content:'';position:absolute;bottom:0;right:0;width:0;height:0;border-style:solid;border-width:0 0 15px 15px;border-color:transparent transparent rgba(0,0,0,.1) transparent;}
-.cc-icon{width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:8px;}
+.chantier-card{position:relative;cursor:pointer;padding:0;min-width:160px;flex:1;max-width:210px;transition:transform .15s ease-out;}
+.chantier-card:hover{transform:translateY(-3px);}
+.cc-tab{height:10px;width:46%;margin-left:14px;border-radius:6px 6px 0 0;}
+.cc-body{position:relative;border-radius:0 10px 10px 10px;padding:14px 16px 16px;box-shadow:0 1px 3px rgba(0,0,0,.1);transition:box-shadow .15s;}
+.chantier-card:hover .cc-body{box-shadow:0 8px 16px rgba(0,0,0,.14);}
+.chantier-card.active .cc-body{outline:2px solid rgba(0,0,0,.28);outline-offset:2px;}
+.cc-icon{width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-size:15px;margin-bottom:8px;}
 .cc-nom{font-weight:700;font-size:13.5px;margin-bottom:4px;padding-right:22px;line-height:1.3;}
 .cc-kpis{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 8px;}
-.cc-kpi{font-size:10.5px;background:rgba(255,255,255,.55);border-radius:6px;padding:2px 7px;white-space:nowrap;font-weight:600;color:var(--text2);}
+.cc-kpi{font-size:10.5px;background:rgba(255,255,255,.6);border-radius:6px;padding:2px 7px;white-space:nowrap;font-weight:600;color:var(--text2);}
 .cc-footer{display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:8px;border-top:1px dashed rgba(0,0,0,.12);}
 .cc-val{font-size:12.5px;font-weight:700;}
 .cc-arrow{font-size:11px;color:var(--text3);transition:transform .15s;}
@@ -247,7 +250,10 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:var(--text3);bac
 .cc-delete{position:absolute;top:9px;right:9px;width:22px;height:22px;border:none;background:transparent;border-radius:6px;color:var(--text3);font-size:12px;cursor:pointer;opacity:0;transition:opacity .15s,background .15s,color .15s;display:flex;align-items:center;justify-content:center;}
 .chantier-card:hover .cc-delete{opacity:1;}
 .cc-delete:hover{background:rgba(0,0,0,.12);color:var(--red);}
-.chantier-card.archived{opacity:.55;}
+.chantier-card.archived .cc-tab{background:#c8c5bc !important;}
+.chantier-card.archived .cc-body{background:var(--bg) !important;opacity:.7;}
+#chantier-detail.opening{animation:chantierOpen .28s ease-out;}
+@keyframes chantierOpen{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
 .badge-archived{background:#e5e3dc;color:#888;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;}
 .archives-section{margin-top:20px;border-top:1px solid var(--border);padding-top:14px;}
 .archives-toggle{cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;user-select:none;margin-bottom:10px;}
@@ -2557,23 +2563,30 @@ function getChantierData(nom){
   return{cmdsApprouv,mvtsOut,lignes,qtyTot,valAchat,valVente};
 }
 
-const POSTIT_COLORS=['#fef3e2','#e8f0fb','#f3eeff','#e6f5ef','#fdecea','#fff8e1'];
-const POSTIT_ROTATIONS=[-3,2,-2,3,-4,2,-2,3];
+const FICHE_COLORS=[
+  {tab:'var(--green)',body:'var(--green-bg)'},
+  {tab:'var(--blue)',body:'var(--blue-bg)'},
+  {tab:'var(--amber)',body:'var(--amber-bg)'},
+  {tab:'var(--purple)',body:'var(--purple-bg)'},
+  {tab:'var(--red)',body:'var(--red-bg)'}
+];
 function chantierCardHTML(c,archived,idx){
   const d=getChantierData(c.nom);
   const valStr=d.valAchat>0?d.valAchat.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f\u20ac':'—';
   const ne=c.nom.replace(/'/g,"\\'");
-  const bg=archived?'#e5e3dc':POSTIT_COLORS[idx%POSTIT_COLORS.length];
-  const rot=archived?0:POSTIT_ROTATIONS[idx%POSTIT_ROTATIONS.length];
-  return`<div class="chantier-card${archived?' archived':''}" style="background:${bg};transform:rotate(${rot}deg);" onclick="showChantierDetail('${ne}')">
-    <button class="cc-delete" onclick="event.stopPropagation();deleteChantier('${ne}')" title="Supprimer ce chantier">🗑</button>
-    <div class="cc-icon">${archived?'📦':'📌'}</div>
-    <div class="cc-nom">${escH(c.nom)}</div>
-    ${archived?'<span class="badge-archived">Archivé</span>':''}
-    <div class="cc-kpis"><span class="cc-kpi">📦 ${d.qtyTot} unités</span><span class="cc-kpi">📋 ${d.cmdsApprouv.length} cmd</span>${c.heures?`<span class="cc-kpi">⏱ ${c.heures}h</span>`:''}</div>
-    <div class="cc-footer">
-      <span class="cc-val">${valStr}</span>
-      <span class="cc-arrow">${archived?'Consulter →':'Voir détail →'}</span>
+  const col=FICHE_COLORS[idx%FICHE_COLORS.length];
+  return`<div class="chantier-card${archived?' archived':''}" data-nom="${escH(c.nom)}" onclick="showChantierDetail('${ne}')">
+    <div class="cc-tab" style="background:${archived?'':col.tab};"></div>
+    <div class="cc-body" style="background:${archived?'':col.body};">
+      <button class="cc-delete" onclick="event.stopPropagation();deleteChantier('${ne}')" title="Supprimer ce chantier">🗑</button>
+      <div class="cc-icon">${archived?'📦':'📁'}</div>
+      <div class="cc-nom">${escH(c.nom)}</div>
+      ${archived?'<span class="badge-archived">Archivé</span>':''}
+      <div class="cc-kpis"><span class="cc-kpi">📦 ${d.qtyTot} unités</span><span class="cc-kpi">📋 ${d.cmdsApprouv.length} cmd</span>${c.heures?`<span class="cc-kpi">⏱ ${c.heures}h</span>`:''}</div>
+      <div class="cc-footer">
+        <span class="cc-val">${valStr}</span>
+        <span class="cc-arrow">${archived?'Consulter →':'Voir détail →'}</span>
+      </div>
     </div>
   </div>`;
 }
@@ -2628,7 +2641,7 @@ async function showChantierDetail(nom){
   const d_el=document.getElementById('chantier-detail');if(!d_el)return;
   document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
   // Marquer carte active
-  document.querySelectorAll('.chantier-card').forEach(c=>c.classList.remove('active'));
+  document.querySelectorAll('.chantier-card').forEach(c=>c.classList.toggle('active',c.dataset.nom===nom));
   const d=getChantierData(nom);
   const fmt=v=>v>0?v.toFixed(2).replace('.',',')+'€':'—';
   const fmtBig=v=>v>0?v.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f€':'—';
@@ -2726,6 +2739,7 @@ async function showChantierDetail(nom){
   if(detail_body) detail_body.innerHTML=kpi+intervenantsHtml+suiviHtml+tableHtml+exportBtn;
   d_el.style.display='';
   d_el.dataset.chantierNom=nom;
+  d_el.classList.remove('opening');void d_el.offsetWidth;d_el.classList.add('opening');
   d_el.scrollIntoView({behavior:'smooth',block:'start'});
 
   // Chargement asynchrone : intervenants (GestionHPC) + commentaires (StockPro)
@@ -2754,16 +2768,28 @@ async function renderChantierComments(nom){
   const{data,error}=await db.from('chantier_commentaires').select('*').eq('chantier_nom',nom).order('created_at',{ascending:false});
   const d_el=document.getElementById('chantier-detail');
   if(!list||!d_el||d_el.dataset.chantierNom!==nom)return;
-  if(error){list.innerHTML='<div style="font-size:12px;color:var(--red);">Erreur de chargement des notes.</div>';return;}
-  if(!data||!data.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0;">Aucune note pour l\'instant.</div>';return;}
-  list.innerHTML=data.map(n=>{
+  if(error){list.style.cssText='';list.innerHTML='<div style="font-size:12px;color:var(--red);">Erreur de chargement des notes.</div>';return;}
+  if(!data||!data.length){list.style.cssText='';list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0;">Aucune note pour l\'instant.</div>';return;}
+  const PALETTE=[
+    {tab:'var(--green)',body:'var(--green-bg)'},
+    {tab:'var(--blue)',body:'var(--blue-bg)'},
+    {tab:'var(--amber)',body:'var(--amber-bg)'},
+    {tab:'var(--purple)',body:'var(--purple-bg)'},
+    {tab:'var(--red)',body:'var(--red-bg)'}
+  ];
+  list.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;';
+  list.innerHTML=data.map((n,i)=>{
     const date=n.created_at?new Date(n.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
     const urls=(n.photo_urls&&n.photo_urls.length)?n.photo_urls:(n.photo_url?[n.photo_url]:[]);
-    const photoHtml=urls.length?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">'+urls.map(u=>'<a href="'+u+'" target="_blank"><img src="'+u+'" style="width:100px;height:100px;border-radius:var(--radius-sm);border:1px solid var(--border);object-fit:cover;"></a>').join('')+'</div>':'';
-    return'<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;font-size:12.5px;">'
-      +'<div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:var(--text3);font-size:11px;">'+(n.auteur?'<strong style="color:var(--text2);">'+escH(n.auteur)+'</strong> — ':'')+date+'</span>'
-      +'<a href="#" onclick="event.preventDefault();supprimerCommentaireChantier(\''+n.id+'\',\''+nom.replace(/'/g,"\\'")+'\')" style="color:var(--red);font-size:11px;">Supprimer</a></div>'
-      +(n.texte?'<div style="white-space:pre-wrap;margin-top:2px;">'+escH(n.texte)+'</div>':'')+photoHtml+'</div>';
+    const col=PALETTE[i%PALETTE.length];
+    const photoGrid=urls.length===1
+      ?'<a href="'+urls[0]+'" target="_blank"><img src="'+urls[0]+'" style="width:100%;height:100px;border-radius:6px;object-fit:cover;margin-top:8px;"></a>'
+      :(urls.length>1?'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin-top:8px;">'+urls.map(u=>'<a href="'+u+'" target="_blank"><img src="'+u+'" style="width:100%;height:52px;border-radius:5px;object-fit:cover;"></a>').join('')+'</div>':'');
+    return'<div style="position:relative;border-radius:2px;padding:12px;background:'+col.body+';box-shadow:0 1px 3px rgba(0,0,0,.1);">'
+      +'<div style="position:absolute;top:0;left:14px;width:32px;height:8px;background:'+col.tab+';border-radius:0 0 4px 4px;"></div>'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;"><span style="font-size:10.5px;opacity:0.75;">'+(n.auteur?'<strong>'+escH(n.auteur)+'</strong> · ':'')+date+'</span>'
+      +'<a href="#" onclick="event.preventDefault();supprimerCommentaireChantier(\''+n.id+'\',\''+nom.replace(/'/g,"\\'")+'\')" style="color:var(--red);font-size:10.5px;flex-shrink:0;">✕</a></div>'
+      +(n.texte?'<div style="white-space:pre-wrap;margin-top:6px;font-size:12.5px;">'+escH(n.texte)+'</div>':'')+photoGrid+'</div>';
   }).join('');
 }
 let _chantierCommentPhotoUrls=[];
