@@ -2580,7 +2580,6 @@ function chantierCardHTML(c,archived,idx){
     <div class="cc-tab" style="background:${archived?'':col.tab};"></div>
     <div class="cc-body" style="background:${archived?'':col.body};">
       <button class="cc-delete" onclick="event.stopPropagation();deleteChantier('${ne}')" title="Supprimer ce chantier">🗑</button>
-      <div class="cc-icon">${archived?'📦':'📁'}</div>
       <div class="cc-nom" style="margin-bottom:0;">${escH(c.nom)}</div>
       ${archived?'<span class="badge-archived" style="margin-top:6px;display:inline-block;">Archivé</span>':''}
     </div>
