@@ -2625,10 +2625,12 @@ function switchChantierTab(tab){
   const histoPanel=document.getElementById('chantier-tab-histo');
   const famBtn=document.getElementById('chantier-tab-btn-famille');
   const histoBtn=document.getElementById('chantier-tab-btn-histo');
-  if(famPanel)famPanel.style.display=tab==='famille'?'':'none';
-  if(histoPanel)histoPanel.style.display=tab==='histo'?'':'none';
-  if(famBtn)famBtn.classList.toggle('active',tab==='famille');
-  if(histoBtn)histoBtn.classList.toggle('active',tab==='histo');
+  const isOpen=tab==='famille'?(famPanel&&famPanel.style.display!=='none'):(histoPanel&&histoPanel.style.display!=='none');
+  const opening=!isOpen;
+  if(famPanel)famPanel.style.display=(tab==='famille'&&opening)?'':'none';
+  if(histoPanel)histoPanel.style.display=(tab==='histo'&&opening)?'':'none';
+  if(famBtn)famBtn.classList.toggle('active',tab==='famille'&&opening);
+  if(histoBtn)histoBtn.classList.toggle('active',tab==='histo'&&opening);
 }
 async function showChantierDetail(nom){
   const d_el=document.getElementById('chantier-detail');if(!d_el)return;
@@ -2643,24 +2645,36 @@ async function showChantierDetail(nom){
   const famRows=buildChantierFamRows(d.lignes);
 
   // KPI bar
+  const benef=d.valVente-d.valAchat;
+  const fmtSigned=v=>{const s=v<0?'-':'';return s+Math.abs(v).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f€';};
   const kpi=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
-      <div style="font-size:22px;font-weight:700;">${d.qtyTot}</div>
-      <div style="font-size:11px;color:var(--text2);">Unités sorties</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:140px;text-align:center;">
+      <div style="font-size:20px;font-weight:700;">${d.qtyTot} <span style="font-size:13px;font-weight:600;color:var(--text3);">unités</span></div>
+      <div style="font-size:11px;color:var(--text2);">${d.cmdsApprouv.length} commande(s) validée(s)</div>
     </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
-      <div style="font-size:22px;font-weight:700;">${d.cmdsApprouv.length}</div>
-      <div style="font-size:11px;color:var(--text2);">Commandes validées</div>
+    <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
+      <div style="font-size:18px;font-weight:700;color:var(--green-dark);">${fmtBig(d.valVente)}</div>
+      <div style="font-size:11px;color:var(--text2);">Prix vendu</div>
     </div>
-    ${(()=>{const ch=chantiers.find(x=>x.nom===nom);return ch&&ch.heures?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;"><div style="font-size:22px;font-weight:700;">${ch.heures}h</div><div style="font-size:11px;color:var(--text2);">Heures chantier</div></div>`:''})()}
-    <div style="background:var(--blue-bg,#e8f0fe);border:1px solid var(--blue);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
-      <div style="font-size:20px;font-weight:700;color:var(--blue);">${fmtBig(d.valAchat)}</div>
-      <div style="font-size:11px;color:var(--text2);">Valeur achat</div>
+    <div style="background:var(--red-bg);border:1px solid var(--red);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
+      <div style="font-size:18px;font-weight:700;color:var(--red);">${fmtBig(d.valAchat)}</div>
+      <div style="font-size:11px;color:var(--text2);">Coût (achat)</div>
+    </div>
+    <div style="background:${benef>=0?'var(--blue-bg)':'var(--red-bg)'};border:1px solid ${benef>=0?'var(--blue)':'var(--red)'};border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
+      <div style="font-size:18px;font-weight:700;color:${benef>=0?'var(--blue)':'var(--red)'};">${fmtSigned(benef)}</div>
+      <div style="font-size:11px;color:var(--text2);">Bénéfice</div>
     </div>
   </div>`;
 
   // Section Intervenants (chargement asynchrone depuis GestionHPC, affichée en premier avec un état "chargement")
+  const chHeuresPrevues=(()=>{const ch=chantiers.find(x=>x.nom===nom);return ch&&ch.heures?ch.heures:null;})();
   const intervenantsHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">👷 Intervenants <span style="font-weight:400;color:var(--text3);font-size:11px;">(heures saisies dans GestionHPC)</span></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">'
+    +'<div style="font-size:12px;color:var(--text2);">Heures prévues :</div>'
+    +'<input type="number" min="0" step="0.5" value="'+(chHeuresPrevues||'')+'" placeholder="—" style="width:70px;padding:4px 6px;font-size:12px;text-align:center;" onchange="saveChantierHeures(\''+nom.replace(/'/g,"\\'")+'\',this.value)">'
+    +'<span style="color:var(--text3);">·</span>'
+    +'<div style="font-size:12px;color:var(--text2);">Heures effectuées : <strong id="chantier-heures-effectuees">…</strong></div>'
+    +'</div>'
     +'<div id="chantier-intervenants-zone" style="margin-bottom:14px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;color:var(--text3);">⏳ Chargement…</div>';
 
   // Section Suivi / journal de commentaires
@@ -2685,10 +2699,10 @@ async function showChantierDetail(nom){
 
   // Onglets : Détail par famille / Historique
   let tableHtml='<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:10px;">'
-    +'<button class="chantier-tab-btn active" id="chantier-tab-btn-famille" onclick="switchChantierTab(\'famille\')">📦 Détail par famille</button>'
+    +'<button class="chantier-tab-btn" id="chantier-tab-btn-famille" onclick="switchChantierTab(\'famille\')">📦 Détail par famille</button>'
     +'<button class="chantier-tab-btn" id="chantier-tab-btn-histo" onclick="switchChantierTab(\'histo\')">📋 Historique des mouvements</button>'
     +'</div>';
-  tableHtml+='<div id="chantier-tab-famille">';
+  tableHtml+='<div id="chantier-tab-famille" style="display:none;">';
   tableHtml+='<div class="table-wrap"><table><thead><tr><th>Famille / Article</th><th>Réf.</th><th>Ø</th><th style="text-align:center;">Qté</th><th>P.U. achat</th><th>Total achat</th></tr></thead><tbody>';
   tableHtml+=famRows;
   tableHtml+='</tbody></table></div>';
@@ -2738,10 +2752,19 @@ async function showChantierDetail(nom){
   // Chargement asynchrone : intervenants (GestionHPC) + commentaires (StockPro)
   fetchChantierHeuresHPC(nom).then(res=>{
     const zone=document.getElementById('chantier-intervenants-zone');
+    const effEl=document.getElementById('chantier-heures-effectuees');
     if(!zone||d_el.dataset.chantierNom!==nom)return;
     if(res.erreur){
       zone.innerHTML='⚠ Impossible de récupérer les heures depuis GestionHPC ('+res.erreur+')';
+      if(effEl)effEl.textContent='—';
       return;
+    }
+    if(effEl){
+      const effStr=res.totalHeures.toFixed(1).replace('.',',')+'h';
+      if(chHeuresPrevues){
+        effEl.style.color=res.totalHeures>chHeuresPrevues?'var(--red)':'var(--green-dark)';
+      }
+      effEl.textContent=effStr;
     }
     if(!res.parEmploye.length){
       zone.innerHTML='Aucune heure trouvée pour ce chantier dans GestionHPC (vérifiez que le nom correspond exactement des deux côtés).';
@@ -2749,7 +2772,7 @@ async function showChantierDetail(nom){
     }
     zone.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:8px;">'
       +res.parEmploye.map(e=>'<span style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-weight:600;">'+e.name+' <span style="color:var(--blue);">'+e.heures.toFixed(1).replace('.',',')+'h</span></span>').join('')
-      +'</div><div style="margin-top:6px;font-size:11px;color:var(--text3);">Total : '+res.totalHeures.toFixed(1).replace('.',',')+'h</div>';
+      +'</div>';
   });
   _chantierCommentPhotoUrls=[];
   renderChantierComments(nom);
