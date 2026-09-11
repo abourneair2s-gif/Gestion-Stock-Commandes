@@ -283,17 +283,17 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
 <!-- Loading overlay -->
 <div id="pin-gate" style="display:none;">
   <div style="font-size:17px;font-weight:700;color:var(--green);">🔒 StockPro AIR2S</div>
-  <div id="login-step-email">
+  <div id="login-step-email" style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:300px;padding:0 20px;box-sizing:border-box;">
     <div style="font-size:13px;color:var(--text2);margin-bottom:10px;text-align:center;">Connexion réservée à l'équipe.<br>Entrez votre adresse email :</div>
-    <input type="email" id="login-email-input" autocomplete="email" placeholder="prenom@air2s-hvac.com" style="max-width:260px;text-align:center;">
+    <input type="email" id="login-email-input" autocomplete="email" placeholder="prenom@air2s-hvac.com" style="width:100%;max-width:260px;text-align:center;box-sizing:border-box;">
     <button class="btn btn-primary" style="margin-top:10px;" onclick="sendMagicLink()">Recevoir le lien de connexion</button>
   </div>
-  <div id="login-step-sent" style="display:none;text-align:center;max-width:280px;">
+  <div id="login-step-sent" style="display:none;flex-direction:column;align-items:center;text-align:center;width:100%;max-width:280px;padding:0 20px;box-sizing:border-box;">
     <div style="font-size:28px;margin-bottom:8px;">📩</div>
     <div style="font-size:13px;color:var(--text2);">Un lien de connexion a été envoyé à <strong id="login-sent-email"></strong>.<br>Ouvrez-le depuis cet appareil pour accéder à l'application.</div>
-    <button class="btn btn-xs" style="margin-top:10px;" onclick="document.getElementById('login-step-sent').style.display='none';document.getElementById('login-step-email').style.display='';">← Essayer une autre adresse</button>
+    <button class="btn btn-xs" style="margin-top:10px;" onclick="document.getElementById('login-step-sent').style.display='none';document.getElementById('login-step-email').style.display='flex';">← Essayer une autre adresse</button>
   </div>
-  <div id="pin-error" style="display:none;color:var(--red);font-size:13px;max-width:280px;text-align:center;"></div>
+  <div id="pin-error" style="display:none;color:var(--red);font-size:13px;max-width:280px;text-align:center;padding:0 20px;box-sizing:border-box;"></div>
 </div>
 <div id="loading-overlay">
   <div class="spinner"></div>
@@ -5704,7 +5704,7 @@ async function sendMagicLink(){
     }
     document.getElementById('login-sent-email').textContent=email;
     document.getElementById('login-step-email').style.display='none';
-    document.getElementById('login-step-sent').style.display='';
+    document.getElementById('login-step-sent').style.display='flex';
   }catch(e){
     if(err){err.style.display='block';err.textContent='Erreur de connexion, réessayez.';}
   }
