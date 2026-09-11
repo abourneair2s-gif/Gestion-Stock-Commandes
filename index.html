@@ -484,6 +484,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
             <option value="refusee">Refusées</option>
           </select>
           <button class="btn btn-primary btn-sm admin-only" onclick="openCmdModal(true)">👤 Commande client</button>
+          <button class="btn btn-sm admin-only" style="background:var(--purple);color:#fff;border-color:var(--purple);" onclick="openRectModal()">▭ Commande rectangulaire</button>
           <button class="btn btn-primary btn-sm" onclick="openCmdModal()">+ Nouvelle demande</button>
         </div>
       </div>
@@ -492,6 +493,13 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <tbody id="cmd-table"></tbody></table>
       </div>
       <div id="cmd-empty" class="empty-state" style="display:none;">Aucune commande pour l'instant.</div>
+      <!-- Commandes rectangulaires (demandes libres avec photo) -->
+      <div style="margin-top:20px;" class="admin-only">
+        <div class="section-header">
+          <div class="section-title" style="font-size:13px;color:var(--text2);">▭ Commandes rectangulaires (demandes spéciales)</div>
+        </div>
+        <div id="rect-list"></div>
+      </div>
       <!-- Archives commandes -->
       <div class="cmd-archived-section admin-only" id="cmd-archives-section" style="display:none;">
         <div class="cmd-archived-toggle" onclick="toggleCmdArchives()">
@@ -657,6 +665,38 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
 </div>
 
 <!-- Modal Location matériel -->
+<div class="modal-backdrop" id="modal-rect">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">▭ Commande rectangulaire</div>
+      <button class="btn btn-xs" onclick="closeModal('modal-rect')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Chantier</label>
+        <select id="rect-chantier"><option value="">— Sélectionner un chantier —</option></select>
+      </div>
+      <div class="form-row"><label class="form-label">Demandeur</label>
+        <select id="rect-demandeur"><option value="">— Qui demande ? —</option></select>
+      </div>
+      <div class="form-row"><label class="form-label">Description de la demande</label>
+        <textarea id="rect-description" rows="4" placeholder="Dimensions, forme, quantité, précisions..."></textarea>
+      </div>
+      <div>
+        <input type="file" id="rect-photo-input" accept="image/*" capture="environment" style="display:none;" onchange="uploadRectPhoto(this.files)">
+        <input type="file" id="rect-photo-input-gallery" accept="image/*" multiple style="display:none;" onchange="uploadRectPhoto(this.files)">
+        <button class="btn btn-xs" onclick="document.getElementById('rect-photo-input').click()">📷 Prendre une photo</button>
+        <button class="btn btn-xs" style="margin-left:6px;" onclick="document.getElementById('rect-photo-input-gallery').click()">🖼 Choisir des fichiers</button>
+        <span id="rect-photo-status" style="font-size:11px;margin-left:8px;"></span>
+        <div id="rect-photo-preview" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-rect')" style="flex:1;">Annuler</button>
+      <button class="btn btn-primary" onclick="saveRectOrder()" style="flex:1;">Soumettre la demande</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-location">
   <div class="modal" style="max-width:480px;">
     <div class="modal-header">
@@ -1303,6 +1343,8 @@ let commandes = [];
 let historique = [];
 let chantiers = []; // [{nom, desc}]
 let locationsMateriel = [];
+let rectOrders = [];
+let _rectPhotoUrls = [];
 let retours = [];
 let retourItems = [];
 const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='client' || window.location.pathname.replace(/\/$/,'')==='/client';
@@ -1662,6 +1704,12 @@ async function loadAllData() {
     if(!locErr)locationsMateriel=locData||[];
   }catch(e){/* table pas encore créée */}
 
+  // Commandes rectangulaires (table optionnelle — ne bloque pas le chargement si absente)
+  try{
+    const {data:rectData,error:rectErr}=await db.from('commandes_rectangulaires').select('*').order('created_at',{ascending:false});
+    if(!rectErr)rectOrders=rectData||[];
+  }catch(e){/* table pas encore créée */}
+
   // Config
   if (configRes.data) {
     configRes.data.forEach(row => {
@@ -1709,6 +1757,12 @@ function subscribeRealtime() {
       try{
         const {data,error} = await db.from('locations_materiel').select('*').order('created_at',{ascending:false});
         if(!error){locationsMateriel = data||[]; renderLocations();}
+      }catch(e){/* table pas encore créée */}
+    })
+    .on('postgres_changes', {event:'*', schema:'public', table:'commandes_rectangulaires'}, async () => {
+      try{
+        const {data,error} = await db.from('commandes_rectangulaires').select('*').order('created_at',{ascending:false});
+        if(!error){rectOrders = data||[]; renderRectOrders();}
       }catch(e){/* table pas encore créée */}
     })
     .on('postgres_changes', {event:'*', schema:'public', table:'config'}, async () => {
@@ -2207,6 +2261,107 @@ function printQR(){
 // ==================== RENDER COMMANDES ====================
 function isClientOrder(c){return c.source==='client'||c.mode_facturation==='vente';}
 function isReliquatFollowUp(c){return!!(c.notes&&c.notes.startsWith('Reliquat reporté depuis'));}
+function openRectModal(){
+  const selC=document.getElementById('rect-chantier');
+  if(selC){
+    selC.innerHTML='<option value="">— Sélectionner un chantier —</option>';
+    chantiers.filter(c=>!c.archived).forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});
+  }
+  const selD=document.getElementById('rect-demandeur');
+  if(selD)selD.innerHTML='<option value="">— Qui demande ? —</option>'+Object.values(HPC_EMPLOYES).map(n=>'<option value="'+n+'">'+n+'</option>').join('');
+  document.getElementById('rect-description').value='';
+  _rectPhotoUrls=[];
+  renderRectPhotoPreview();
+  const status=document.getElementById('rect-photo-status');if(status)status.textContent='';
+  document.getElementById('rect-photo-input').value='';
+  document.getElementById('rect-photo-input-gallery').value='';
+  openModal('modal-rect');
+}
+function renderRectPhotoPreview(){
+  const zone=document.getElementById('rect-photo-preview');
+  if(!zone)return;
+  zone.innerHTML=_rectPhotoUrls.map((u,i)=>'<span style="position:relative;display:inline-block;"><img src="'+u+'" style="width:60px;height:60px;border-radius:6px;border:1px solid var(--border);object-fit:cover;"><a href="#" onclick="event.preventDefault();_rectPhotoUrls.splice('+i+',1);renderRectPhotoPreview();" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;line-height:18px;text-align:center;font-size:12px;text-decoration:none;">×</a></span>').join('');
+}
+async function uploadRectPhoto(files){
+  if(!files||!files.length)return;
+  const status=document.getElementById('rect-photo-status');
+  if(!status)return;
+  for(const file of files){
+    if(file.size>10*1024*1024){
+      status.style.color='var(--red)';
+      status.textContent='⚠ '+file.name+' trop volumineuse (max 10 Mo), ignorée';
+      continue;
+    }
+    status.style.color='var(--text2)';
+    status.textContent='⏳ Envoi de '+file.name+'…';
+    const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+    const path='rect-orders/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
+    try{
+      const{error}=await db.storage.from('commandes-documents').upload(path,file,{upsert:false});
+      if(error)throw error;
+      const{data:pub}=db.storage.from('commandes-documents').getPublicUrl(path);
+      _rectPhotoUrls.push(pub.publicUrl);
+      renderRectPhotoPreview();
+    }catch(e){
+      status.style.color='var(--red)';
+      status.textContent='⚠ Échec de l\'envoi de '+file.name+' : '+(e.message||'erreur inconnue');
+    }
+  }
+  status.style.color='var(--green-dark)';
+  status.textContent=_rectPhotoUrls.length?_rectPhotoUrls.length+' photo(s) prête(s)':'';
+  document.getElementById('rect-photo-input').value='';
+  document.getElementById('rect-photo-input-gallery').value='';
+}
+async function saveRectOrder(){
+  const chantier=document.getElementById('rect-chantier')?.value?.trim()||'';
+  const demandeur=document.getElementById('rect-demandeur')?.value?.trim()||'';
+  const description=document.getElementById('rect-description')?.value?.trim()||'';
+  if(!chantier){showToast('⚠ Sélectionnez un chantier');return;}
+  if(!demandeur){showToast('⚠ Indiquez qui fait la demande');return;}
+  if(!description&&!_rectPhotoUrls.length){showToast('⚠ Décrivez la demande ou ajoutez une photo');return;}
+  const payload={chantier_nom:chantier,demandeur,description:description||null,photo_urls:_rectPhotoUrls.length?_rectPhotoUrls:null,statut:'en_attente'};
+  const{error}=await db.from('commandes_rectangulaires').insert(payload);
+  if(error){showToast('❌ Erreur : '+error.message);return;}
+  closeModal('modal-rect');
+  const{data}=await db.from('commandes_rectangulaires').select('*').order('created_at',{ascending:false});
+  if(data)rectOrders=data;
+  renderRectOrders();
+  showToast('✅ Demande envoyée');
+}
+async function toggleRectStatut(id){
+  const r=rectOrders.find(x=>x.id===id);if(!r)return;
+  const newStatut=r.statut==='traitee'?'en_attente':'traitee';
+  await db.from('commandes_rectangulaires').update({statut:newStatut}).eq('id',id);
+  r.statut=newStatut;
+  renderRectOrders();
+}
+async function deleteRectOrder(id){
+  if(!confirm('Supprimer cette demande ?'))return;
+  await db.from('commandes_rectangulaires').delete().eq('id',id);
+  rectOrders=rectOrders.filter(r=>r.id!==id);
+  renderRectOrders();
+  showToast('Supprimé');
+}
+function renderRectOrders(){
+  const list=document.getElementById('rect-list');
+  if(!list)return;
+  if(!rectOrders.length){
+    list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0;">Aucune demande pour l\'instant.</div>';
+    return;
+  }
+  const LISERE=['var(--purple)','var(--blue)','var(--amber)','var(--green)','var(--red)'];
+  list.innerHTML=[...rectOrders].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).map((r,i)=>{
+    const date=r.created_at?new Date(r.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    const urls=r.photo_urls&&r.photo_urls.length?r.photo_urls:[];
+    const photoHtml=urls.length?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">'+urls.map(u=>'<a href="'+u+'" target="_blank"><img src="'+u+'" style="width:100px;height:100px;border-radius:var(--radius-sm);border:1px solid var(--border);object-fit:cover;"></a>').join('')+'</div>':'';
+    const traitee=r.statut==='traitee';
+    return'<div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid '+LISERE[i%LISERE.length]+';border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;font-size:12.5px;'+(traitee?'opacity:.6;':'')+'">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span style="color:var(--text3);font-size:11px;"><strong style="color:var(--text2);">'+escH(r.demandeur||'')+'</strong> — '+escH(r.chantier_nom||'')+' — '+date+(traitee?' — <span style="color:var(--green-dark);font-weight:700;">✓ Traitée</span>':'')+'</span>'
+      +'<span style="white-space:nowrap;"><a href="#" onclick="event.preventDefault();toggleRectStatut(\''+r.id+'\')" style="color:'+(traitee?'var(--text3)':'var(--green-dark)')+';font-size:11px;font-weight:600;margin-right:10px;">'+(traitee?'↺ Rouvrir':'✓ Marquer traitée')+'</a>'
+      +'<a href="#" onclick="event.preventDefault();deleteRectOrder(\''+r.id+'\')" style="color:var(--red);font-size:11px;">Supprimer</a></span></div>'
+      +(r.description?'<div style="white-space:pre-wrap;margin-top:4px;">'+escH(r.description)+'</div>':'')+photoHtml+'</div>';
+  }).join('');
+}
 function closeCmdMenus(){const m=document.getElementById('cmd-global-menu');if(m)m.style.display='none';}
 function cmdMenuHTML(c){
   return(c.statut==='en_attente'?`<a href="#" onclick="event.preventDefault();closeCmdMenus();editCmd('${c.id}')" class="cmd-menu-item">✏ Modifier</a>
@@ -2246,6 +2401,7 @@ function toggleCmdMenu(ev,id){
 document.addEventListener('click',closeCmdMenus);
 document.addEventListener('scroll',closeCmdMenus,true);
 function renderCommandes(){
+  renderRectOrders();
   const tbody=document.getElementById('cmd-table');if(!tbody)return;
   const statutFilt=document.getElementById('cmd-filter-statut')?.value||'';
   // En mode client : afficher uniquement les commandes passées par le compte connecté (pas celles des autres clients)
