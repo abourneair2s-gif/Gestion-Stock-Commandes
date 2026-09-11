@@ -283,10 +283,17 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
 <!-- Loading overlay -->
 <div id="pin-gate" style="display:none;">
   <div style="font-size:17px;font-weight:700;color:var(--green);">🔒 StockPro AIR2S</div>
-  <div style="font-size:13px;color:var(--text2);">Code d'accès admin</div>
-  <input type="password" inputmode="numeric" pattern="[0-9]*" id="pin-input" maxlength="6" autocomplete="off" placeholder="••••">
-  <button class="btn btn-primary" onclick="checkAdminPin()">Déverrouiller</button>
-  <div id="pin-error" style="display:none;color:var(--red);font-size:13px;">Code incorrect</div>
+  <div id="login-step-email">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px;text-align:center;">Connexion réservée à l'équipe.<br>Entrez votre adresse email :</div>
+    <input type="email" id="login-email-input" autocomplete="email" placeholder="prenom@air2s-hvac.com" style="max-width:260px;text-align:center;">
+    <button class="btn btn-primary" style="margin-top:10px;" onclick="sendMagicLink()">Recevoir le lien de connexion</button>
+  </div>
+  <div id="login-step-sent" style="display:none;text-align:center;max-width:280px;">
+    <div style="font-size:28px;margin-bottom:8px;">📩</div>
+    <div style="font-size:13px;color:var(--text2);">Un lien de connexion a été envoyé à <strong id="login-sent-email"></strong>.<br>Ouvrez-le depuis cet appareil pour accéder à l'application.</div>
+    <button class="btn btn-xs" style="margin-top:10px;" onclick="document.getElementById('login-step-sent').style.display='none';document.getElementById('login-step-email').style.display='';">← Essayer une autre adresse</button>
+  </div>
+  <div id="pin-error" style="display:none;color:var(--red);font-size:13px;max-width:280px;text-align:center;"></div>
 </div>
 <div id="loading-overlay">
   <div class="spinner"></div>
@@ -326,7 +333,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <button class="nav-btn" onclick="showPage('parametres',this)" data-page="parametres"><span class="nav-icon">⚙️</span>Paramètres</button>
   <button class="nav-btn" onclick="showPage('inventaire',this)" data-page="inventaire"><span class="nav-icon">📋</span>Inventaire</button>
   <button class="nav-btn admin-only" onclick="exportExcel()" style="margin-top:auto;border-top:1px solid var(--border);color:var(--green);" title="Export global : stock + alertes + historique"><span class="nav-icon">📥</span>Export global</button>
-  <button class="nav-btn admin-only" onclick="lockAdminAccess()" style="color:var(--text3);" title="Reverrouiller l'accès avec le code PIN"><span class="nav-icon">🔒</span>Verrouiller</button>
+  <button class="nav-btn admin-only" onclick="lockAdminAccess()" style="color:var(--text3);" title="Se déconnecter"><span class="nav-icon">🔒</span>Se déconnecter</button>
 </div>
 
 <div id="main">
@@ -345,7 +352,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <button class="mob-btn admin-only" onclick="showPage('location',this)" data-page="location"><span class="mob-btn-icon">🚜</span>Location</button>
     <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
     <button class="mob-btn" onclick="showPage('etiquettes',this)" data-page="etiquettes"><span class="mob-btn-icon">🏷</span>Étiquettes</button>
-    <button class="mob-btn admin-only" onclick="lockAdminAccess()"><span class="mob-btn-icon">🔒</span>Verrouiller</button>
+    <button class="mob-btn admin-only" onclick="lockAdminAccess()"><span class="mob-btn-icon">🔒</span>Déconnexion</button>
   </div>
 </div>
 
@@ -5677,49 +5684,57 @@ async function desarchiverCmd(id){
   showToast('✅ Commande restaurée');
 }
 
-const ADMIN_PIN_STORAGE_KEY='stockpro_admin_unlocked';
 function lockAdminAccess(){
-  localStorage.removeItem(ADMIN_PIN_STORAGE_KEY);
-  location.reload();
+  db.auth.signOut().then(()=>location.reload());
 }
-async function checkAdminPin(){
-  const input=document.getElementById('pin-input');
+async function sendMagicLink(){
+  const input=document.getElementById('login-email-input');
   const err=document.getElementById('pin-error');
-  const val=(input?.value||'').trim();
-  if(!val){return;}
+  const email=(input?.value||'').trim();
+  if(err){err.style.display='none';err.textContent='';}
+  if(!email||!email.includes('@')){
+    if(err){err.style.display='block';err.textContent='Entrez une adresse email valide.';}
+    return;
+  }
   try{
-    const {data,error}=await db.from('config').select('value').eq('key','admin_pin').single();
-    const realPin=data?.value!=null?String(data.value):null;
-    if(realPin===null){
-      // Pas de PIN configuré côté base : on laisse passer pour ne pas bloquer l'accès par erreur de config
-      document.getElementById('pin-gate').style.display='none';
-      localStorage.setItem(ADMIN_PIN_STORAGE_KEY,'1');
-      initApp();
+    const{error}=await db.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href.split('#')[0]}});
+    if(error){
+      if(err){err.style.display='block';err.textContent=error.message.includes('Signups not allowed')?'Cette adresse n\'a pas accès à l\'application.':'Erreur : '+error.message;}
       return;
     }
-    if(val===realPin){
-      document.getElementById('pin-gate').style.display='none';
-      localStorage.setItem(ADMIN_PIN_STORAGE_KEY,'1');
-      initApp();
-    }else{
-      if(err)err.style.display='block';
-      if(input){input.value='';input.focus();}
-    }
+    document.getElementById('login-sent-email').textContent=email;
+    document.getElementById('login-step-email').style.display='none';
+    document.getElementById('login-step-sent').style.display='';
   }catch(e){
-    if(err){err.style.display='block';err.textContent='Erreur de connexion, réessayez';}
+    if(err){err.style.display='block';err.textContent='Erreur de connexion, réessayez.';}
   }
 }
 document.addEventListener('DOMContentLoaded',()=>{
-  const pinInput=document.getElementById('pin-input');
-  if(pinInput)pinInput.addEventListener('keydown',e=>{if(e.key==='Enter')checkAdminPin();});
+  const emailInput=document.getElementById('login-email-input');
+  if(emailInput)emailInput.addEventListener('keydown',e=>{if(e.key==='Enter')sendMagicLink();});
 });
-if(!CLIENT_MODE&&localStorage.getItem(ADMIN_PIN_STORAGE_KEY)!=='1'){
-  document.getElementById('loading-overlay').classList.add('hidden');
-  const gate=document.getElementById('pin-gate');
-  if(gate){gate.style.display='flex';setTimeout(()=>document.getElementById('pin-input')?.focus(),100);}
-}else{
-  initApp();
+async function checkAuthAndStart(){
+  if(CLIENT_MODE){initApp();return;}
+  const{data:{session}}=await db.auth.getSession();
+  if(session){
+    initApp();
+  }else{
+    document.getElementById('loading-overlay').classList.add('hidden');
+    const gate=document.getElementById('pin-gate');
+    if(gate){gate.style.display='flex';setTimeout(()=>document.getElementById('login-email-input')?.focus(),100);}
+  }
 }
+db.auth.onAuthStateChange((event,session)=>{
+  if(event==='SIGNED_IN'&&session&&!CLIENT_MODE){
+    const gate=document.getElementById('pin-gate');
+    if(gate&&gate.style.display!=='none'){
+      gate.style.display='none';
+      document.getElementById('loading-overlay').classList.remove('hidden');
+      initApp();
+    }
+  }
+});
+checkAuthAndStart();
 
 </script>
 </body>
