@@ -644,7 +644,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <button class="btn btn-primary btn-sm" onclick="openLocationModal()">+ Nouvelle demande</button>
   </div>
   <div class="table-wrap">
-    <table><thead><tr><th>Date</th><th>Chantier</th><th>Matériel</th><th>Fournisseur</th><th>Coût</th><th>Notes</th><th></th></tr></thead>
+    <table><thead><tr><th>Date</th><th>Chantier</th><th>Demandeur</th><th>Matériel</th><th>Fournisseur</th><th>Coût</th><th>Notes</th><th></th></tr></thead>
     <tbody id="locations-table"></tbody></table>
   </div>
 </div>
@@ -660,12 +660,15 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
       <div class="form-row"><label class="form-label">Chantier</label>
         <select id="loc-chantier"><option value="">— Sélectionner un chantier —</option></select>
       </div>
+      <div class="form-row"><label class="form-label">Demandeur</label>
+        <select id="loc-demandeur"><option value="">— Qui demande ? —</option></select>
+      </div>
       <div class="form-row"><label class="form-label">Matériel demandé</label>
         <input type="text" id="loc-materiel" placeholder="Ex: Nacelle 12m, Groupe électrogène...">
       </div>
       <div class="form-grid col2">
-        <div class="form-row"><label class="form-label">Fournisseur</label><input type="text" id="loc-fournisseur" placeholder="Ex: Kiloutou, Loxam..."></div>
-        <div class="form-row"><label class="form-label">Coût (€)</label><input type="number" id="loc-cout" min="0" step="0.01" placeholder="Ex: 350"></div>
+        <div class="form-row"><label class="form-label">Fournisseur <span style="color:var(--text3);font-weight:400;">(à valider)</span></label><input type="text" id="loc-fournisseur" placeholder="Ex: Kiloutou, Loxam..."></div>
+        <div class="form-row"><label class="form-label">Coût (€) <span style="color:var(--text3);font-weight:400;">(à valider)</span></label><input type="number" id="loc-cout" min="0" step="0.01" placeholder="Ex: 350"></div>
       </div>
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Date de début</label><input type="date" id="loc-date-debut"></div>
@@ -2641,17 +2644,19 @@ function renderLocations(){
   if(!tbody)return;
   const rows=[...locationsMateriel].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;">Aucune demande de location pour l\'instant.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;">Aucune demande de location pour l\'instant.</td></tr>';
     return;
   }
   tbody.innerHTML=rows.map(l=>{
     const dateStr=l.date_debut?new Date(l.date_debut).toLocaleDateString('fr-FR')+(l.date_fin?' → '+new Date(l.date_fin).toLocaleDateString('fr-FR'):''):(l.created_at?new Date(l.created_at).toLocaleDateString('fr-FR'):'');
+    const aValider=!l.fournisseur&&!l.cout;
     return`<tr>
       <td>${dateStr}</td>
       <td><strong>${escH(l.chantier_nom||'')}</strong></td>
+      <td>${escH(l.demandeur||'')||'—'}</td>
       <td>${escH(l.materiel||'')}</td>
-      <td>${escH(l.fournisseur||'')||'—'}</td>
-      <td style="font-weight:700;">${(l.cout||0).toFixed(2).replace('.',',')} €</td>
+      <td>${aValider?'<span class="badge badge-warn">⏳ À valider</span>':escH(l.fournisseur||'')||'—'}</td>
+      <td style="font-weight:700;">${l.cout>0?(l.cout).toFixed(2).replace('.',',')+' €':'—'}</td>
       <td style="font-size:12px;color:var(--text2);">${escH(l.notes||'')||'—'}</td>
       <td style="text-align:right;white-space:nowrap;">
         <button class="btn btn-xs" onclick="openLocationModal('${l.id}')">✏</button>
@@ -2670,8 +2675,13 @@ function openLocationModal(id){
     selC.innerHTML='<option value="">— Sélectionner un chantier —</option>';
     chantiers.filter(c=>!c.archived).forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});
   }
+  const selD=document.getElementById('loc-demandeur');
+  if(selD){
+    selD.innerHTML='<option value="">— Qui demande ? —</option>'+Object.values(HPC_EMPLOYES).map(n=>'<option value="'+n+'">'+n+'</option>').join('');
+  }
   const l=id?locationsMateriel.find(x=>x.id===id):null;
   if(selC)selC.value=l?l.chantier_nom:'';
+  if(selD)selD.value=l?l.demandeur||'':'';
   document.getElementById('loc-materiel').value=l?l.materiel||'':'';
   document.getElementById('loc-fournisseur').value=l?l.fournisseur||'':'';
   document.getElementById('loc-cout').value=l?(l.cout||''):'';
@@ -2687,6 +2697,7 @@ function openLocationModalForChantier(nom){
 }
 async function saveLocation(){
   const chantier=document.getElementById('loc-chantier')?.value?.trim()||'';
+  const demandeur=document.getElementById('loc-demandeur')?.value?.trim()||'';
   const materiel=document.getElementById('loc-materiel')?.value?.trim()||'';
   const fournisseur=document.getElementById('loc-fournisseur')?.value?.trim()||'';
   const cout=parseFloat(document.getElementById('loc-cout')?.value)||0;
@@ -2695,7 +2706,7 @@ async function saveLocation(){
   const notes=document.getElementById('loc-notes')?.value?.trim()||'';
   if(!chantier){showToast('⚠ Sélectionnez un chantier');return;}
   if(!materiel){showToast('⚠ Renseignez le matériel demandé');return;}
-  const payload={chantier_nom:chantier,materiel,fournisseur:fournisseur||null,cout,date_debut:dateDebut,date_fin:dateFin,notes:notes||null};
+  const payload={chantier_nom:chantier,demandeur:demandeur||null,materiel,fournisseur:fournisseur||null,cout,date_debut:dateDebut,date_fin:dateFin,notes:notes||null};
   let result;
   if(editingLocationId){
     result=await db.from('locations_materiel').update(payload).eq('id',editingLocationId);
