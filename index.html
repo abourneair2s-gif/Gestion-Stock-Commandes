@@ -317,6 +317,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <button class="nav-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="nav-icon">📋</span>Commandes <span class="badge-sb" id="sb-cmd-count" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showPage('retours',this)" data-page="retours"><span class="nav-icon">↩️</span>Retour articles</button>
   <button class="nav-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="nav-icon">🏗</span>Chantiers</button>
+  <button class="nav-btn admin-only" onclick="showPage('location',this)" data-page="location"><span class="nav-icon">🚜</span>Location matériel</button>
   <div class="sb-section">Admin</div>
   <button class="nav-btn" onclick="showPage('alertes',this)" data-page="alertes"><span class="nav-icon">🔔</span>Alertes <span class="badge-sb" id="sb-alert-count" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showPage('historique',this)" data-page="historique"><span class="nav-icon">📜</span>Historique</button>
@@ -341,6 +342,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <button class="mob-btn" onclick="showPage('commandes',this)" data-page="commandes"><span class="mob-btn-icon">📋</span>Commandes</button>
     <button class="mob-btn" onclick="showPage('retours',this)" data-page="retours"><span class="mob-btn-icon">↩️</span>Retour</button>
     <button class="mob-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="mob-btn-icon">🏗</span>Chantiers</button>
+    <button class="mob-btn admin-only" onclick="showPage('location',this)" data-page="location"><span class="mob-btn-icon">🚜</span>Location</button>
     <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
     <button class="mob-btn" onclick="showPage('etiquettes',this)" data-page="etiquettes"><span class="mob-btn-icon">🏷</span>Étiquettes</button>
     <button class="mob-btn admin-only" onclick="lockAdminAccess()"><span class="mob-btn-icon">🔒</span>Verrouiller</button>
@@ -635,7 +637,48 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   </div>
 </div>
 
-<!-- ETIQUETTES PAGE -->
+<!-- LOCATION MATERIEL PAGE -->
+<div class="page" id="page-location">
+  <div class="section-header">
+    <div class="section-title">🚜 Location matériel</div>
+    <button class="btn btn-primary btn-sm" onclick="openLocationModal()">+ Nouvelle demande</button>
+  </div>
+  <div class="table-wrap">
+    <table><thead><tr><th>Date</th><th>Chantier</th><th>Matériel</th><th>Fournisseur</th><th>Coût</th><th>Notes</th><th></th></tr></thead>
+    <tbody id="locations-table"></tbody></table>
+  </div>
+</div>
+
+<!-- Modal Location matériel -->
+<div class="modal-backdrop" id="modal-location">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="location-modal-title">Nouvelle demande de location</div>
+      <button class="btn btn-xs" onclick="closeModal('modal-location')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Chantier</label>
+        <select id="loc-chantier"><option value="">— Sélectionner un chantier —</option></select>
+      </div>
+      <div class="form-row"><label class="form-label">Matériel demandé</label>
+        <input type="text" id="loc-materiel" placeholder="Ex: Nacelle 12m, Groupe électrogène...">
+      </div>
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Fournisseur</label><input type="text" id="loc-fournisseur" placeholder="Ex: Kiloutou, Loxam..."></div>
+        <div class="form-row"><label class="form-label">Coût (€)</label><input type="number" id="loc-cout" min="0" step="0.01" placeholder="Ex: 350"></div>
+      </div>
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Date de début</label><input type="date" id="loc-date-debut"></div>
+        <div class="form-row"><label class="form-label">Date de fin</label><input type="date" id="loc-date-fin"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Notes</label><textarea id="loc-notes" rows="2" placeholder="Précisions..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-location')" style="flex:1;">Annuler</button>
+      <button class="btn btn-primary" onclick="saveLocation()" style="flex:1;">Enregistrer</button>
+    </div>
+  </div>
+</div>
 <div class="page" id="page-etiquettes">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div class="section-title">🏷 Étiquettes QR</div>
@@ -1249,6 +1292,7 @@ let stock = [];
 let commandes = [];
 let historique = [];
 let chantiers = []; // [{nom, desc}]
+let locationsMateriel = [];
 let retours = [];
 let retourItems = [];
 const CLIENT_MODE = new URLSearchParams(window.location.search).get('mode')==='client' || window.location.pathname.replace(/\/$/,'')==='/client';
@@ -1602,6 +1646,12 @@ async function loadAllData() {
     if(!retourErr)retours=retourData||[];
   }catch(e){/* table pas encore créée */}
 
+  // Location matériel (table optionnelle — ne bloque pas le chargement si absente)
+  try{
+    const {data:locData,error:locErr}=await db.from('locations_materiel').select('*').order('created_at',{ascending:false});
+    if(!locErr)locationsMateriel=locData||[];
+  }catch(e){/* table pas encore créée */}
+
   // Config
   if (configRes.data) {
     configRes.data.forEach(row => {
@@ -1643,6 +1693,12 @@ function subscribeRealtime() {
       try{
         const {data,error} = await db.from('retours').select('*').order('created_at',{ascending:false});
         if(!error){retours = data||[]; renderRetoursPage();}
+      }catch(e){/* table pas encore créée */}
+    })
+    .on('postgres_changes', {event:'*', schema:'public', table:'locations_materiel'}, async () => {
+      try{
+        const {data,error} = await db.from('locations_materiel').select('*').order('created_at',{ascending:false});
+        if(!error){locationsMateriel = data||[]; renderLocations();}
       }catch(e){/* table pas encore créée */}
     })
     .on('postgres_changes', {event:'*', schema:'public', table:'config'}, async () => {
@@ -1744,7 +1800,7 @@ function showToast(msg, duration=3500) {
 // ==================== NAVIGATION ====================
 function showPage(page,el){
   // Sécurité : bloquer l'accès direct aux pages admin en mode client, même via appel JS direct
-  const adminOnlyPages=['categories','parametres','familles','historique','pareto','alertes','etiquettes','dashboard','scan','chantiers','inventaire','retours'];
+  const adminOnlyPages=['categories','parametres','familles','historique','pareto','alertes','etiquettes','dashboard','scan','chantiers','inventaire','retours','location'];
   if(typeof CLIENT_MODE!=='undefined'&&CLIENT_MODE&&adminOnlyPages.includes(page)){
     page='commandes';el=document.querySelector('.nav-btn[data-page="commandes"]');
   }
@@ -1775,7 +1831,7 @@ function showPage(page,el){
   },10);
   const titles={dashboard:'Tableau de bord',stock:'Articles & Stock',pareto:'Analyse Pareto (80/20)',
     scan:'Scanner QR',commandes:'Commandes chantiers',alertes:'Alertes de stock',
-    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres',familles:'Familles & Sous-familles',inventaire:'Saisie d\'inventaire',retours:'Retour articles'};
+    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres',familles:'Familles & Sous-familles',inventaire:'Saisie d\'inventaire',retours:'Retour articles',location:'Location matériel'};
   document.getElementById('topbar-title').textContent=titles[page]||page;
   const ab=document.getElementById('topbar-action');
   if(page==='stock'){ab.style.display='none';}
@@ -1784,7 +1840,7 @@ function showPage(page,el){
   else ab.style.display='none';
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
     commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
-    categories:renderCategories,parametres:renderParams,familles:renderFamillesPage,inventaire:renderInventaire,retours:renderRetoursPage};
+    categories:renderCategories,parametres:renderParams,familles:renderFamillesPage,inventaire:renderInventaire,retours:renderRetoursPage,location:renderLocations};
   if(renders[page])renders[page]();
   if(page!=='scan'){stopQRScan();stopCmdQR();stopRetourQR();}
 }
@@ -2580,6 +2636,90 @@ function chantierCardHTML(c,archived,idx){
     </div>
   </div>`;
 }
+function renderLocations(){
+  const tbody=document.getElementById('locations-table');
+  if(!tbody)return;
+  const rows=[...locationsMateriel].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;">Aucune demande de location pour l\'instant.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=rows.map(l=>{
+    const dateStr=l.date_debut?new Date(l.date_debut).toLocaleDateString('fr-FR')+(l.date_fin?' → '+new Date(l.date_fin).toLocaleDateString('fr-FR'):''):(l.created_at?new Date(l.created_at).toLocaleDateString('fr-FR'):'');
+    return`<tr>
+      <td>${dateStr}</td>
+      <td><strong>${escH(l.chantier_nom||'')}</strong></td>
+      <td>${escH(l.materiel||'')}</td>
+      <td>${escH(l.fournisseur||'')||'—'}</td>
+      <td style="font-weight:700;">${(l.cout||0).toFixed(2).replace('.',',')} €</td>
+      <td style="font-size:12px;color:var(--text2);">${escH(l.notes||'')||'—'}</td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn btn-xs" onclick="openLocationModal('${l.id}')">✏</button>
+        <button class="btn btn-xs btn-danger" style="margin-left:3px;" onclick="deleteLocation('${l.id}')">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+let editingLocationId=null;
+function openLocationModal(id){
+  editingLocationId=id||null;
+  const title=document.getElementById('location-modal-title');
+  if(title)title.textContent=id?'Modifier la demande':'Nouvelle demande de location';
+  const selC=document.getElementById('loc-chantier');
+  if(selC){
+    selC.innerHTML='<option value="">— Sélectionner un chantier —</option>';
+    chantiers.filter(c=>!c.archived).forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});
+  }
+  const l=id?locationsMateriel.find(x=>x.id===id):null;
+  if(selC)selC.value=l?l.chantier_nom:'';
+  document.getElementById('loc-materiel').value=l?l.materiel||'':'';
+  document.getElementById('loc-fournisseur').value=l?l.fournisseur||'':'';
+  document.getElementById('loc-cout').value=l?(l.cout||''):'';
+  document.getElementById('loc-date-debut').value=l&&l.date_debut?l.date_debut.slice(0,10):'';
+  document.getElementById('loc-date-fin').value=l&&l.date_fin?l.date_fin.slice(0,10):'';
+  document.getElementById('loc-notes').value=l?l.notes||'':'';
+  openModal('modal-location');
+}
+function openLocationModalForChantier(nom){
+  openLocationModal();
+  const selC=document.getElementById('loc-chantier');
+  if(selC)selC.value=nom;
+}
+async function saveLocation(){
+  const chantier=document.getElementById('loc-chantier')?.value?.trim()||'';
+  const materiel=document.getElementById('loc-materiel')?.value?.trim()||'';
+  const fournisseur=document.getElementById('loc-fournisseur')?.value?.trim()||'';
+  const cout=parseFloat(document.getElementById('loc-cout')?.value)||0;
+  const dateDebut=document.getElementById('loc-date-debut')?.value||null;
+  const dateFin=document.getElementById('loc-date-fin')?.value||null;
+  const notes=document.getElementById('loc-notes')?.value?.trim()||'';
+  if(!chantier){showToast('⚠ Sélectionnez un chantier');return;}
+  if(!materiel){showToast('⚠ Renseignez le matériel demandé');return;}
+  const payload={chantier_nom:chantier,materiel,fournisseur:fournisseur||null,cout,date_debut:dateDebut,date_fin:dateFin,notes:notes||null};
+  let result;
+  if(editingLocationId){
+    result=await db.from('locations_materiel').update(payload).eq('id',editingLocationId);
+  }else{
+    result=await db.from('locations_materiel').insert(payload);
+  }
+  if(result.error){showToast('❌ Erreur : '+result.error.message);return;}
+  editingLocationId=null;
+  closeModal('modal-location');
+  const {data}=await db.from('locations_materiel').select('*').order('created_at',{ascending:false});
+  if(data)locationsMateriel=data;
+  renderLocations();
+  showToast('✅ Demande de location enregistrée');
+}
+async function deleteLocation(id){
+  if(!confirm('Supprimer cette demande de location ?'))return;
+  await db.from('locations_materiel').delete().eq('id',id);
+  locationsMateriel=locationsMateriel.filter(l=>l.id!==id);
+  renderLocations();
+  showToast('Supprimé');
+}
+function getChantierFraisAnnexes(nom){
+  return locationsMateriel.filter(l=>l.chantier_nom===nom).reduce((s,l)=>s+(l.cout||0),0);
+}
 function renderChantiers(){
   const actifs=chantiers.filter(c=>!c.archived).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
   const archives=chantiers.filter(c=>c.archived).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
@@ -2680,7 +2820,8 @@ async function showChantierDetail(nom){
 
   // KPI bar
   const chPrixVente=(()=>{const ch=chantiers.find(x=>x.nom===nom);return ch&&ch.prix_vente?ch.prix_vente:0;})();
-  const benef=chPrixVente-d.valAchat;
+  const fraisAnnexes=getChantierFraisAnnexes(nom);
+  const benef=chPrixVente-d.valAchat-fraisAnnexes;
   const fmtSigned=v=>{const s=v<0?'-':'';return s+Math.abs(v).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f€';};
   const kpi=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:140px;text-align:center;">
@@ -2698,6 +2839,10 @@ async function showChantierDetail(nom){
       <div style="font-size:18px;font-weight:700;color:var(--red);">${fmtBig(d.valAchat)}</div>
       <div style="font-size:11px;color:var(--text2);">Coût (achat)</div>
     </div>
+    ${fraisAnnexes>0?`<div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;cursor:pointer;" onclick="event.stopPropagation();showPage('location',document.querySelector('[data-page=location]'));">
+      <div style="font-size:18px;font-weight:700;color:var(--amber);">${fmtBig(fraisAnnexes)}</div>
+      <div style="font-size:11px;color:var(--text2);">🚜 Frais annexes</div>
+    </div>`:''}
     <div style="background:${benef>=0?'var(--blue-bg)':'var(--red-bg)'};border:1px solid ${benef>=0?'var(--blue)':'var(--red)'};border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
       <div style="font-size:18px;font-weight:700;color:${benef>=0?'var(--blue)':'var(--red)'};">${chPrixVente?fmtSigned(benef):'—'}</div>
       <div style="font-size:11px;color:var(--text2);">Bénéfice</div>
@@ -2779,6 +2924,7 @@ async function showChantierDetail(nom){
     const isArc=ch&&ch.archived;
     const ne=nom.replace(/'/g,"\'");
     return`<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+      <button class="btn btn-sm" style="color:var(--amber);border-color:var(--amber);" onclick="openLocationModalForChantier('${ne}')">🚜 + Frais annexe / location</button>
       ${isArc?`<button class="btn btn-sm" style="color:var(--green);border-color:var(--green);" onclick="desarchiverChantier('${ne}')">↩ Réactiver</button>`
              :`<button class="btn btn-sm" onclick="archiverChantier('${ne}')">📦 Archiver ce chantier</button>`}
       <button class="btn btn-sm" onclick="exportChantierExcel('${ne}')">📥 Export Excel</button>
