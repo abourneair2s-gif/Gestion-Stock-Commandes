@@ -3068,6 +3068,7 @@ async function showChantierDetail(nom){
     +'<div style="font-size:11px;color:var(--text2);">Heures restantes</div>'
     +'</div>'
     +'</div>'
+    +(enfants.length?'<div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Total heures prévues <strong>avec sous-dossiers</strong> : <strong style="color:var(--purple);">'+((chHeuresPrevues||0)+enfants.reduce((s,e)=>s+(e.heures||0),0)).toFixed(1).replace('.',',')+' h</strong> <span style="color:var(--text3);">('+(chHeuresPrevues||0).toFixed(1).replace('.',',')+' h ici + '+enfants.reduce((s,e)=>s+(e.heures||0),0).toFixed(1).replace('.',',')+' h dans les sous-dossiers)</span></div>':'')
     +'<div id="chantier-intervenants-zone" style="margin-bottom:14px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;color:var(--text3);">⏳ Chargement…</div>';
 
   // Section Suivi / journal de commentaires
