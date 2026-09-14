@@ -1237,8 +1237,8 @@ const HPC_EMPLOYES = {
   GDA:'Giovanny DA SILVA', TBI:'Thomas BALCERSKI', ABE:'Audrey BOURNE', RML:'Romuald LEMAUFF'
 };
 async function fetchChantierHeuresHPC(nom){
-  const target=(nom||'').trim().toLowerCase();
-  if(!target)return{parEmploye:[],totalHeures:0,erreur:null};
+  const targets=getChantierNomsAssocies(nom).map(n=>(n||'').trim().toLowerCase()).filter(Boolean);
+  if(!targets.length)return{parEmploye:[],totalHeures:0,erreur:null};
   try{
     const{data,error}=await dbHpc.from('heures').select('emp_id,c1,h1,c2,h2,c3,h3');
     if(error)return{parEmploye:[],totalHeures:0,erreur:error.message};
@@ -1247,7 +1247,7 @@ async function fetchChantierHeuresHPC(nom){
       [['c1','h1'],['c2','h2'],['c3','h3']].forEach(([ck,hk])=>{
         const cval=(row[ck]||'').trim().toLowerCase();
         const hval=parseFloat(row[hk])||0;
-        if(cval===target&&hval>0){
+        if(targets.includes(cval)&&hval>0){
           parEmploye[row.emp_id]=(parEmploye[row.emp_id]||0)+hval;
         }
       });
@@ -2759,9 +2759,15 @@ async function deleteCmd(id){
   commandes=commandes.filter(c=>c.id!==id);
   renderCommandes();updateBadges();showToast('Commande supprimee');
 }
+function getChantierNomsAssocies(nom){
+  const ch=chantiers.find(c=>c.nom===nom);
+  const aliases=(ch&&ch.sousChantiers)||[];
+  return [nom,...aliases];
+}
 function getChantierData(nom){
-  const cmdsApprouv=commandes.filter(x=>x.chantier===nom&&x.statut==='approuvee');
-  const mvtsOut=historique.filter(h=>h.chantier===nom&&h.type==='out');
+  const noms=getChantierNomsAssocies(nom);
+  const cmdsApprouv=commandes.filter(x=>noms.includes(x.chantier)&&x.statut==='approuvee');
+  const mvtsOut=historique.filter(h=>noms.includes(h.chantier)&&h.type==='out');
   // Articles depuis commandes approuvées
   const lignesCmd=[];
   cmdsApprouv.forEach(c=>{
@@ -3023,6 +3029,17 @@ async function showChantierDetail(nom){
     </div>
   </div>`;
 
+  // Section Sous-chantiers / noms associés (regroupe plusieurs noms sous ce chantier)
+  const sousChantiersListe=(()=>{const ch=chantiers.find(x=>x.nom===nom);return (ch&&ch.sousChantiers)||[];})();
+  const sousChantiersHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">🔗 Sous-chantiers / noms associés <span style="font-weight:400;color:var(--text3);font-size:11px;">(regroupe d\'autres noms — commandes, mouvements, heures — sous ce chantier)</span></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;" id="chantier-sous-liste">'
+    +(sousChantiersListe.length?sousChantiersListe.map(sc=>'<span style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;">'+escH(sc)+' <a href="#" onclick="event.preventDefault();removeSousChantier(\''+nom.replace(/'/g,"\\'")+'\',\''+sc.replace(/'/g,"\\'")+'\')" style="color:var(--red);margin-left:4px;">×</a></span>').join(''):'<span style="font-size:12px;color:var(--text3);">Aucun pour l\'instant.</span>')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;">'
+    +'<input type="text" id="chantier-sous-input" placeholder="Ex: BAT.I - CDA DÉPOSE" style="flex:1;">'
+    +'<button class="btn btn-sm" onclick="addSousChantier(\''+nom.replace(/'/g,"\\'")+'\')">+ Ajouter</button>'
+    +'</div>';
+
   // Section Intervenants (chargement asynchrone depuis GestionHPC, affichée en premier avec un état "chargement")
   const chHeuresPrevues=(()=>{const ch=chantiers.find(x=>x.nom===nom);return ch&&ch.heures?ch.heures:null;})();
   const intervenantsHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">👷 Intervenants <span style="font-weight:400;color:var(--text3);font-size:11px;">(heures saisies dans GestionHPC)</span></div>'
@@ -3108,7 +3125,7 @@ async function showChantierDetail(nom){
   document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
   // Reconstruire le contenu du detail
   const detail_body=document.getElementById('chantier-detail-body');
-  if(detail_body) detail_body.innerHTML=kpi+intervenantsHtml+suiviHtml+tableHtml+exportBtn;
+  if(detail_body) detail_body.innerHTML=kpi+sousChantiersHtml+intervenantsHtml+suiviHtml+tableHtml+exportBtn;
   d_el.style.display='';
   d_el.dataset.chantierNom=nom;
   d_el.classList.remove('opening');void d_el.offsetWidth;d_el.classList.add('opening');
@@ -5478,6 +5495,24 @@ async function desarchiverChantier(nom){
   showToast('✅ Chantier réactivé');
 }
 
+async function addSousChantier(nom){
+  const input=document.getElementById('chantier-sous-input');
+  const val=(input?.value||'').trim();
+  if(!val){showToast('⚠ Renseignez un nom');return;}
+  const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  c.sousChantiers=c.sousChantiers||[];
+  if(c.sousChantiers.some(s=>s.toLowerCase()===val.toLowerCase())){showToast('Déjà ajouté');return;}
+  c.sousChantiers.push(val);
+  await db.from('config').upsert({key:'chantiers',value:chantiers},{onConflict:'key'});
+  showToast('✅ Ajouté : '+val);
+  showChantierDetail(nom);
+}
+async function removeSousChantier(nom,val){
+  const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  c.sousChantiers=(c.sousChantiers||[]).filter(s=>s!==val);
+  await db.from('config').upsert({key:'chantiers',value:chantiers},{onConflict:'key'});
+  showChantierDetail(nom);
+}
 async function saveChantierHeures(nom, val){
   const c=chantiers.find(x=>x.nom===nom);if(!c)return;
   c.heures=parseFloat(val)||0;
