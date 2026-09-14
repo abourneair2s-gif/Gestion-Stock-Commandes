@@ -1184,6 +1184,10 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Nom du chantier</label><input type="text" id="chantier-name" placeholder="ex: Résidence Les Pins, Site A…"></div>
       <div class="form-row"><label class="form-label">Description (optionnel)</label><input type="text" id="chantier-desc" placeholder="Adresse, responsable…"></div>
+      <div class="form-row"><label class="form-label">Chantier parent (optionnel)</label>
+        <select id="chantier-parent"><option value="">— Aucun (chantier principal) —</option></select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Pour créer un sous-dossier rattaché à un chantier existant (ex: un étage, une phase).</div>
+      </div>
       <div class="form-row"><label class="form-label">Heures chantier</label><input type="number" id="chantier-heures" min="0" step="0.5" placeholder="ex: 12.5"></div>
     </div>
     <div class="modal-footer">
@@ -2901,8 +2905,8 @@ function getChantierFraisAnnexes(nom){
   return locationsMateriel.filter(l=>l.chantier_nom===nom).reduce((s,l)=>s+(l.cout||0),0);
 }
 function renderChantiers(){
-  const actifs=chantiers.filter(c=>!c.archived).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
-  const archives=chantiers.filter(c=>c.archived).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  const actifs=chantiers.filter(c=>!c.archived&&!c.parent).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  const archives=chantiers.filter(c=>c.archived&&!c.parent).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
   const cards=document.getElementById('chantiers-cards');
   const arcCards=document.getElementById('archives-cards');
   const arcSection=document.getElementById('archives-section');
@@ -3029,9 +3033,9 @@ async function showChantierDetail(nom){
     </div>
   </div>`;
 
-  // Section Sous-chantiers / noms associés (regroupe plusieurs noms sous ce chantier)
+  // Section Sous-chantiers / noms associés (regroupe plusieurs noms sous ce chantier — fusion de données)
   const sousChantiersListe=(()=>{const ch=chantiers.find(x=>x.nom===nom);return (ch&&ch.sousChantiers)||[];})();
-  const sousChantiersHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">🔗 Sous-chantiers / noms associés <span style="font-weight:400;color:var(--text3);font-size:11px;">(regroupe d\'autres noms — commandes, mouvements, heures — sous ce chantier)</span></div>'
+  const sousChantiersHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">🔗 Noms associés <span style="font-weight:400;color:var(--text3);font-size:11px;">(fusionne d\'autres libellés — commandes, mouvements, heures — dans ce chantier, ex: écarts d\'orthographe avec GestionHPC)</span></div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;" id="chantier-sous-liste">'
     +(sousChantiersListe.length?sousChantiersListe.map(sc=>'<span style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;">'+escH(sc)+' <a href="#" onclick="event.preventDefault();removeSousChantier(\''+nom.replace(/'/g,"\\'")+'\',\''+sc.replace(/'/g,"\\'")+'\')" style="color:var(--red);margin-left:4px;">×</a></span>').join(''):'<span style="font-size:12px;color:var(--text3);">Aucun pour l\'instant.</span>')
     +'</div>'
@@ -3039,6 +3043,14 @@ async function showChantierDetail(nom){
     +'<input type="text" id="chantier-sous-input" placeholder="Ex: BAT.I - CDA DÉPOSE" style="flex:1;">'
     +'<button class="btn btn-sm" onclick="addSousChantier(\''+nom.replace(/'/g,"\\'")+'\')">+ Ajouter</button>'
     +'</div>';
+
+  // Section Sous-dossiers : vrais chantiers rattachés (étages, phases...), chacun avec sa propre fiche complète
+  const enfants=chantiers.filter(x=>x.parent===nom&&!x.archived).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  const sousDossiersHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">📂 Sous-dossiers <span style="font-weight:400;color:var(--text3);font-size:11px;">(étages, phases, tâches — chacun avec sa propre fiche complète)</span></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">'
+    +(enfants.length?enfants.map(e=>'<span style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="showChantierDetail(\''+e.nom.replace(/'/g,"\\'")+'\')">📁 '+escH(e.nom)+'</span>').join(''):'<span style="font-size:12px;color:var(--text3);">Aucun sous-dossier pour l\'instant.</span>')
+    +'</div>'
+    +'<button class="btn btn-sm" onclick="openNewChantier(\''+nom.replace(/'/g,"\\'")+'\')">+ Ajouter un sous-dossier</button>';
 
   // Section Intervenants (chargement asynchrone depuis GestionHPC, affichée en premier avec un état "chargement")
   const chHeuresPrevues=(()=>{const ch=chantiers.find(x=>x.nom===nom);return ch&&ch.heures?ch.heures:null;})();
@@ -3125,7 +3137,7 @@ async function showChantierDetail(nom){
   document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
   // Reconstruire le contenu du detail
   const detail_body=document.getElementById('chantier-detail-body');
-  if(detail_body) detail_body.innerHTML=kpi+sousChantiersHtml+intervenantsHtml+suiviHtml+tableHtml+exportBtn;
+  if(detail_body) detail_body.innerHTML=kpi+sousDossiersHtml+sousChantiersHtml+intervenantsHtml+suiviHtml+tableHtml+exportBtn;
   d_el.style.display='';
   d_el.dataset.chantierNom=nom;
   d_el.classList.remove('opening');void d_el.offsetWidth;d_el.classList.add('opening');
@@ -3489,9 +3501,27 @@ async function downloadEtiquettes(){
   showToast('✅ PNG téléchargé ('+arts.length+' étiquette(s))');
 }
 function exportChantiers(){showToast('Export non disponible');}
-function openNewChantier(){openModal('modal-chantier');}
-function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';document.getElementById('chantier-heures').value=c.heures||'';openModal('modal-chantier');}
-async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();const heures=parseFloat(document.getElementById('chantier-heures').value)||0;if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1){l[i]={...l[i],nom,desc,heures};}else{l.push({nom,desc,heures});}await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistré');}
+function openNewChantier(parentNom){
+  const selP=document.getElementById('chantier-parent');
+  if(selP){
+    selP.innerHTML='<option value="">— Aucun (chantier principal) —</option>';
+    chantiers.filter(c=>!c.archived&&!c.parent).forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selP.appendChild(o);});
+    selP.value=parentNom||'';
+  }
+  document.getElementById('chantier-name').value='';
+  document.getElementById('chantier-desc').value='';
+  document.getElementById('chantier-heures').value='';
+  openModal('modal-chantier');
+}
+function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  const selP=document.getElementById('chantier-parent');
+  if(selP){
+    selP.innerHTML='<option value="">— Aucun (chantier principal) —</option>';
+    chantiers.filter(x=>!x.archived&&!x.parent&&x.nom!==nom).forEach(x=>{const o=document.createElement('option');o.value=x.nom;o.textContent=x.nom;selP.appendChild(o);});
+    selP.value=c.parent||'';
+  }
+  document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';document.getElementById('chantier-heures').value=c.heures||'';openModal('modal-chantier');}
+async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();const heures=parseFloat(document.getElementById('chantier-heures').value)||0;const parent=document.getElementById('chantier-parent')?.value||null;if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1){l[i]={...l[i],nom,desc,heures,parent:parent||null};}else{l.push({nom,desc,heures,parent:parent||null});}await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistré');}
 async function deleteChantier(nom){if(!confirm('Supprimer?'))return;const l=chantiers.filter(c=>c.nom!==nom);await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;renderChantiers();showToast('Supprime');}
 let etiqSelectedCat='';let etiqSelected=new Set();function renderAlertes(){
   const alerts=getAlerts();
