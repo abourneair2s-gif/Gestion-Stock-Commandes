@@ -3048,7 +3048,9 @@ async function showChantierDetail(nom){
   const enfants=chantiers.filter(x=>x.parent===nom&&!x.archived).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
   const sousDossiersHtml='<div style="font-weight:700;font-size:13px;margin-bottom:8px;">📂 Sous-dossiers <span style="font-weight:400;color:var(--text3);font-size:11px;">(étages, phases, tâches — chacun avec sa propre fiche complète)</span></div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">'
-    +(enfants.length?enfants.map(e=>'<span style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="showChantierDetail(\''+e.nom.replace(/'/g,"\\'")+'\')">📁 '+escH(e.nom)+'</span>').join(''):'<span style="font-size:12px;color:var(--text3);">Aucun sous-dossier pour l\'instant.</span>')
+    +(enfants.length?enfants.map(e=>'<span style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:6px 10px;font-size:12.5px;font-weight:600;">'
+      +'<span style="cursor:pointer;" onclick="showChantierDetail(\''+e.nom.replace(/'/g,"\\'")+'\')">📁 '+escH(e.nom)+'</span>'
+      +' <a href="#" onclick="event.preventDefault();deleteSousDossier(\''+e.nom.replace(/'/g,"\\'")+'\',\''+nom.replace(/'/g,"\\'")+'\')" style="color:var(--red);margin-left:6px;font-weight:700;">×</a></span>').join(''):'<span style="font-size:12px;color:var(--text3);">Aucun sous-dossier pour l\'instant.</span>')
     +'</div>'
     +'<button class="btn btn-sm" onclick="openNewChantier(\''+nom.replace(/'/g,"\\'")+'\')">+ Ajouter un sous-dossier</button>';
 
@@ -3524,6 +3526,15 @@ function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;
   document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';document.getElementById('chantier-heures').value=c.heures||'';openModal('modal-chantier');}
 async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();const heures=parseFloat(document.getElementById('chantier-heures').value)||0;const parent=document.getElementById('chantier-parent')?.value||null;if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1){l[i]={...l[i],nom,desc,heures,parent:parent||null};}else{l.push({nom,desc,heures,parent:parent||null});}await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistré');}
 async function deleteChantier(nom){if(!confirm('Supprimer?'))return;const l=chantiers.filter(c=>c.nom!==nom);await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;renderChantiers();showToast('Supprime');}
+async function deleteSousDossier(nom,parentNom){
+  if(!confirm('Supprimer le sous-dossier "'+nom+'" ?'))return;
+  const l=chantiers.filter(c=>c.nom!==nom);
+  await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});
+  chantiers=l;
+  renderChantiers();
+  showToast('Sous-dossier supprimé');
+  showChantierDetail(parentNom);
+}
 let etiqSelectedCat='';let etiqSelected=new Set();function renderAlertes(){
   const alerts=getAlerts();
   // Remplacer toute la zone alertes par un rendu autonome (pas de table vide cachée)
