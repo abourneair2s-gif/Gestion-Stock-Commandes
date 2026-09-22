@@ -325,6 +325,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <button class="nav-btn" onclick="showPage('retours',this)" data-page="retours"><span class="nav-icon">↩️</span>Retour articles</button>
   <button class="nav-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="nav-icon">🏗</span>Chantiers</button>
   <button class="nav-btn admin-only" onclick="showPage('location',this)" data-page="location"><span class="nav-icon">🚜</span>Location matériel</button>
+  <button class="nav-btn admin-only" onclick="showPage('reception',this)" data-page="reception"><span class="nav-icon">📥</span>Réception stock</button>
   <div class="sb-section">Admin</div>
   <button class="nav-btn" onclick="showPage('alertes',this)" data-page="alertes"><span class="nav-icon">🔔</span>Alertes <span class="badge-sb" id="sb-alert-count" style="display:none">0</span></button>
   <button class="nav-btn" onclick="showPage('historique',this)" data-page="historique"><span class="nav-icon">📜</span>Historique</button>
@@ -350,6 +351,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <button class="mob-btn" onclick="showPage('retours',this)" data-page="retours"><span class="mob-btn-icon">↩️</span>Retour</button>
     <button class="mob-btn" onclick="showPage('chantiers',this)" data-page="chantiers"><span class="mob-btn-icon">🏗</span>Chantiers</button>
     <button class="mob-btn admin-only" onclick="showPage('location',this)" data-page="location"><span class="mob-btn-icon">🚜</span>Location</button>
+    <button class="mob-btn admin-only" onclick="showPage('reception',this)" data-page="reception"><span class="mob-btn-icon">📥</span>Réception</button>
     <button class="mob-btn" onclick="showPage('pareto',this)" data-page="pareto"><span class="mob-btn-icon">📈</span>Pareto</button>
     <button class="mob-btn" onclick="showPage('etiquettes',this)" data-page="etiquettes"><span class="mob-btn-icon">🏷</span>Étiquettes</button>
     <button class="mob-btn admin-only" onclick="lockAdminAccess()"><span class="mob-btn-icon">🔒</span>Déconnexion</button>
@@ -662,6 +664,25 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <table><thead><tr><th>Date</th><th>Chantier</th><th>Demandeur</th><th>Matériel</th><th>Fournisseur</th><th>Coût</th><th>Notes</th><th></th></tr></thead>
     <tbody id="locations-table"></tbody></table>
   </div>
+</div>
+
+<!-- RECEPTION STOCK PAGE (entree en masse, sans passer article par article) -->
+<div class="page" id="page-reception">
+  <div class="section-header">
+    <div class="section-title">📥 Réception de commande fournisseur</div>
+  </div>
+  <div class="form-grid col2" style="margin-bottom:12px;">
+    <div class="form-row"><label class="form-label">Fournisseur (optionnel)</label><input type="text" id="recep-fournisseur" placeholder="Ex: Kiloutou, Wurth, Lindab..."></div>
+    <div class="form-row"><label class="form-label">N° bon de livraison / commande (optionnel)</label><input type="text" id="recep-bl" placeholder="Ex: BL-2026-0451"></div>
+  </div>
+  <div class="form-row" style="position:relative;">
+    <label class="form-label">Ajouter un article</label>
+    <input type="text" id="recep-search" placeholder="Taper référence, catégorie ou diamètre…" oninput="filterRecepSearch(this.value)" autocomplete="off">
+    <div id="recep-search-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);max-height:220px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+  </div>
+  <div id="recep-items-list" style="margin:14px 0;"></div>
+  <div id="recep-items-empty" style="color:var(--text3);font-size:13px;padding:12px 0;">Aucun article ajouté pour l'instant — recherchez une référence ci-dessus.</div>
+  <button class="btn btn-primary" onclick="validerReception()" style="width:100%;">✅ Valider la réception (ajoute tout au stock d'un coup)</button>
 </div>
 
 <!-- Modal Location matériel -->
@@ -1893,7 +1914,7 @@ function showToast(msg, duration=3500) {
 // ==================== NAVIGATION ====================
 function showPage(page,el){
   // Sécurité : bloquer l'accès direct aux pages admin en mode client, même via appel JS direct
-  const adminOnlyPages=['categories','parametres','familles','historique','pareto','alertes','etiquettes','dashboard','scan','chantiers','inventaire','retours','location'];
+  const adminOnlyPages=['categories','parametres','familles','historique','pareto','alertes','etiquettes','dashboard','scan','chantiers','inventaire','retours','location','reception'];
   if(typeof CLIENT_MODE!=='undefined'&&CLIENT_MODE&&adminOnlyPages.includes(page)){
     page='commandes';el=document.querySelector('.nav-btn[data-page="commandes"]');
   }
@@ -1924,7 +1945,7 @@ function showPage(page,el){
   },10);
   const titles={dashboard:'Tableau de bord',stock:'Articles & Stock',pareto:'Analyse Pareto (80/20)',
     scan:'Scanner QR',commandes:'Commandes chantiers',alertes:'Alertes de stock',
-    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres',familles:'Familles & Sous-familles',inventaire:'Saisie d\'inventaire',retours:'Retour articles',location:'Location matériel'};
+    chantiers:'Suivi par chantier',etiquettes:'Étiquettes QR',historique:'Historique des mouvements',categories:'Gestion des catégories',parametres:'Paramètres',familles:'Familles & Sous-familles',inventaire:'Saisie d\'inventaire',retours:'Retour articles',location:'Location matériel',reception:'Réception stock'};
   document.getElementById('topbar-title').textContent=titles[page]||page;
   const ab=document.getElementById('topbar-action');
   if(page==='stock'){ab.style.display='none';}
@@ -1933,7 +1954,7 @@ function showPage(page,el){
   else ab.style.display='none';
   const renders={dashboard:renderDashboard,stock:renderStock,pareto:renderPareto,
     commandes:renderCommandes,chantiers:renderChantiers,etiquettes:renderEtiquettes,alertes:renderAlertes,historique:renderHistorique,
-    categories:renderCategories,parametres:renderParams,familles:renderFamillesPage,inventaire:renderInventaire,retours:renderRetoursPage,location:renderLocations};
+    categories:renderCategories,parametres:renderParams,familles:renderFamillesPage,inventaire:renderInventaire,retours:renderRetoursPage,location:renderLocations,reception:renderRecepItems};
   if(renders[page])renders[page]();
   if(page!=='scan'){stopQRScan();stopCmdQR();stopRetourQR();}
 }
@@ -2976,6 +2997,89 @@ function chantierCardHTML(c,archived,idx){
       ${archived?'<span class="badge-archived" style="margin-top:6px;display:inline-block;">Archivé</span>':''}
     </div>
   </div>`;
+}
+let recepItems=[];
+function filterRecepSearch(val){
+  const dd=document.getElementById('recep-search-dropdown');if(!dd)return;
+  const v=val.toLowerCase().trim();
+  if(!v){dd.style.display='none';return;}
+  const res=stock.filter(a=>a.id.toLowerCase().includes(v)||a.categorie.toLowerCase().includes(v)||String(a.diametre).includes(v)).slice(0,15);
+  if(!res.length){dd.innerHTML='<div style="padding:10px 12px;color:var(--text3);font-size:12px;">Aucun résultat.</div>';dd.style.display='';return;}
+  dd.innerHTML=res.map(a=>`<div onclick="addRecepItem('${a.id}')" style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
+    <code style="flex:1;font-size:12px;">${a.id}</code>
+    <span style="font-size:11px;color:var(--text2);">${a.categorie} Ø${a.diametre}</span>
+    <span style="font-size:11px;color:var(--text3);">stock actuel: ${a.stock}</span>
+  </div>`).join('');
+  dd.style.display='';
+}
+function addRecepItem(id){
+  document.getElementById('recep-search-dropdown').style.display='none';
+  const s=document.getElementById('recep-search');if(s)s.value='';
+  const existing=recepItems.find(i=>i.id===id);
+  if(existing){existing.qty+=1;}else{recepItems.push({id,qty:1});}
+  renderRecepItems();
+}
+function changeRecepQty(idx,delta){
+  const it=recepItems[idx];if(!it)return;
+  it.qty=Math.max(1,it.qty+delta);
+  renderRecepItems();
+}
+function setRecepQty(idx,val){
+  const it=recepItems[idx];if(!it)return;
+  it.qty=Math.max(1,parseInt(val,10)||1);
+  renderRecepItems();
+}
+function removeRecepItem(idx){
+  recepItems.splice(idx,1);
+  renderRecepItems();
+}
+function renderRecepItems(){
+  const list=document.getElementById('recep-items-list');
+  const empty=document.getElementById('recep-items-empty');
+  if(!list)return;
+  if(empty)empty.style.display=recepItems.length?'none':'';
+  list.innerHTML=recepItems.map((item,i)=>{
+    const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:0};
+    return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;">
+      <code style="font-size:12px;font-weight:700;flex:1;">${item.id}</code>
+      <span style="font-size:11px;color:var(--text2);">${art.categorie} Ø${art.diametre}</span>
+      <span style="font-size:11px;color:var(--text3);">stock actuel: ${art.stock}</span>
+      <button onclick="changeRecepQty(${i},-1)" style="width:26px;height:26px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">−</button>
+      <input type="number" min="1" value="${item.qty}" onchange="setRecepQty(${i},this.value)" style="width:60px;text-align:center;">
+      <button onclick="changeRecepQty(${i},1)" style="width:26px;height:26px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">+</button>
+      <button onclick="removeRecepItem(${i})" style="color:var(--red);border:none;background:none;cursor:pointer;font-size:16px;padding:0 4px;">×</button>
+    </div>`;
+  }).join('');
+}
+async function validerReception(){
+  if(!recepItems.length){showToast('⚠ Ajoutez au moins un article');return;}
+  const fournisseur=document.getElementById('recep-fournisseur')?.value?.trim()||'';
+  const bl=document.getElementById('recep-bl')?.value?.trim()||'';
+  const noteBase='Réception'+(fournisseur?' — '+fournisseur:'')+(bl?' (BL '+bl+')':'');
+  if(!confirm('Valider la réception de '+recepItems.length+' article(s) et les ajouter au stock ?'))return;
+  showToast('⏳ Réception en cours…');
+  let erreurs=0;
+  for(const item of recepItems){
+    const art=stock.find(a=>a.id===item.id);
+    if(!art){erreurs++;continue;}
+    const fresh=await db.from('stock').select('stock').eq('id',item.id).single();
+    const dispo=(!fresh.error&&fresh.data)?fresh.data.stock:art.stock;
+    const newStock=dispo+item.qty;
+    const upd=await db.from('stock').update({stock:newStock}).eq('id',item.id);
+    if(upd.error){erreurs++;continue;}
+    art.stock=newStock;
+    await db.from('historique').insert({
+      type:'in',article_id:item.id,categorie:art.categorie,diametre:art.diametre,
+      qty:item.qty,new_stock:newStock,equipe:fournisseur||'Réception',note:noteBase
+    });
+  }
+  recepItems=[];
+  renderRecepItems();
+  document.getElementById('recep-fournisseur').value='';
+  document.getElementById('recep-bl').value='';
+  renderStock();updateBadges();
+  if(erreurs>0)showToast('⚠ Réception terminée avec '+erreurs+' erreur(s)');
+  else showToast('✅ Réception enregistrée, stock mis à jour');
 }
 function renderLocations(){
   const tbody=document.getElementById('locations-table');
