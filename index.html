@@ -675,6 +675,11 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <div class="form-row"><label class="form-label">Fournisseur (optionnel)</label><input type="text" id="recep-fournisseur" placeholder="Ex: Kiloutou, Wurth, Lindab..."></div>
     <div class="form-row"><label class="form-label">N° bon de livraison / commande (optionnel)</label><input type="text" id="recep-bl" placeholder="Ex: BL-2026-0451"></div>
   </div>
+  <div class="form-row">
+    <label class="form-label">Destination</label>
+    <select id="recep-chantier" onchange="onRecepChantierChange()"><option value="">📦 Dépôt (ajoute au stock normalement)</option></select>
+    <div id="recep-chantier-hint" style="font-size:11px;color:var(--amber);margin-top:4px;display:none;">⚠ Livraison directe sur chantier : le stock du dépôt ne bougera pas, mais la dépense sera bien comptabilisée pour ce chantier.</div>
+  </div>
   <div class="form-row" style="position:relative;">
     <label class="form-label">Ajouter un article</label>
     <input type="text" id="recep-search" placeholder="Taper référence, catégorie ou diamètre…" oninput="filterRecepSearch(this.value)" autocomplete="off">
@@ -682,7 +687,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   </div>
   <div id="recep-items-list" style="margin:14px 0;"></div>
   <div id="recep-items-empty" style="color:var(--text3);font-size:13px;padding:12px 0;">Aucun article ajouté pour l'instant — recherchez une référence ci-dessus.</div>
-  <button class="btn btn-primary" onclick="validerReception()" style="width:100%;">✅ Valider la réception (ajoute tout au stock d'un coup)</button>
+  <button class="btn btn-primary" id="recep-submit-btn" onclick="validerReception()" style="width:100%;">✅ Valider la réception (ajoute tout au stock d'un coup)</button>
 </div>
 
 <!-- Modal Location matériel -->
@@ -2999,6 +3004,13 @@ function chantierCardHTML(c,archived,idx){
   </div>`;
 }
 let recepItems=[];
+function onRecepChantierChange(){
+  const val=document.getElementById('recep-chantier')?.value||'';
+  const hint=document.getElementById('recep-chantier-hint');
+  const btn=document.getElementById('recep-submit-btn');
+  if(hint)hint.style.display=val?'':'none';
+  if(btn)btn.textContent=val?'✅ Valider la livraison directe sur "'+val+'" (stock dépôt inchangé)':'✅ Valider la réception (ajoute tout au stock d\'un coup)';
+}
 function filterRecepSearch(val){
   const dd=document.getElementById('recep-search-dropdown');if(!dd)return;
   const v=val.toLowerCase().trim();
@@ -3037,6 +3049,13 @@ function renderRecepItems(){
   const list=document.getElementById('recep-items-list');
   const empty=document.getElementById('recep-items-empty');
   if(!list)return;
+  const selC=document.getElementById('recep-chantier');
+  if(selC){
+    const current=selC.value;
+    selC.innerHTML='<option value="">📦 Dépôt (ajoute au stock normalement)</option>'
+      +chantiers.filter(c=>!c.archived).map(c=>'<option value="'+escH(c.nom)+'">🏗 '+escH(c.nom)+' (livraison directe)</option>').join('');
+    selC.value=current;
+  }
   if(empty)empty.style.display=recepItems.length?'none':'';
   list.innerHTML=recepItems.map((item,i)=>{
     const art=stock.find(a=>a.id===item.id)||{categorie:'?',diametre:'?',stock:0};
@@ -3055,31 +3074,45 @@ async function validerReception(){
   if(!recepItems.length){showToast('⚠ Ajoutez au moins un article');return;}
   const fournisseur=document.getElementById('recep-fournisseur')?.value?.trim()||'';
   const bl=document.getElementById('recep-bl')?.value?.trim()||'';
-  const noteBase='Réception'+(fournisseur?' — '+fournisseur:'')+(bl?' (BL '+bl+')':'');
-  if(!confirm('Valider la réception de '+recepItems.length+' article(s) et les ajouter au stock ?'))return;
-  showToast('⏳ Réception en cours…');
+  const chantierNom=document.getElementById('recep-chantier')?.value||'';
+  const noteBase=(chantierNom?'Livraison directe chantier':'Réception')+(fournisseur?' — '+fournisseur:'')+(bl?' (BL '+bl+')':'');
+  const confirmMsg=chantierNom
+    ? 'Confirmer la livraison directe de '+recepItems.length+' article(s) sur le chantier "'+chantierNom+'" ?\n\nLe stock du dépôt ne sera pas modifié.'
+    : 'Valider la réception de '+recepItems.length+' article(s) et les ajouter au stock ?';
+  if(!confirm(confirmMsg))return;
+  showToast('⏳ Traitement en cours…');
   let erreurs=0;
   for(const item of recepItems){
     const art=stock.find(a=>a.id===item.id);
     if(!art){erreurs++;continue;}
-    const fresh=await db.from('stock').select('stock').eq('id',item.id).single();
-    const dispo=(!fresh.error&&fresh.data)?fresh.data.stock:art.stock;
-    const newStock=dispo+item.qty;
-    const upd=await db.from('stock').update({stock:newStock}).eq('id',item.id);
-    if(upd.error){erreurs++;continue;}
-    art.stock=newStock;
-    await db.from('historique').insert({
-      type:'in',article_id:item.id,categorie:art.categorie,diametre:art.diametre,
-      qty:item.qty,new_stock:newStock,equipe:fournisseur||'Réception',note:noteBase
-    });
+    if(chantierNom){
+      // Livraison directe chantier : ne touche pas au stock du dépôt, juste tracé pour le chantier
+      await db.from('historique').insert({
+        type:'out',article_id:item.id,categorie:art.categorie,diametre:art.diametre,
+        qty:item.qty,new_stock:art.stock,equipe:fournisseur||'Réception',note:noteBase,chantier:chantierNom
+      });
+    }else{
+      const fresh=await db.from('stock').select('stock').eq('id',item.id).single();
+      const dispo=(!fresh.error&&fresh.data)?fresh.data.stock:art.stock;
+      const newStock=dispo+item.qty;
+      const upd=await db.from('stock').update({stock:newStock}).eq('id',item.id);
+      if(upd.error){erreurs++;continue;}
+      art.stock=newStock;
+      await db.from('historique').insert({
+        type:'in',article_id:item.id,categorie:art.categorie,diametre:art.diametre,
+        qty:item.qty,new_stock:newStock,equipe:fournisseur||'Réception',note:noteBase
+      });
+    }
   }
   recepItems=[];
   renderRecepItems();
   document.getElementById('recep-fournisseur').value='';
   document.getElementById('recep-bl').value='';
+  document.getElementById('recep-chantier').value='';
+  onRecepChantierChange();
   renderStock();updateBadges();
-  if(erreurs>0)showToast('⚠ Réception terminée avec '+erreurs+' erreur(s)');
-  else showToast('✅ Réception enregistrée, stock mis à jour');
+  if(erreurs>0)showToast('⚠ Terminé avec '+erreurs+' erreur(s)');
+  else showToast(chantierNom?'✅ Livraison directe enregistrée pour "'+chantierNom+'"':'✅ Réception enregistrée, stock mis à jour');
 }
 function renderLocations(){
   const tbody=document.getElementById('locations-table');
