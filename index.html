@@ -1598,7 +1598,7 @@ function openCmdModal(asClient){
   const aLivrerDef=document.getElementById('cmd-a-livrer');if(aLivrerDef)aLivrerDef.checked=true;
   const dejaRecupDef=document.getElementById('cmd-deja-recupere');if(dejaRecupDef)dejaRecupDef.checked=false;
   updateAdminFlagBox('cmd-a-livrer-box',true);updateAdminFlagBox('cmd-deja-recupere-box',false);
-  const numFld=document.getElementById('cmd-num');if(numFld)numFld.value=(cmdCounter||0)+1;
+  const numFld=document.getElementById('cmd-num');if(numFld){numFld.value=(cmdCounter||0)+1;numFld.dataset.autofill=numFld.value;}
   const fraisGestFld=document.getElementById('cmd-frais-gestion');if(fraisGestFld)fraisGestFld.value='';
   const modeFactFld=document.getElementById('cmd-mode-facturation');if(modeFactFld)modeFactFld.value=cmdActingAsClient?'vente':'achat';
   const billingFields=document.getElementById('cmd-billing-fields');if(billingFields)billingFields.style.display=cmdActingAsClient?'':'none';
@@ -5183,10 +5183,15 @@ async function saveCommande(){
       if(chosen!=='__keep__'){statutOverride=chosen;restockNeeded=true;originalForRestock=original;}
     }
   }else{
-    // Relire le compteur en base au moment de l'enregistrement pour limiter les collisions entre sessions
+    // Relire le compteur en base au moment de l'enregistrement pour limiter les collisions entre sessions.
+    // On ignore la valeur du champ si c'est encore la pré-remplissage automatique (potentiellement obsolète) —
+    // on ne respecte une saisie manuelle que si elle diffère de ce qui avait été suggéré à l'ouverture.
     const{data:cfgRow}=await db.from('config').select('value').eq('key','cmd_counter').single();
     const freshCounter=cfgRow?.value??cmdCounter??0;
-    num=(!CLIENT_MODE&&numFieldVal>0)?numFieldVal:freshCounter+1;
+    const numFld=document.getElementById('cmd-num');
+    const autofillVal=parseInt(numFld?.dataset?.autofill,10);
+    const isManualOverride=!CLIENT_MODE&&numFieldVal>0&&numFieldVal!==autofillVal;
+    num=isManualOverride?numFieldVal:freshCounter+1;
   }
   const source=CLIENT_MODE?'client':'admin';
   const deviceId=CLIENT_MODE?getClientDeviceId():null;
