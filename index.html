@@ -2449,14 +2449,18 @@ async function saveRectOrder(){
   const cadre=document.getElementById('rect-cadre')?.value||null;
   const emboiture=t.emboiture?(document.getElementById('rect-emboiture')?.value||null):null;
   const manchon=t.manchon?(document.getElementById('rect-manchon')?.value||null):null;
-  const payload={chantier_nom:chantier,demandeur,type_piece:type,sous_type:sousType,cotes,quantite,cadre,emboiture,manchon,description:description||null,photo_urls:_rectPhotoUrls.length?_rectPhotoUrls:null,statut:'en_attente'};
+  const{data:cfgRow}=await db.from('config').select('value').eq('key','rect_counter').single();
+  const freshCounter=cfgRow?.value??0;
+  const num=freshCounter+1;
+  const payload={num,chantier_nom:chantier,demandeur,type_piece:type,sous_type:sousType,cotes,quantite,cadre,emboiture,manchon,description:description||null,photo_urls:_rectPhotoUrls.length?_rectPhotoUrls:null,statut:'en_attente'};
   const{error}=await db.from('commandes_rectangulaires').insert(payload);
   if(error){showToast('❌ Erreur : '+error.message);return;}
+  await db.from('config').upsert({key:'rect_counter',value:num},{onConflict:'key'});
   closeModal('modal-rect');
   const{data}=await db.from('commandes_rectangulaires').select('*').order('created_at',{ascending:false});
   if(data)rectOrders=data;
   renderRectOrders();
-  showToast('✅ Demande envoyée');
+  showToast('✅ Demande CR'+String(num).padStart(3,'0')+' envoyée');
 }
 async function toggleRectStatut(id){
   const r=rectOrders.find(x=>x.id===id);if(!r)return;
@@ -2495,7 +2499,7 @@ function renderRectOrders(){
       +(optsStr?'<div style="font-size:11px;color:var(--text3);">'+escH(optsStr)+'</div>':'')
       +'</div></div>':'';
     return'<div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid '+LISERE[i%LISERE.length]+';border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;font-size:12.5px;'+(traitee?'opacity:.6;':'')+'">'
-      +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span style="color:var(--text3);font-size:11px;"><strong style="color:var(--text2);">'+escH(r.demandeur||'')+'</strong> — '+escH(r.chantier_nom||'')+' — '+date+(traitee?' — <span style="color:var(--green-dark);font-weight:700;">✓ Traitée</span>':'')+'</span>'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span style="color:var(--text3);font-size:11px;">'+(r.num?'<strong style="color:var(--purple);">CR'+String(r.num).padStart(3,'0')+'</strong> — ':'')+'<strong style="color:var(--text2);">'+escH(r.demandeur||'')+'</strong> — '+escH(r.chantier_nom||'')+' — '+date+(traitee?' — <span style="color:var(--green-dark);font-weight:700;">✓ Traitée</span>':'')+'</span>'
       +'<span style="white-space:nowrap;"><a href="#" onclick="event.preventDefault();printRectOrder(\''+r.id+'\')" style="color:var(--blue);font-size:11px;font-weight:600;margin-right:10px;">🖨 Imprimer</a>'
       +'<a href="#" onclick="event.preventDefault();toggleRectStatut(\''+r.id+'\')" style="color:'+(traitee?'var(--text3)':'var(--green-dark)')+';font-size:11px;font-weight:600;margin-right:10px;">'+(traitee?'↺ Rouvrir':'✓ Marquer traitée')+'</a>'
       +'<a href="#" onclick="event.preventDefault();deleteRectOrder(\''+r.id+'\')" style="color:var(--red);font-size:11px;">Supprimer</a></span></div>'
@@ -2828,13 +2832,14 @@ function printCmd(id){
 }
 function printRectOrder(id){
   const r=rectOrders.find(x=>x.id===id);if(!r)return;
+  const numLabel=r.num?('CR'+String(r.num).padStart(3,'0')):'';
   const date=r.created_at?new Date(r.created_at).toLocaleString('fr-FR'):'';
   const typeInfo=r.type_piece&&RECT_TYPES[r.type_piece]?RECT_TYPES[r.type_piece]:null;
   const cotesRows=(r.cotes&&Object.keys(r.cotes).length)?Object.entries(r.cotes).map(([k,v])=>`<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:700;">`+k+`</td><td style="padding:6px 10px;border-bottom:1px solid #eee;">`+v+` mm</td></tr>`).join(''):'<tr><td colspan="2" style="padding:6px 10px;color:#999;">Aucune cote renseignee</td></tr>';
   const optsStr=[r.cadre,r.emboiture?'Emboîture '+r.emboiture:'',r.manchon?'Manchon '+r.manchon:'',r.sous_type?'Sous-type '+r.sous_type:''].filter(Boolean).join(' — ');
   const photosHtml=(r.photo_urls&&r.photo_urls.length)?'<div style="margin-top:16px;"><strong>Photos jointes :</strong><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">'+r.photo_urls.map(u=>`<img src="`+u+`" style="width:140px;height:140px;object-fit:cover;border:1px solid #ddd;border-radius:6px;">`).join('')+'</div></div>':'';
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Commande rectangulaire</title>
+  w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Commande rectangulaire`+(numLabel?' '+numLabel:'')+`</title>
   <style>
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px;color:#1a1917;font-size:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
     .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #e8e6e0;}
@@ -2852,7 +2857,7 @@ function printRectOrder(id){
   </style></head><body>
   <div class="header">
     <div class="header-left">
-      <h1>Commande rectangulaire</h1>
+      <h1>Commande rectangulaire`+(numLabel?' — '+numLabel:'')+`</h1>
       <div class="num">`+(typeInfo?typeInfo.label:(r.type_piece||''))+` &nbsp;\u00b7&nbsp; `+date+`</div>
     </div>
     <div class="header-right">
