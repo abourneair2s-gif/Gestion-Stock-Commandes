@@ -713,6 +713,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
       <div id="rect-cotes-zone"></div>
       <div class="form-grid col2">
         <div class="form-row"><label class="form-label">Quantité</label><input type="number" id="rect-quantite" min="1" step="1" value="1"></div>
+        <div class="form-row"><label class="form-label">Coût (€) — optionnel, à valider</label><input type="number" id="rect-cout" min="0" step="0.01" placeholder="Ex: 85"></div>
         <div class="form-row" id="rect-soustype-row" style="display:none;">
           <label class="form-label">Sous-type (voir dessin)</label>
           <select id="rect-soustype"><option value="1">Type 1</option><option value="2">Type 2</option><option value="3">Type 3</option><option value="4">Type 4</option><option value="5">Type 5</option></select>
@@ -2385,6 +2386,7 @@ function openRectModal(){
   const selT=document.getElementById('rect-type');
   if(selT)selT.innerHTML='<option value="">— Sélectionner un type —</option>'+Object.entries(RECT_TYPES).map(([k,v])=>'<option value="'+k+'">'+v.label+'</option>').join('');
   document.getElementById('rect-quantite').value=1;
+  document.getElementById('rect-cout').value='';
   document.getElementById('rect-soustype').value='1';
   document.getElementById('rect-cadre').value='';
   document.getElementById('rect-emboiture').value='';
@@ -2445,6 +2447,7 @@ async function saveRectOrder(){
   const cotes={};
   t.dims.forEach(([key])=>{const v=document.getElementById('rect-cote-'+key)?.value;if(v!=='')cotes[key]=parseFloat(v);});
   const quantite=parseInt(document.getElementById('rect-quantite')?.value,10)||1;
+  const coutRect=parseFloat(document.getElementById('rect-cout')?.value)||0;
   const sousType=t.soustype?document.getElementById('rect-soustype')?.value:null;
   const cadre=document.getElementById('rect-cadre')?.value||null;
   const emboiture=t.emboiture?(document.getElementById('rect-emboiture')?.value||null):null;
@@ -2452,7 +2455,7 @@ async function saveRectOrder(){
   const{data:cfgRow}=await db.from('config').select('value').eq('key','rect_counter').single();
   const freshCounter=cfgRow?.value??0;
   const num=freshCounter+1;
-  const payload={num,chantier_nom:chantier,demandeur,type_piece:type,sous_type:sousType,cotes,quantite,cadre,emboiture,manchon,description:description||null,photo_urls:_rectPhotoUrls.length?_rectPhotoUrls:null,statut:'en_attente'};
+  const payload={num,chantier_nom:chantier,demandeur,type_piece:type,sous_type:sousType,cotes,quantite,cadre,emboiture,manchon,cout:coutRect,description:description||null,photo_urls:_rectPhotoUrls.length?_rectPhotoUrls:null,statut:'en_attente'};
   const{error}=await db.from('commandes_rectangulaires').insert(payload);
   if(error){showToast('❌ Erreur : '+error.message);return;}
   await db.from('config').upsert({key:'rect_counter',value:num},{onConflict:'key'});
@@ -2491,7 +2494,7 @@ function renderRectOrders(){
     const traitee=r.statut==='traitee';
     const typeInfo=r.type_piece&&RECT_TYPES[r.type_piece]?RECT_TYPES[r.type_piece]:null;
     const cotesStr=r.cotes&&Object.keys(r.cotes).length?Object.entries(r.cotes).map(([k,v])=>k+'='+v).join('  ·  '):'';
-    const optsStr=[r.cadre,r.emboiture?'Emboîture '+r.emboiture:'',r.manchon?'Manchon '+r.manchon:'',r.sous_type?'Type '+r.sous_type:''].filter(Boolean).join('  ·  ');
+    const optsStr=[r.cadre,r.emboiture?'Emboîture '+r.emboiture:'',r.manchon?'Manchon '+r.manchon:'',r.sous_type?'Type '+r.sous_type:'',r.cout>0?r.cout.toFixed(2)+' €':''].filter(Boolean).join('  ·  ');
     const typeHtml=r.type_piece?'<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">'
       +(typeInfo?'<div style="width:120px;flex-shrink:0;border:1px solid var(--border);border-radius:6px;background:#fff;padding:2px;">'+renderRectImageWithCotes(r.type_piece,r.cotes)+'</div>':'')
       +'<div><div style="font-weight:700;">'+escH(typeInfo?typeInfo.label:r.type_piece)+(r.quantite>1?' × '+r.quantite:'')+'</div>'
@@ -3212,6 +3215,9 @@ async function deleteLocation(id){
 function getChantierFraisAnnexes(nom){
   return locationsMateriel.filter(l=>l.chantier_nom===nom).reduce((s,l)=>s+(l.cout||0),0);
 }
+function getChantierCoutRect(nom){
+  return rectOrders.filter(r=>r.chantier_nom===nom).reduce((s,r)=>s+(r.cout||0),0);
+}
 function renderChantiers(){
   const actifs=chantiers.filter(c=>!c.archived&&!c.parent).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
   const archives=chantiers.filter(c=>c.archived&&!c.parent).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
@@ -3311,33 +3317,24 @@ async function showChantierDetail(nom){
   const famRows=buildChantierFamRows(d.lignes);
 
   // KPI bar
-  const chPrixVente=(()=>{const ch=chantiers.find(x=>x.nom===nom);return ch&&ch.prix_vente?ch.prix_vente:0;})();
   const fraisAnnexes=getChantierFraisAnnexes(nom);
-  const benef=chPrixVente-d.valAchat-fraisAnnexes;
-  const fmtSigned=v=>{const s=v<0?'-':'';return s+Math.abs(v).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+'\u202f€';};
+  const coutRect=getChantierCoutRect(nom);
   const kpi=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:140px;text-align:center;">
       <div style="font-size:20px;font-weight:700;">${d.qtyTot} <span style="font-size:13px;font-weight:600;color:var(--text3);">unités</span></div>
       <div style="font-size:11px;color:var(--text2);">${d.cmdsApprouv.length} commande(s) validée(s)</div>
     </div>
-    <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:150px;text-align:center;">
-      <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
-        <input type="number" min="0" step="1" value="${chPrixVente||''}" placeholder="0" style="width:90px;padding:3px 6px;font-size:16px;font-weight:700;color:var(--green-dark);text-align:center;background:transparent;border:1px dashed var(--green);" onchange="saveChantierPrixVente('${nom.replace(/'/g,"\\'")}',this.value)" onclick="event.stopPropagation()">
-        <span style="font-size:15px;font-weight:700;color:var(--green-dark);">€</span>
-      </div>
-      <div style="font-size:11px;color:var(--text2);">Prix vendu au client</div>
-    </div>
     <div style="background:var(--red-bg);border:1px solid var(--red);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
       <div style="font-size:18px;font-weight:700;color:var(--red);">${fmtBig(d.valAchat)}</div>
       <div style="font-size:11px;color:var(--text2);">Coût (achat)</div>
     </div>
-    ${fraisAnnexes>0?`<div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;cursor:pointer;" onclick="event.stopPropagation();showPage('location',document.querySelector('[data-page=location]'));">
+    <div style="background:var(--purple-bg);border:1px solid var(--purple);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
+      <div style="font-size:18px;font-weight:700;color:var(--purple);">${fmtBig(coutRect)}</div>
+      <div style="font-size:11px;color:var(--text2);">▭ Coût gaines rectangulaires</div>
+    </div>
+    <div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;cursor:pointer;" onclick="event.stopPropagation();showPage('location',document.querySelector('[data-page=location]'));">
       <div style="font-size:18px;font-weight:700;color:var(--amber);">${fmtBig(fraisAnnexes)}</div>
-      <div style="font-size:11px;color:var(--text2);">🚜 Frais annexes</div>
-    </div>`:''}
-    <div style="background:${benef>=0?'var(--blue-bg)':'var(--red-bg)'};border:1px solid ${benef>=0?'var(--blue)':'var(--red)'};border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
-      <div style="font-size:18px;font-weight:700;color:${benef>=0?'var(--blue)':'var(--red)'};">${chPrixVente?fmtSigned(benef):'—'}</div>
-      <div style="font-size:11px;color:var(--text2);">Bénéfice</div>
+      <div style="font-size:11px;color:var(--text2);">🚜 Coût location matériel/nacelle</div>
     </div>
   </div>`;
 
