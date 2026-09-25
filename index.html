@@ -3810,6 +3810,7 @@ async function downloadEtiquettes(){
 }
 function exportChantiers(){showToast('Export non disponible');}
 function openNewChantier(parentNom){
+  editingChantierNom=null;
   const selP=document.getElementById('chantier-parent');
   if(selP){
     selP.innerHTML='<option value="">— Aucun (chantier principal) —</option>';
@@ -3821,7 +3822,9 @@ function openNewChantier(parentNom){
   document.getElementById('chantier-heures').value='';
   openModal('modal-chantier');
 }
+let editingChantierNom=null;
 function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;
+  editingChantierNom=nom;
   const selP=document.getElementById('chantier-parent');
   if(selP){
     selP.innerHTML='<option value="">— Aucun (chantier principal) —</option>';
@@ -3829,7 +3832,50 @@ function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;
     selP.value=c.parent||'';
   }
   document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';document.getElementById('chantier-heures').value=c.heures||'';openModal('modal-chantier');}
-async function saveChantier(){const nom=document.getElementById('chantier-name').value.trim();const desc=document.getElementById('chantier-desc').value.trim();const heures=parseFloat(document.getElementById('chantier-heures').value)||0;const parent=document.getElementById('chantier-parent')?.value||null;if(!nom)return;let l=[...chantiers];const i=l.findIndex(c=>c.nom===nom);if(i>-1){l[i]={...l[i],nom,desc,heures,parent:parent||null};}else{l.push({nom,desc,heures,parent:parent||null});}await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;closeModal('modal-chantier');renderChantiers();showToast('Chantier enregistré');}
+async function saveChantier(){
+  const nom=document.getElementById('chantier-name').value.trim();
+  const desc=document.getElementById('chantier-desc').value.trim();
+  const heures=parseFloat(document.getElementById('chantier-heures').value)||0;
+  const parent=document.getElementById('chantier-parent')?.value||null;
+  if(!nom)return;
+  const oldNom=editingChantierNom;
+  let l=[...chantiers];
+  const i=oldNom?l.findIndex(c=>c.nom===oldNom):-1;
+  const renaming=oldNom&&oldNom!==nom;
+  if(renaming&&l.some(c=>c.nom===nom)){showToast('⚠ Un chantier porte déjà ce nom');return;}
+  if(i>-1){l[i]={...l[i],nom,desc,heures,parent:parent||null};}else{l.push({nom,desc,heures,parent:parent||null});}
+  if(renaming){
+    // Un chantier référencé par son enfant (parent) ou par un alias (sousChantiers) doit suivre le nouveau nom
+    l=l.map(c=>({
+      ...c,
+      parent:c.parent===oldNom?nom:c.parent,
+      sousChantiers:(c.sousChantiers||[]).map(s=>s===oldNom?nom:s)
+    }));
+  }
+  await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});
+  chantiers=l;
+  if(renaming){
+    showToast('⏳ Mise à jour des données liées…');
+    const tables=[
+      {table:'commandes',col:'chantier'},
+      {table:'historique',col:'chantier'},
+      {table:'chantier_commentaires',col:'chantier_nom'},
+      {table:'locations_materiel',col:'chantier_nom'},
+      {table:'commandes_rectangulaires',col:'chantier_nom'}
+    ];
+    for(const t of tables){
+      try{await db.from(t.table).update({[t.col]:nom}).eq(t.col,oldNom);}catch(e){/* table peut-être absente */}
+    }
+    commandes.forEach(c=>{if(c.chantier===oldNom)c.chantier=nom;});
+    historique.forEach(h=>{if(h.chantier===oldNom)h.chantier=nom;});
+    locationsMateriel.forEach(x=>{if(x.chantier_nom===oldNom)x.chantier_nom=nom;});
+    rectOrders.forEach(x=>{if(x.chantier_nom===oldNom)x.chantier_nom=nom;});
+  }
+  editingChantierNom=null;
+  closeModal('modal-chantier');
+  renderChantiers();renderCommandes();
+  showToast(renaming?'✅ Chantier renommé partout dans l\'appli':'Chantier enregistré');
+}
 async function deleteChantier(nom){if(!confirm('Supprimer?'))return;const l=chantiers.filter(c=>c.nom!==nom);await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;renderChantiers();showToast('Supprime');}
 async function deleteSousDossier(nom,parentNom){
   if(!confirm('Supprimer le sous-dossier "'+nom+'" ?'))return;
