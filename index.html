@@ -3266,7 +3266,8 @@ function toggleChantierRowMenu(ev,nom){
   if(wasVisible&&wasOpenFor===nom){menu.style.display='none';return;}
   const c=chantiers.find(x=>x.nom===nom);if(!c)return;
   const ne=nom.replace(/'/g,"\\'");
-  menu.innerHTML='<a href="#" onclick="event.preventDefault();closeChantierMenus();exportChantierExcel(\''+ne+'\')" class="cmd-menu-item">📥 Export Excel</a>'
+  menu.innerHTML='<a href="#" onclick="event.preventDefault();closeChantierMenus();editChantier(\''+ne+'\')" class="cmd-menu-item">✏ Modifier</a>'
+    +'<a href="#" onclick="event.preventDefault();closeChantierMenus();exportChantierExcel(\''+ne+'\')" class="cmd-menu-item">📥 Export Excel</a>'
     +(c.archived
       ?'<a href="#" onclick="event.preventDefault();closeChantierMenus();desarchiverChantier(\''+ne+'\')" class="cmd-menu-item" style="color:var(--green);">↩ Réactiver</a>'
       :'<a href="#" onclick="event.preventDefault();closeChantierMenus();archiverChantier(\''+ne+'\')" class="cmd-menu-item">📦 Archiver</a>')
@@ -3435,6 +3436,7 @@ async function showChantierDetail(nom){
     const isArc=ch&&ch.archived;
     const ne=nom.replace(/'/g,"\'");
     return`<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+      <button class="btn btn-sm" onclick="editChantier('${ne}')">✏ Modifier</button>
       <button class="btn btn-sm" style="color:var(--amber);border-color:var(--amber);" onclick="openLocationModalForChantier('${ne}')">🚜 + Frais annexe / location</button>
       ${isArc?`<button class="btn btn-sm" style="color:var(--green);border-color:var(--green);" onclick="desarchiverChantier('${ne}')">↩ Réactiver</button>`
              :`<button class="btn btn-sm" onclick="archiverChantier('${ne}')">📦 Archiver ce chantier</button>`}
