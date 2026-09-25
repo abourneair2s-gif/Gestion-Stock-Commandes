@@ -3437,7 +3437,6 @@ async function showChantierDetail(nom){
     const ne=nom.replace(/'/g,"\'");
     return`<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
       <button class="btn btn-sm" onclick="editChantier('${ne}')">✏ Modifier</button>
-      <button class="btn btn-sm" style="color:var(--amber);border-color:var(--amber);" onclick="openLocationModalForChantier('${ne}')">🚜 + Frais annexe / location</button>
       ${isArc?`<button class="btn btn-sm" style="color:var(--green);border-color:var(--green);" onclick="desarchiverChantier('${ne}')">↩ Réactiver</button>`
              :`<button class="btn btn-sm" onclick="archiverChantier('${ne}')">📦 Archiver ce chantier</button>`}
       <button class="btn btn-sm" onclick="exportChantierExcel('${ne}')">📥 Export Excel</button>
