@@ -1235,6 +1235,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <div class="modal-header"><div class="modal-title" id="chantier-modal-title">Nouveau chantier</div></div>
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Nom du chantier</label><input type="text" id="chantier-name" placeholder="ex: Résidence Les Pins, Site A…"></div>
+      <div class="form-row"><label class="form-label">Client (optionnel)</label><input type="text" id="chantier-client" placeholder="ex: Capgemini"></div>
       <div class="form-row"><label class="form-label">Description (optionnel)</label><input type="text" id="chantier-desc" placeholder="Adresse, responsable…"></div>
       <div class="form-row"><label class="form-label">Chantier parent (optionnel)</label>
         <select id="chantier-parent"><option value="">— Aucun (chantier principal) —</option></select>
@@ -3008,6 +3009,7 @@ function chantierCardHTML(c,archived,idx){
     <div class="cc-tab" style="background:${archived?'':col.tab};"></div>
     <div class="cc-body" style="background:${archived?'':col.body};">
       <div class="cc-nom" style="margin-bottom:0;">${escH(c.nom)}</div>
+      ${c.client?'<div style="font-size:11px;opacity:.75;margin-top:2px;">👤 '+escH(c.client)+'</div>':''}
       ${archived?'<span class="badge-archived" style="margin-top:6px;display:inline-block;">Archivé</span>':''}
     </div>
   </div>`;
@@ -3235,7 +3237,7 @@ function renderChantiers(){
     tbody.innerHTML=[...actifs,...archives].map(c=>{
       const d=getChantierData(c.nom);const ne=c.nom.replace(/'/g,"\\'");
       return`<tr style="${c.archived?'opacity:.6;':''}">
-        <td><strong>${escH(c.nom)}</strong>${c.archived?' <span class="badge-archived">Archivé</span>':''}</td>
+        <td><strong>${escH(c.nom)}</strong>${c.archived?' <span class="badge-archived">Archivé</span>':''}${c.client?'<br><span style="font-size:11px;color:var(--text3);">👤 '+escH(c.client)+'</span>':''}</td>
         <td>${d.cmdsApprouv.length}</td><td>${d.mvtsOut.length}</td><td>${d.qtyTot}</td><td style="padding:4px 8px;">
           <input type="number" min="0" step="0.5" value="${c.heures||''}"
             placeholder="—"
@@ -3307,7 +3309,7 @@ function switchChantierTab(tab){
 }
 async function showChantierDetail(nom){
   const d_el=document.getElementById('chantier-detail');if(!d_el)return;
-  document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
+  document.getElementById('chantier-detail-title').textContent='Détail — '+nom+((chantiers.find(x=>x.nom===nom)||{}).client?' ('+(chantiers.find(x=>x.nom===nom)||{}).client+')':'');
   // Marquer carte active
   document.querySelectorAll('.chantier-card').forEach(c=>c.classList.toggle('active',c.dataset.nom===nom));
   const d=getChantierData(nom);
@@ -3443,7 +3445,7 @@ async function showChantierDetail(nom){
     </div>`;
   })()
 
-  document.getElementById('chantier-detail-title').textContent='Détail — '+nom;
+  document.getElementById('chantier-detail-title').textContent='Détail — '+nom+((chantiers.find(x=>x.nom===nom)||{}).client?' ('+(chantiers.find(x=>x.nom===nom)||{}).client+')':'');
   // Reconstruire le contenu du detail
   const detail_body=document.getElementById('chantier-detail-body');
   if(detail_body) detail_body.innerHTML=kpi+sousDossiersHtml+sousChantiersHtml+intervenantsHtml+suiviHtml+tableHtml+exportBtn;
@@ -3819,6 +3821,7 @@ function openNewChantier(parentNom){
     selP.value=parentNom||'';
   }
   document.getElementById('chantier-name').value='';
+  document.getElementById('chantier-client').value='';
   document.getElementById('chantier-desc').value='';
   document.getElementById('chantier-heures').value='';
   openModal('modal-chantier');
@@ -3832,9 +3835,10 @@ function editChantier(nom){const c=chantiers.find(x=>x.nom===nom);if(!c)return;
     chantiers.filter(x=>!x.archived&&!x.parent&&x.nom!==nom).forEach(x=>{const o=document.createElement('option');o.value=x.nom;o.textContent=x.nom;selP.appendChild(o);});
     selP.value=c.parent||'';
   }
-  document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-desc').value=c.desc||'';document.getElementById('chantier-heures').value=c.heures||'';openModal('modal-chantier');}
+  document.getElementById('chantier-name').value=c.nom;document.getElementById('chantier-client').value=c.client||'';document.getElementById('chantier-desc').value=c.desc||'';document.getElementById('chantier-heures').value=c.heures||'';openModal('modal-chantier');}
 async function saveChantier(){
   const nom=document.getElementById('chantier-name').value.trim();
+  const client=document.getElementById('chantier-client').value.trim();
   const desc=document.getElementById('chantier-desc').value.trim();
   const heures=parseFloat(document.getElementById('chantier-heures').value)||0;
   const parent=document.getElementById('chantier-parent')?.value||null;
@@ -3844,7 +3848,7 @@ async function saveChantier(){
   const i=oldNom?l.findIndex(c=>c.nom===oldNom):-1;
   const renaming=oldNom&&oldNom!==nom;
   if(renaming&&l.some(c=>c.nom===nom)){showToast('⚠ Un chantier porte déjà ce nom');return;}
-  if(i>-1){l[i]={...l[i],nom,desc,heures,parent:parent||null};}else{l.push({nom,desc,heures,parent:parent||null});}
+  if(i>-1){l[i]={...l[i],nom,client,desc,heures,parent:parent||null};}else{l.push({nom,client,desc,heures,parent:parent||null});}
   if(renaming){
     // Un chantier référencé par son enfant (parent) ou par un alias (sousChantiers) doit suivre le nouveau nom
     l=l.map(c=>({
