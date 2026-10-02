@@ -2376,11 +2376,12 @@ function onRectTypeChange(){
   if(emboitureRow)emboitureRow.style.display=t.emboiture?'':'none';
   if(manchonRow)manchonRow.style.display=t.manchon?'':'none';
 }
-function openRectModal(){
+function openRectModal(preselectChantier){
   const selC=document.getElementById('rect-chantier');
   if(selC){
     selC.innerHTML='<option value="">— Sélectionner un chantier —</option>';
     chantiers.filter(c=>!c.archived).forEach(c=>{const o=document.createElement('option');o.value=c.nom;o.textContent=c.nom;selC.appendChild(o);});
+    if(preselectChantier)selC.value=preselectChantier;
   }
   const selD=document.getElementById('rect-demandeur');
   if(selD)selD.innerHTML='<option value="">— Qui demande ? —</option>'+Object.values(HPC_EMPLOYES).map(n=>'<option value="'+n+'">'+n+'</option>').join('');
@@ -3331,7 +3332,7 @@ async function showChantierDetail(nom){
       <div style="font-size:18px;font-weight:700;color:var(--red);">${fmtBig(d.valAchat)}</div>
       <div style="font-size:11px;color:var(--text2);">Coût (achat)</div>
     </div>
-    <div style="background:var(--purple-bg);border:1px solid var(--purple);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;">
+    <div style="background:var(--purple-bg);border:1px solid var(--purple);border-radius:var(--radius);padding:10px 16px;flex:1;min-width:120px;text-align:center;cursor:pointer;" onclick="event.stopPropagation();openRectModal('${nom.replace(/'/g,"\\'")}');">
       <div style="font-size:18px;font-weight:700;color:var(--purple);">${fmtBig(coutRect)}</div>
       <div style="font-size:11px;color:var(--text2);">▭ Coût gaines rectangulaires</div>
     </div>
