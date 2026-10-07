@@ -893,7 +893,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-article')">Annuler</button>
-      <button class="btn btn-primary" onclick="saveArticle()">Enregistrer</button>
+      <button class="btn btn-primary" id="btn-save-article" onclick="saveArticle()">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -5652,7 +5652,16 @@ function editArticle(id){
   openModal('modal-article');
 }
 
+let _savingArticle=false;
 async function saveArticle(){
+  if(_savingArticle)return;
+  _savingArticle=true;
+  const btn=document.getElementById('btn-save-article');
+  if(btn){btn.disabled=true;btn.textContent='Enregistrement…';}
+  try{await _saveArticleInner();}
+  finally{_savingArticle=false;if(btn){btn.disabled=false;btn.textContent='Enregistrer';}}
+}
+async function _saveArticleInner(){
   const id=document.getElementById('art-id').value.trim();
   const newId=document.getElementById('art-newid')?.value.trim()||'';
   const artCatVal=document.getElementById('art-cat').value||'';
@@ -5732,16 +5741,28 @@ async function saveArticle(){
   if(isEdit){
     // Si renommage, supprimer l'ancien et insérer le nouveau
     if(newId&&newId!==id){
-      const {error:delErr}=await db.from('stock').delete().eq('id',id);
-      if(delErr){showToast('❌ '+delErr.message);return;}
       const {error:insErr}=await db.from('stock').insert(payload);
-      error=insErr;
+      if(insErr){showToast('❌ '+insErr.message);return;}
+      const {error:delErr}=await db.from('stock').delete().eq('id',id);
+      error=delErr;
     } else {
       const {error:updErr}=await db.from('stock').update(payload).eq('id',id);
       error=updErr;
     }
   } else {
     const {error:insErr}=await db.from('stock').insert(payload);
+    if(insErr&&(insErr.code==='23505'||/duplicate key/i.test(insErr.message||''))){
+      const wasVisible=stock.some(a=>a.id===finalId);
+      const {data:ex}=await db.from('stock').select('*').eq('id',finalId).maybeSingle();
+      if(ex){
+        const {data:all}=await db.from('stock').select('*').order('categorie').order('id');
+        if(all){stock=sortStockArr(all.map(adaptArticle));renderStock();renderDashboard();updateBadges();}
+        const same=ex.categorie===payload.categorie&&String(ex.diametre)===String(payload.diametre)&&ex.stock===payload.stock;
+        if(same){closeModal('modal-article');showToast('✅ Article déjà enregistré');return;}
+        showToast('⚠ La référence "'+finalId+'" existe déjà (catégorie '+ex.categorie+', stock '+ex.stock+')'+(wasVisible?'':' — elle ne s\'affichait pas dans la liste, qui vient d\'être rechargée'));
+        return;
+      }
+    }
     error=insErr;
   }
   if(error){showToast('❌ '+error.message);return;}
