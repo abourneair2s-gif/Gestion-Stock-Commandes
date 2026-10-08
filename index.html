@@ -499,6 +499,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
       <div style="margin-top:20px;" class="admin-only">
         <div class="section-header">
           <div class="section-title" style="font-size:13px;color:var(--text2);">▭ Commandes rectangulaires (demandes spéciales)</div>
+          <button class="btn btn-sm" onclick="openRectManuelModal()">+ Ajouter un montant (commande déjà passée)</button>
         </div>
         <div id="rect-list"></div>
       </div>
@@ -745,6 +746,32 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-rect')" style="flex:1;">Annuler</button>
       <button class="btn btn-primary" onclick="saveRectOrder()" style="flex:1;">Soumettre la demande</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-rect-manuel">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">▭ Ajouter un montant (commande déjà passée)</div>
+      <button class="btn btn-xs" onclick="closeModal('modal-rect-manuel')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Enregistre le coût d'une commande de gaines rectangulaires déjà passée chez le fournisseur, sans recréer la demande (type de pièce, cotes…). Le montant est compté dans « Coût gaines rectangulaires » du chantier.</div>
+      <div class="form-row"><label class="form-label">Chantier</label>
+        <select id="rm-chantier"><option value="">— Sélectionner un chantier —</option></select>
+      </div>
+      <div class="form-grid col2">
+        <div class="form-row"><label class="form-label">Montant HT (€)</label><input type="number" id="rm-montant" min="0" step="0.01" placeholder="Ex: 450"></div>
+        <div class="form-row"><label class="form-label">Date de la commande</label><input type="date" id="rm-date"></div>
+      </div>
+      <div class="form-row"><label class="form-label">N° du bon fournisseur (optionnel)</label><input type="text" id="rm-ref" placeholder="Ex: C26-OCA-184"></div>
+      <div class="form-row"><label class="form-label">Précision (optionnel)</label><input type="text" id="rm-precision" placeholder="Ex: R+1 — 2 transfos"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-rect-manuel')" style="flex:1;">Fermer</button>
+      <button class="btn" onclick="saveRectManuel(true)" style="flex:1;">Enregistrer + nouveau</button>
+      <button class="btn btn-primary" onclick="saveRectManuel(false)" style="flex:1;">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -2481,6 +2508,46 @@ async function deleteRectOrder(id){
   renderRectOrders();
   showToast('Supprimé');
 }
+let _savingRectManuel=false;
+function openRectManuelModal(){
+  const sel=document.getElementById('rm-chantier');
+  if(sel){
+    sel.innerHTML='<option value="">— Sélectionner un chantier —</option>'
+      +chantiers.filter(c=>!c.archived).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(c=>'<option value="'+escH(c.nom)+'">'+escH(c.nom)+'</option>').join('');
+  }
+  const d=new Date();
+  document.getElementById('rm-date').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  ['rm-montant','rm-ref','rm-precision'].forEach(id=>{document.getElementById(id).value='';});
+  openModal('modal-rect-manuel');
+}
+async function saveRectManuel(keepOpen){
+  if(_savingRectManuel)return;
+  const chantier=document.getElementById('rm-chantier')?.value||'';
+  const montant=parseFloat(document.getElementById('rm-montant')?.value);
+  const dateVal=document.getElementById('rm-date')?.value||'';
+  const ref=document.getElementById('rm-ref')?.value?.trim()||'';
+  const prec=document.getElementById('rm-precision')?.value?.trim()||'';
+  if(!chantier){showToast('⚠ Sélectionnez un chantier');return;}
+  if(!(montant>0)){showToast('⚠ Renseignez le montant');return;}
+  _savingRectManuel=true;
+  try{
+    const description=[ref?('Bon '+ref):'',prec].filter(Boolean).join(' — ')||null;
+    const payload={chantier_nom:chantier,demandeur:'Saisie manuelle',description,cout:montant,statut:'traitee'};
+    if(dateVal)payload.created_at=new Date(dateVal+'T12:00:00').toISOString();
+    const{error}=await db.from('commandes_rectangulaires').insert(payload);
+    if(error){showToast('❌ Erreur : '+error.message);return;}
+    const{data}=await db.from('commandes_rectangulaires').select('*').order('created_at',{ascending:false});
+    if(data)rectOrders=data;
+    renderRectOrders();
+    showToast('✅ '+montant.toFixed(2).replace('.',',')+' € ajouté à '+chantier);
+    if(keepOpen){
+      ['rm-montant','rm-ref','rm-precision'].forEach(id=>{document.getElementById(id).value='';});
+      document.getElementById('rm-montant').focus();
+    }else{
+      closeModal('modal-rect-manuel');
+    }
+  }finally{_savingRectManuel=false;}
+}
 function renderRectOrders(){
   const list=document.getElementById('rect-list');
   if(!list)return;
@@ -2505,10 +2572,11 @@ function renderRectOrders(){
       +'</div></div>':'';
     return'<div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid '+LISERE[i%LISERE.length]+';border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;font-size:12.5px;'+(traitee?'opacity:.6;':'')+'">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span style="color:var(--text3);font-size:11px;">'+(r.num?'<strong style="color:var(--purple);">CR'+String(r.num).padStart(3,'0')+'</strong> — ':'')+'<strong style="color:var(--text2);">'+escH(r.demandeur||'')+'</strong> — '+escH(r.chantier_nom||'')+' — '+date+(traitee?' — <span style="color:var(--green-dark);font-weight:700;">✓ Traitée</span>':'')+'</span>'
-      +'<span style="white-space:nowrap;"><a href="#" onclick="event.preventDefault();printRectOrder(\''+r.id+'\')" style="color:var(--blue);font-size:11px;font-weight:600;margin-right:10px;">🖨 Imprimer</a>'
+      +'<span style="white-space:nowrap;">'+(r.type_piece?'<a href="#" onclick="event.preventDefault();printRectOrder(\''+r.id+'\')" style="color:var(--blue);font-size:11px;font-weight:600;margin-right:10px;">🖨 Imprimer</a>':'')
       +'<a href="#" onclick="event.preventDefault();toggleRectStatut(\''+r.id+'\')" style="color:'+(traitee?'var(--text3)':'var(--green-dark)')+';font-size:11px;font-weight:600;margin-right:10px;">'+(traitee?'↺ Rouvrir':'✓ Marquer traitée')+'</a>'
       +'<a href="#" onclick="event.preventDefault();deleteRectOrder(\''+r.id+'\')" style="color:var(--red);font-size:11px;">Supprimer</a></span></div>'
       +typeHtml
+      +((!r.type_piece&&r.cout>0)?'<div style="margin-top:4px;font-weight:700;">'+r.cout.toFixed(2).replace('.',',')+' € HT</div>':'')
       +(r.description?'<div style="white-space:pre-wrap;margin-top:6px;">'+escH(r.description)+'</div>':'')+photoHtml+'</div>';
   }).join('');
 }
