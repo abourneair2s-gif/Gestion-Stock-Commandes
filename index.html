@@ -649,7 +649,11 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
   <div id="chantier-detail" style="display:none;">
     <div class="section-header" style="margin-top:8px;">
       <div class="section-title" id="chantier-detail-title">Détail chantier</div>
-      <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-xs" onclick="editChantier(document.getElementById('chantier-detail').dataset.chantierNom)">✏ Modifier / renommer</button>
+        <button class="btn btn-xs" style="color:var(--red);border-color:var(--red);" onclick="deleteChantier(document.getElementById('chantier-detail').dataset.chantierNom)">🗑 Supprimer</button>
+        <button class="btn btn-xs" onclick="document.getElementById('chantier-detail').style.display='none'">✕ Fermer</button>
+      </div>
     </div>
     <div id="chantier-detail-body"></div>
   </div>
@@ -4030,7 +4034,21 @@ async function saveChantier(){
   renderChantiers();renderCommandes();
   showToast(renaming?'✅ Chantier renommé partout dans l\'appli':'Chantier enregistré');
 }
-async function deleteChantier(nom){if(!confirm('Supprimer?'))return;const l=chantiers.filter(c=>c.nom!==nom);await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});chantiers=l;renderChantiers();showToast('Supprime');}
+async function deleteChantier(nom){
+  if(!nom)return;
+  const enfants=chantiers.filter(c=>c.parent===nom);
+  let msg='Supprimer le chantier "'+nom+'" ?\n\nLes commandes, mouvements et notes déjà enregistrés pour ce chantier ne sont pas effacés : ils ne seront simplement plus rattachés à une fiche.';
+  if(enfants.length)msg+='\n\nCe chantier a '+enfants.length+' sous-dossier(s) ('+enfants.map(e=>e.nom).join(', ')+') : ils deviendront des chantiers principaux.';
+  if(!confirm(msg))return;
+  const l=chantiers.filter(c=>c.nom!==nom).map(c=>c.parent===nom?{...c,parent:null}:c);
+  const{error}=await db.from('config').upsert({key:'chantiers',value:l},{onConflict:'key'});
+  if(error){showToast('❌ '+error.message);return;}
+  chantiers=l;
+  const d=document.getElementById('chantier-detail');
+  if(d&&d.dataset.chantierNom===nom)d.style.display='none';
+  renderChantiers();
+  showToast('Chantier supprimé');
+}
 async function deleteSousDossier(nom,parentNom){
   if(!confirm('Supprimer le sous-dossier "'+nom+'" ?'))return;
   const l=chantiers.filter(c=>c.nom!==nom);
