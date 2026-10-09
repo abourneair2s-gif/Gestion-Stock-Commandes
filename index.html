@@ -695,7 +695,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
 <div class="modal-backdrop" id="modal-rect">
   <div class="modal" style="max-width:560px;">
     <div class="modal-header">
-      <div class="modal-title">▭ Commande rectangulaire</div>
+      <div class="modal-title" id="rect-modal-title">▭ Commande rectangulaire</div>
       <button class="btn btn-xs" onclick="closeModal('modal-rect')">✕</button>
     </div>
     <div class="modal-body">
@@ -745,7 +745,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-rect')" style="flex:1;">Annuler</button>
-      <button class="btn btn-primary" onclick="saveRectOrder()" style="flex:1;">Soumettre la demande</button>
+      <button class="btn btn-primary" id="rect-submit-btn" onclick="saveRectOrder()" style="flex:1;">Soumettre la demande</button>
     </div>
   </div>
 </div>
@@ -2403,7 +2403,9 @@ function onRectTypeChange(){
   if(emboitureRow)emboitureRow.style.display=t.emboiture?'':'none';
   if(manchonRow)manchonRow.style.display=t.manchon?'':'none';
 }
+let editingRectId=null;
 function openRectModal(preselectChantier){
+  editingRectId=null;
   const selC=document.getElementById('rect-chantier');
   if(selC){
     selC.innerHTML='<option value="">— Sélectionner un chantier —</option>';
@@ -2416,6 +2418,9 @@ function openRectModal(preselectChantier){
   if(selT)selT.innerHTML='<option value="">— Sélectionner un type —</option>'+Object.entries(RECT_TYPES).map(([k,v])=>'<option value="'+k+'">'+v.label+'</option>').join('');
   document.getElementById('rect-quantite').value=1;
   document.getElementById('rect-cout').value='';
+  const cf0=document.getElementById('rect-cout');if(cf0){cf0.disabled=true;cf0.style.background='var(--bg)';cf0.style.cursor='not-allowed';cf0.style.opacity='.7';}
+  const tt0=document.getElementById('rect-modal-title');if(tt0)tt0.textContent='▭ Commande rectangulaire';
+  const sb0=document.getElementById('rect-submit-btn');if(sb0)sb0.textContent='Soumettre la demande';
   document.getElementById('rect-soustype').value='1';
   document.getElementById('rect-cadre').value='';
   document.getElementById('rect-emboiture').value='';
@@ -2464,7 +2469,39 @@ async function uploadRectPhoto(files){
   document.getElementById('rect-photo-input').value='';
   document.getElementById('rect-photo-input-gallery').value='';
 }
+function openRectEdit(id){
+  const r=rectOrders.find(x=>x.id===id);if(!r||!r.type_piece)return;
+  openRectModal();
+  editingRectId=id;
+  const addOpt=(sel,val)=>{if(sel&&val&&![...sel.options].some(o=>o.value===val)){const o=document.createElement('option');o.value=val;o.textContent=val;sel.appendChild(o);}};
+  const selC=document.getElementById('rect-chantier');addOpt(selC,r.chantier_nom);if(selC)selC.value=r.chantier_nom||'';
+  const selD=document.getElementById('rect-demandeur');addOpt(selD,r.demandeur);if(selD)selD.value=r.demandeur||'';
+  document.getElementById('rect-type').value=r.type_piece;
+  onRectTypeChange();
+  Object.entries(r.cotes||{}).forEach(([k,v])=>{const inp=document.getElementById('rect-cote-'+k);if(inp){inp.value=v;updateRectSvgCote(k,String(v));}});
+  document.getElementById('rect-quantite').value=r.quantite||1;
+  const cf=document.getElementById('rect-cout');
+  if(cf){cf.disabled=false;cf.style.background='';cf.style.cursor='';cf.style.opacity='';cf.value=r.cout>0?r.cout:'';}
+  if(r.sous_type)document.getElementById('rect-soustype').value=r.sous_type;
+  document.getElementById('rect-cadre').value=r.cadre||'';
+  document.getElementById('rect-emboiture').value=r.emboiture||'';
+  document.getElementById('rect-manchon').value=r.manchon||'';
+  document.getElementById('rect-description').value=r.description||'';
+  _rectPhotoUrls=Array.isArray(r.photo_urls)?[...r.photo_urls]:[];
+  renderRectPhotoPreview();
+  const tt=document.getElementById('rect-modal-title');if(tt)tt.textContent='▭ Modifier la commande'+(r.num?' CR'+String(r.num).padStart(3,'0'):'');
+  const sb=document.getElementById('rect-submit-btn');if(sb)sb.textContent='Enregistrer les modifications';
+}
+let _savingRect=false;
 async function saveRectOrder(){
+  if(_savingRect)return;
+  _savingRect=true;
+  const btn=document.getElementById('rect-submit-btn');
+  if(btn)btn.disabled=true;
+  try{await _saveRectOrderInner();}
+  finally{_savingRect=false;if(btn)btn.disabled=false;}
+}
+async function _saveRectOrderInner(){
   const chantier=document.getElementById('rect-chantier')?.value?.trim()||'';
   const demandeur=document.getElementById('rect-demandeur')?.value?.trim()||'';
   const type=document.getElementById('rect-type')?.value||'';
@@ -2481,6 +2518,19 @@ async function saveRectOrder(){
   const cadre=document.getElementById('rect-cadre')?.value||null;
   const emboiture=t.emboiture?(document.getElementById('rect-emboiture')?.value||null):null;
   const manchon=t.manchon?(document.getElementById('rect-manchon')?.value||null):null;
+  if(editingRectId){
+    const upd={chantier_nom:chantier,demandeur,type_piece:type,sous_type:sousType,cotes,quantite,cadre,emboiture,manchon,cout:coutRect,description:description||null,photo_urls:_rectPhotoUrls.length?_rectPhotoUrls:null};
+    const{error:updErr}=await db.from('commandes_rectangulaires').update(upd).eq('id',editingRectId);
+    if(updErr){showToast('❌ Erreur : '+updErr.message);return;}
+    const edited=rectOrders.find(x=>x.id===editingRectId);
+    closeModal('modal-rect');
+    editingRectId=null;
+    const{data:d2}=await db.from('commandes_rectangulaires').select('*').order('created_at',{ascending:false});
+    if(d2)rectOrders=d2;
+    renderRectOrders();
+    showToast('✅ Commande'+(edited&&edited.num?' CR'+String(edited.num).padStart(3,'0'):'')+' modifiée');
+    return;
+  }
   const{data:cfgRow}=await db.from('config').select('value').eq('key','rect_counter').single();
   const freshCounter=cfgRow?.value??0;
   const num=freshCounter+1;
@@ -2587,7 +2637,7 @@ function renderRectOrders(){
       +'</div></div>':'';
     return'<div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid '+LISERE[i%LISERE.length]+';border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;font-size:12.5px;'+(traitee?'opacity:.6;':'')+'">'
       +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span style="color:var(--text3);font-size:11px;">'+(r.num?'<strong style="color:var(--purple);">CR'+String(r.num).padStart(3,'0')+'</strong> — ':'')+'<strong style="color:var(--text2);">'+escH(r.demandeur||'')+'</strong> — '+escH(r.chantier_nom||'')+' — '+date+(traitee?' — <span style="color:var(--green-dark);font-weight:700;">✓ Traitée</span>':'')+'</span>'
-      +'<span style="white-space:nowrap;"><a href="#" onclick="event.preventDefault();editRectCout(\''+r.id+'\')" style="color:var(--amber);font-size:11px;font-weight:600;margin-right:10px;">💶 '+(r.cout>0?'Modifier le coût':'Renseigner le coût')+'</a>'+(r.type_piece?'<a href="#" onclick="event.preventDefault();printRectOrder(\''+r.id+'\')" style="color:var(--blue);font-size:11px;font-weight:600;margin-right:10px;">🖨 Imprimer</a>':'')
+      +'<span style="white-space:nowrap;"><a href="#" onclick="event.preventDefault();editRectCout(\''+r.id+'\')" style="color:var(--amber);font-size:11px;font-weight:600;margin-right:10px;">💶 '+(r.cout>0?'Modifier le coût':'Renseigner le coût')+'</a>'+(r.type_piece?'<a href="#" onclick="event.preventDefault();openRectEdit(\''+r.id+'\')" style="color:var(--text2);font-size:11px;font-weight:600;margin-right:10px;">✏ Modifier</a><a href="#" onclick="event.preventDefault();printRectOrder(\''+r.id+'\')" style="color:var(--blue);font-size:11px;font-weight:600;margin-right:10px;">🖨 Imprimer</a>':'')
       +'<a href="#" onclick="event.preventDefault();toggleRectStatut(\''+r.id+'\')" style="color:'+(traitee?'var(--text3)':'var(--green-dark)')+';font-size:11px;font-weight:600;margin-right:10px;">'+(traitee?'↺ Rouvrir':'✓ Marquer traitée')+'</a>'
       +'<a href="#" onclick="event.preventDefault();deleteRectOrder(\''+r.id+'\')" style="color:var(--red);font-size:11px;">Supprimer</a></span></div>'
       +typeHtml
