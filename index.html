@@ -1999,12 +1999,29 @@ function showPage(page,el){
 }
 
 // ==================== DASHBOARD ====================
+function getVentesClients(){
+  // Commandes clients (CC) approuvées : quantités réellement sorties x prix de vente actuel de l'article
+  let total=0,nb=0;
+  commandes.forEach(c=>{
+    if(!isClientOrder(c))return;
+    if(c.statut!=='approuvee'&&c.statut!=='approuvee_partielle')return;
+    let t=0;
+    (c.items||[]).forEach(it=>{
+      const art=stock.find(a=>a.id===it.id);
+      const q=(it.qtySorti!==undefined&&it.qtySorti!==null)?it.qtySorti:it.qty;
+      t+=((art&&art.prixVente)||0)*q;
+    });
+    if(t>0){total+=t;nb++;}
+  });
+  return{total,nb};
+}
 function renderDashboard(){
   const alerts=getAlerts(),pending=getCmdPending();
   const totalVal=stock.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
   document.getElementById('kpi-grid').innerHTML=`
     <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div></div>
-    <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>`;
+    <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>
+    ${(()=>{const v=getVentesClients();return`<div class="kpi"><div class="kpi-label">Ventes clients</div><div class="kpi-value" style="color:var(--blue);">${v.total.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')} €</div><div class="kpi-sub ok">${v.nb} commande${v.nb>1?'s':''} client approuvée${v.nb>1?'s':''}</div></div>`;})()}`;
   const alertDiv=document.getElementById('dashboard-alerts');
   const top5=alerts.slice(0,5);
   alertDiv.innerHTML=top5.length===0?'<div style="font-size:13px;color:var(--green);padding:10px 0;">✅ Tous les stocks sont OK</div>'
