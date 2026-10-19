@@ -504,7 +504,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
           <select id="suivi-exo" onchange="renderRectSuivi()" style="max-width:300px;"></select>
           <input type="text" id="suivi-search" placeholder="Rechercher : n° de bon, chantier, pièces…" oninput="renderRectSuivi()" style="flex:1;min-width:180px;">
-          <label style="font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><input type="checkbox" id="suivi-aenlever" onchange="renderRectSuivi()"> À enlever uniquement</label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:6px;white-space:nowrap;cursor:pointer;"><input type="checkbox" id="suivi-aenlever" onchange="renderRectSuivi()" style="width:auto;flex:none;margin:0;padding:0;"> À enlever uniquement</label>
         </div>
         <div id="suivi-total" style="margin-bottom:8px;"></div>
         <div class="table-wrap">
@@ -785,7 +785,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div class="form-row"><label class="form-label">Date de commande</label><input type="date" id="su-date"></div>
         <div class="form-row"><label class="form-label">Date d'enlèvement des pièces</label><input type="date" id="su-enl"></div>
       </div>
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin:-4px 0 12px;"><input type="checkbox" id="su-recup"> Pièces récupérées (date inconnue ou non renseignée)</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:-4px 0 12px;cursor:pointer;"><input type="checkbox" id="su-recup" style="width:auto;flex:none;margin:0;padding:0;"><span><strong>Pièces récupérées</strong> <span style="color:var(--text3);">— à cocher si la date d'enlèvement n'est pas connue</span></span></label>
       <div class="form-row"><label class="form-label">Chantier</label>
         <input type="text" id="su-chantier" list="su-chantiers" placeholder="Choisir ou saisir un chantier" autocomplete="off" oninput="onSuiviChantierInput()">
         <datalist id="su-chantiers"></datalist>
