@@ -785,6 +785,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         <div class="form-row"><label class="form-label">Date de commande</label><input type="date" id="su-date"></div>
         <div class="form-row"><label class="form-label">Date d'enlèvement des pièces</label><input type="date" id="su-enl"></div>
       </div>
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin:-4px 0 12px;"><input type="checkbox" id="su-recup"> Pièces récupérées (date inconnue ou non renseignée)</label>
       <div class="form-row"><label class="form-label">Chantier</label>
         <input type="text" id="su-chantier" list="su-chantiers" placeholder="Choisir ou saisir un chantier" autocomplete="off" oninput="onSuiviChantierInput()">
         <datalist id="su-chantiers"></datalist>
@@ -2634,7 +2635,7 @@ const _normRef=x=>String(x||'').trim().toUpperCase().replace(/\s+/g,' ');
 
 function renderRectSuivi(){
   const body=document.getElementById('suivi-table');if(!body)return;
-  const lines=rectOrders.filter(isSuiviLine).map(r=>({r,ref:suiviRef(r),date:suiviDate(r),enl:r.date_enlevement?String(r.date_enlevement).slice(0,10):'',type:suiviType(r),montant:r.cout||0}));
+  const lines=rectOrders.filter(isSuiviLine).map(r=>({r,ref:suiviRef(r),date:suiviDate(r),enl:r.date_enlevement?String(r.date_enlevement).slice(0,10):'',recup:!!(r.enleve||r.date_enlevement),type:suiviType(r),montant:r.cout||0}));
   const sel=document.getElementById('suivi-exo');
   const now=new Date();const curExo=now.getMonth()+1>=10?now.getFullYear():now.getFullYear()-1;
   const exos=[...new Set([curExo,...lines.map(l=>suiviExo(l.date)).filter(v=>v!==null)])].sort((a,b)=>b-a);
@@ -2645,10 +2646,10 @@ function renderRectSuivi(){
   const refCount={};lines.forEach(l=>{const k=_normRef(l.ref);if(k)refCount[k]=(refCount[k]||0)+1;});
   const inExo=lines.filter(l=>cur==='all'||String(suiviExo(l.date))===cur);
   const totalExo=inExo.reduce((x,l)=>x+l.montant,0);
-  const nbAEnlever=inExo.filter(l=>!l.enl).length;
+  const nbAEnlever=inExo.filter(l=>!l.recup).length;
   const q=(document.getElementById('suivi-search').value||'').toLowerCase().trim();
   const onlyAE=document.getElementById('suivi-aenlever').checked;
-  const view=inExo.filter(l=>(!q||[l.ref,l.r.chantier_nom,l.type].join(' ').toLowerCase().includes(q))&&(!onlyAE||!l.enl))
+  const view=inExo.filter(l=>(!q||[l.ref,l.r.chantier_nom,l.type].join(' ').toLowerCase().includes(q))&&(!onlyAE||!l.recup))
     .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||String(b.ref).localeCompare(String(a.ref)));
   const filtered=q||onlyAE;
   const parChantier={};inExo.forEach(l=>{const k=l.r.chantier_nom||'—';parChantier[k]=(parChantier[k]||0)+l.montant;});
@@ -2665,7 +2666,7 @@ function renderRectSuivi(){
   body.innerHTML=view.map(l=>{
     const dup=l.ref&&refCount[_normRef(l.ref)]>1;
     const known=chantiers.some(c=>normNom(c.nom)===normNom(l.r.chantier_nom));
-    const enl=l.enl?'<span style="color:var(--green-dark);">✓ '+fmtDateFr(l.enl)+'</span>':'<span style="color:var(--amber);font-weight:600;">⏳ à enlever</span>';
+    const enl=l.enl?'<span style="color:var(--green-dark);">✓ '+fmtDateFr(l.enl)+'</span>':(l.recup?'<span style="color:var(--green-dark);">✓ récupérée</span>':'<span style="color:var(--amber);font-weight:600;">⏳ à enlever</span>');
     return`<tr>
       <td style="white-space:nowrap;"><strong>${l.ref?escH(l.ref):'<span style="color:var(--text3);">sans n°</span>'}</strong>${dup?' <span style="color:var(--red);font-weight:700;" title="Ce n° de bon apparaît plusieurs fois">⚠ doublon</span>':''}</td>
       <td style="white-space:nowrap;">${fmtDateFr(l.date)}</td>
@@ -2691,6 +2692,7 @@ function openSuiviModal(id){
   document.getElementById('su-montant').value=r&&r.cout>0?r.cout:'';
   document.getElementById('su-date').value=r?suiviDate(r):today;
   document.getElementById('su-enl').value=r&&r.date_enlevement?String(r.date_enlevement).slice(0,10):'';
+  document.getElementById('su-recup').checked=!!(r&&(r.enleve||r.date_enlevement));
   document.getElementById('su-chantier').value=r?(r.chantier_nom||''):'';
   document.getElementById('su-type').value=r?suiviType(r):'';
   document.getElementById('su-title').textContent=r?'✏ Modifier la commande fournisseur':'📋 Commande fournisseur';
@@ -2706,6 +2708,7 @@ async function saveSuivi(keepOpen){
   const enl=document.getElementById('su-enl').value||'';
   const chRaw=(document.getElementById('su-chantier').value||'').trim();
   const type=(document.getElementById('su-type').value||'').trim();
+  const recup=document.getElementById('su-recup').checked;
   if(!ref){showToast('⚠ Indiquez le n° du bon');return;}
   if(!dateVal){showToast('⚠ Indiquez la date de commande');return;}
   if(!chRaw){showToast('⚠ Indiquez le chantier');return;}
@@ -2717,6 +2720,8 @@ async function saveSuivi(keepOpen){
   _savingSuivi=true;
   try{
     const fields={ref_fournisseur:ref,date_commande:dateVal,date_enlevement:enl||null,chantier_nom:chantier,type_pieces:type||null,cout:montant};
+    const rowEdit=editingSuiviId?rectOrders.find(x=>x.id===editingSuiviId):null;
+    if(recup||enl||(rowEdit&&rowEdit.enleve!==undefined))fields.enleve=!!(recup||enl);
     let error;
     if(editingSuiviId){
       ({error}=await db.from('commandes_rectangulaires').update(fields).eq('id',editingSuiviId));
