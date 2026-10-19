@@ -2617,6 +2617,7 @@ async function editRectCout(id){
 }
 let editingSuiviId=null,_savingSuivi=false;
 const _p2=n=>String(n).padStart(2,'0');
+const normNom=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
 function isSuiviLine(r){return !!r.ref_fournisseur||r.demandeur==='Saisie manuelle';}
 function suiviRef(r){if(r.ref_fournisseur)return r.ref_fournisseur;const m=/^Bon\s+(\S+)/.exec(r.description||'');return m?m[1]:'';}
 function suiviDate(r){
@@ -2663,7 +2664,7 @@ function renderRectSuivi(){
   if(!view.length){body.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);font-size:12px;padding:14px;">'+(lines.length?'Aucun bon pour ce filtre.':'Aucune commande fournisseur saisie pour l\'instant.')+'</td></tr>';return;}
   body.innerHTML=view.map(l=>{
     const dup=l.ref&&refCount[_normRef(l.ref)]>1;
-    const known=chantiers.some(c=>c.nom===l.r.chantier_nom);
+    const known=chantiers.some(c=>normNom(c.nom)===normNom(l.r.chantier_nom));
     const enl=l.enl?'<span style="color:var(--green-dark);">✓ '+fmtDateFr(l.enl)+'</span>':'<span style="color:var(--amber);font-weight:600;">⏳ à enlever</span>';
     return`<tr>
       <td style="white-space:nowrap;"><strong>${l.ref?escH(l.ref):'<span style="color:var(--text3);">sans n°</span>'}</strong>${dup?' <span style="color:var(--red);font-weight:700;" title="Ce n° de bon apparaît plusieurs fois">⚠ doublon</span>':''}</td>
@@ -2679,7 +2680,7 @@ function renderRectSuivi(){
 function onSuiviChantierInput(){
   const v=(document.getElementById('su-chantier').value||'').trim().toLowerCase();
   const hint=document.getElementById('su-chantier-hint');
-  if(hint)hint.style.display=(v&&!chantiers.some(c=>c.nom.toLowerCase()===v))?'':'none';
+  if(hint)hint.style.display=(v&&!chantiers.some(c=>normNom(c.nom)===normNom(v)))?'':'none';
 }
 function openSuiviModal(id){
   editingSuiviId=id||null;
@@ -2711,7 +2712,7 @@ async function saveSuivi(keepOpen){
   if(!(montant>0)){showToast('⚠ Renseignez le montant');return;}
   const dup=rectOrders.find(x=>x.id!==editingSuiviId&&_normRef(suiviRef(x))===_normRef(ref));
   if(dup){showToast('⚠ Le n° '+ref+' existe déjà (chantier '+(dup.chantier_nom||'?')+', '+fmtEur2(dup.cout)+')');return;}
-  const known=chantiers.find(c=>c.nom.toLowerCase()===chRaw.toLowerCase());
+  const known=chantiers.find(c=>normNom(c.nom)===normNom(chRaw));
   const chantier=known?known.nom:chRaw;
   _savingSuivi=true;
   try{
@@ -3494,7 +3495,7 @@ function getChantierFraisAnnexes(nom){
   return locationsMateriel.filter(l=>l.chantier_nom===nom).reduce((s,l)=>s+(l.cout||0),0);
 }
 function getChantierCoutRect(nom){
-  return rectOrders.filter(r=>r.chantier_nom===nom).reduce((s,r)=>s+(r.cout||0),0);
+  return rectOrders.filter(r=>normNom(r.chantier_nom)===normNom(nom)).reduce((s,r)=>s+(r.cout||0),0);
 }
 function renderChantiers(){
   const actifs=chantiers.filter(c=>!c.archived&&!c.parent).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
