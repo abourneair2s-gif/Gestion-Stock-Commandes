@@ -1134,6 +1134,10 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
           <input type="checkbox" id="cmd-deja-recupere" style="width:auto;flex:none;pointer-events:none;"> ✅ Déjà récupéré
         </label>
       </div>
+      <div class="form-grid col2 admin-only" id="cmd-admin-livr-row" style="margin-bottom:12px;align-items:end;">
+        <div class="form-row" style="margin-bottom:0;"><label class="form-label">📅 Date de livraison prévue</label><input type="date" id="cmd-date-livr"></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:9px 11px;border:1px solid var(--border2);border-radius:var(--radius-sm);"><input type="checkbox" id="cmd-livre" style="width:auto;flex:none;margin:0;padding:0;"> 📦 Livré</label>
+      </div>
       <div class="form-grid col2" id="cmd-client-contact-row" style="display:none;">
         <div class="form-row"><label class="form-label">Adresse mail</label><input type="email" id="cmd-email" placeholder="votre@email.com" autocomplete="email"></div>
         <div class="form-row"><label class="form-label">Téléphone *</label><input type="tel" id="cmd-telephone" placeholder="06 12 34 56 78" autocomplete="tel" required></div>
@@ -1653,6 +1657,8 @@ function openCmdModal(asClient){
   const aLivrerDef=document.getElementById('cmd-a-livrer');if(aLivrerDef)aLivrerDef.checked=true;
   const dejaRecupDef=document.getElementById('cmd-deja-recupere');if(dejaRecupDef)dejaRecupDef.checked=false;
   updateAdminFlagBox('cmd-a-livrer-box',true);updateAdminFlagBox('cmd-deja-recupere-box',false);
+  const dlp0=document.getElementById('cmd-date-livr');if(dlp0)dlp0.value='';
+  const lv0=document.getElementById('cmd-livre');if(lv0)lv0.checked=false;
   const numFld=document.getElementById('cmd-num');if(numFld){numFld.value=(cmdCounter||0)+1;numFld.dataset.autofill=numFld.value;}
   const fraisGestFld=document.getElementById('cmd-frais-gestion');if(fraisGestFld)fraisGestFld.value='';
   const modeFactFld=document.getElementById('cmd-mode-facturation');if(modeFactFld)modeFactFld.value=cmdActingAsClient?'vente':'achat';
@@ -2870,7 +2876,7 @@ function renderCommandes(){
       <td>${c.nom||''}</td>
       <td><span style="color:${urgColor};font-weight:600;">${c.urgence||''}</span></td>
       <td>${nbArt} article(s)</td>
-      <td><span style="color:${statColor};font-weight:600;">${statLabel}</span></td>
+      <td><span style="color:${statColor};font-weight:600;">${statLabel}</span>${cmdLivraisonBadge(c)}</td>
       ${!CLIENT_MODE?`<td style="text-align:right;white-space:nowrap;">
         <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
         <button class="btn btn-xs" style="margin-left:3px;" onclick="toggleCmdMenu(event,'${c.id}')">⋯</button>
@@ -2890,6 +2896,24 @@ function renderCommandes(){
     if(internalOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:var(--purple-bg);color:var(--purple);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">🏗 Commandes internes (${internalOrders.length})</td></tr>`+internalOrders.map(cmdRowHTML).join('');
     tbody.innerHTML=html;
   }
+}
+function cmdLivraisonBadge(c){
+  if(CLIENT_MODE||c.statut==='refusee')return'';
+  const n=new Date();const today=n.getFullYear()+'-'+_p2(n.getMonth()+1)+'-'+_p2(n.getDate());
+  const d=c.date_livraison_prevue?String(c.date_livraison_prevue).slice(0,10):'';
+  let info='';
+  if(c.livre)info='<span style="color:var(--green-dark);font-weight:600;">📦 Livré</span>';
+  else if(d)info=d<today?'<span style="color:var(--red);font-weight:600;">⚠ Livraison prévue le '+fmtDateFr(d)+' (dépassée)</span>':'<span style="color:var(--blue);">📅 Livraison prévue le '+fmtDateFr(d)+'</span>';
+  return'<div style="font-size:11px;margin-top:4px;white-space:nowrap;">'+(info?info+'<br>':'')
+    +'<label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;color:var(--text2);"><input type="checkbox" '+(c.livre?'checked ':'')+'onchange="toggleCmdLivre(\''+c.id+'\',this.checked)" style="width:auto;flex:none;margin:0;padding:0;"> Livré</label></div>';
+}
+async function toggleCmdLivre(id,checked){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  const{error}=await db.from('commandes').update({livre:checked}).eq('id',id);
+  if(error){showToast('❌ '+error.message);renderCommandes();return;}
+  c.livre=checked;
+  renderCommandes();
+  showToast(checked?'📦 '+cmdNumLabel(c)+' marquée livrée':'Livraison de '+cmdNumLabel(c)+' annulée');
 }
 function viewCmd(id){
   const c=commandes.find(x=>x.id===id);if(!c)return;
@@ -2938,6 +2962,7 @@ function viewCmd(id){
     +'<strong>Urgence :</strong> '+(c.urgence||'—')+' &nbsp;|&nbsp; <strong>Statut :</strong> <span style="color:'+statColor+';font-weight:700;">'+statLabel+'</span>'
     +(CLIENT_MODE?'':(c.a_livrer?'<br><strong>Logistique :</strong> <span style="color:var(--blue);font-weight:700;">🚚 À livrer</span>':(c.deja_recupere?'<br><strong>Logistique :</strong> <span style="color:var(--green);font-weight:700;">✅ Déjà récupéré</span>':'')))
     +(c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km) — <strong>'+(c.frais_livraison>0?c.frais_livraison+' €':'Gratuite')+'</strong>':'')
+    +(CLIENT_MODE?'':((c.date_livraison_prevue||c.livre)?'<br><strong>Date de livraison :</strong> '+(c.livre?'<span style="color:var(--green-dark);font-weight:700;">📦 Livré</span>':'')+(c.date_livraison_prevue?(c.livre?' — ':'')+'prévue le '+fmtDateFr(String(c.date_livraison_prevue).slice(0,10)):''):''))
     +(c.frais_gestion>0?'<br><strong>Frais de gestion :</strong> '+c.frais_gestion.toFixed(2)+' €':'')
     +((c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):'')
     +(c.notes?'<br><strong>Notes :</strong> '+c.notes:'')
@@ -3068,6 +3093,7 @@ function printCmd(id){
     ${c.numero_commande_interne?'<br><strong>N° commande interne :</strong> '+c.numero_commande_interne:''}
     ${c.document_interne_url?'<br><strong>Document joint :</strong> <a href="#" onclick="event.preventDefault();window.opener.printDocInterne(\''+c.document_interne_url+'\',\''+(c.document_interne_nom||'').replace(/'/g,"")+'\');">📄 '+(c.document_interne_nom||'Voir le document')+'</a>':''}
     ${c.a_livrer?'<br><strong>Logistique :</strong> 🚚 À livrer':(c.deja_recupere?'<br><strong>Logistique :</strong> ✅ Déjà récupéré':'')}
+    ${c.date_livraison_prevue?'<br><strong>Livraison prévue le :</strong> '+fmtDateFr(String(c.date_livraison_prevue).slice(0,10)):''}
     ${c.adresse_livraison?'<br><strong>Livraison :</strong> '+c.adresse_livraison+' ('+(c.distance_livraison_km??'?')+' km) — '+(c.frais_livraison>0?c.frais_livraison+' €':'Gratuite'):''}
     ${(c.email||c.telephone)?'<br>'+(c.email?'<strong>Email :</strong> '+c.email+' ':'')+(c.telephone?'&nbsp;|&nbsp; <strong>Tél :</strong> '+c.telephone:''):''}
     ${c.notes?'<br><strong>Notes :</strong> '+c.notes:''}
@@ -5551,6 +5577,12 @@ async function saveCommande(){
   const fraisLivraisonOverrideVal=document.getElementById('cmd-frais-livraison-override')?.value;
   const fraisLivraisonFinal=(!CLIENT_MODE&&fraisLivraisonOverrideVal!=='')?(parseFloat(fraisLivraisonOverrideVal)||0):(cmdLivraisonData?.frais??null);
   const payload={num,chantier,nom,urgence,notes,email,telephone,items:cmdItems,statut:'en_attente',source,device_id:deviceId,account_email:accountEmail,a_livrer:aLivrer,deja_recupere:dejaRecupere,adresse_livraison:adresseLivraison||null,distance_livraison_km:cmdLivraisonData?.distance_km??null,zone_livraison:cmdLivraisonData?.zone??null,frais_livraison:fraisLivraisonFinal,numero_commande_interne:numInterne||null,document_interne_url:cmdDocInterneUrl||null,document_interne_nom:cmdDocInterneNom||null,frais_gestion:fraisGestionVal,mode_facturation:modeFacturation};
+  if(!CLIENT_MODE){
+    const dlpVal=document.getElementById('cmd-date-livr')?.value||'';
+    const livreChk=!!document.getElementById('cmd-livre')?.checked;
+    const origCmd=editingCmdId?commandes.find(x=>x.id===editingCmdId):null;
+    if(dlpVal||livreChk||(origCmd&&origCmd.livre!==undefined)){payload.date_livraison_prevue=dlpVal||null;payload.livre=livreChk;}
+  }
   if(CLIENT_MODE&&editingCmdId){
     const original=commandes.find(x=>x.id===editingCmdId);
     payload.frais_gestion=original?.frais_gestion??null; // le client ne peut pas toucher ce champ
@@ -5666,6 +5698,8 @@ function editCmd(id){
   const aLivrer=document.getElementById('cmd-a-livrer');if(aLivrer)aLivrer.checked=!!c.a_livrer;
   const dejaRecupere=document.getElementById('cmd-deja-recupere');if(dejaRecupere)dejaRecupere.checked=!!c.deja_recupere;
   updateAdminFlagBox('cmd-a-livrer-box',!!c.a_livrer);updateAdminFlagBox('cmd-deja-recupere-box',!!c.deja_recupere);
+  const dlpEl=document.getElementById('cmd-date-livr');if(dlpEl)dlpEl.value=c.date_livraison_prevue?String(c.date_livraison_prevue).slice(0,10):'';
+  const livreEl=document.getElementById('cmd-livre');if(livreEl)livreEl.checked=!!c.livre;
   const adrLivr=document.getElementById('cmd-adresse-livraison');if(adrLivr)adrLivr.value=c.adresse_livraison||'';
   const fraisLivrOverride=document.getElementById('cmd-frais-livraison-override');if(fraisLivrOverride)fraisLivrOverride.value=(c.frais_livraison!=null?c.frais_livraison:'');
   const livrInfo=document.getElementById('cmd-livraison-info');
