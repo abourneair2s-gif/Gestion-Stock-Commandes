@@ -491,7 +491,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
         </div>
       </div>
       <div class="table-wrap">
-        <table><thead><tr><th>N°</th><th>Date</th><th>Chantier</th><th>Demandeur</th><th>Urgence</th><th>Articles</th><th>Statut</th><th></th></tr></thead>
+        <table><thead><tr><th>N°</th><th>Date</th><th>Chantier</th><th>Demandeur</th><th>Urgence</th><th>Articles</th><th>Statut</th><th class="admin-only">Livraison prévue</th><th></th></tr></thead>
         <tbody id="cmd-table"></tbody></table>
       </div>
       <div id="cmd-empty" class="empty-state" style="display:none;">Aucune commande pour l'instant.</div>
@@ -2876,7 +2876,8 @@ function renderCommandes(){
       <td>${c.nom||''}</td>
       <td><span style="color:${urgColor};font-weight:600;">${c.urgence||''}</span></td>
       <td>${nbArt} article(s)</td>
-      <td><span style="color:${statColor};font-weight:600;">${statLabel}</span>${cmdLivraisonBadge(c)}</td>
+      <td><span style="color:${statColor};font-weight:600;">${statLabel}</span></td>
+      ${!CLIENT_MODE?cmdLivraisonCell(c):''}
       ${!CLIENT_MODE?`<td style="text-align:right;white-space:nowrap;">
         <button class="btn btn-xs" onclick="viewCmd('${c.id}')">Détail</button>
         <button class="btn btn-xs" style="margin-left:3px;" onclick="toggleCmdMenu(event,'${c.id}')">⋯</button>
@@ -2891,21 +2892,31 @@ function renderCommandes(){
     const clientOrders=sorted.filter(c=>!isReliquatFollowUp(c)&&isClientOrder(c));
     const internalOrders=sorted.filter(c=>!isReliquatFollowUp(c)&&!isClientOrder(c));
     let html='';
-    if(reliquatOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:#fff3e0;color:#e65100;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">📤 Suivi de reliquat (${reliquatOrders.length})</td></tr>`+reliquatOrders.map(cmdRowHTML).join('');
-    if(clientOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">👤 Commandes clients (${clientOrders.length})</td></tr>`+clientOrders.map(cmdRowHTML).join('');
-    if(internalOrders.length)html+=`<tr class="cmd-group-header"><td colspan="8" style="text-align:left;background:var(--purple-bg);color:var(--purple);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">🏗 Commandes internes (${internalOrders.length})</td></tr>`+internalOrders.map(cmdRowHTML).join('');
+    if(reliquatOrders.length)html+=`<tr class="cmd-group-header"><td colspan="9" style="text-align:left;background:#fff3e0;color:#e65100;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">📤 Suivi de reliquat (${reliquatOrders.length})</td></tr>`+reliquatOrders.map(cmdRowHTML).join('');
+    if(clientOrders.length)html+=`<tr class="cmd-group-header"><td colspan="9" style="text-align:left;background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">👤 Commandes clients (${clientOrders.length})</td></tr>`+clientOrders.map(cmdRowHTML).join('');
+    if(internalOrders.length)html+=`<tr class="cmd-group-header"><td colspan="9" style="text-align:left;background:var(--purple-bg);color:var(--purple);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 12px;">🏗 Commandes internes (${internalOrders.length})</td></tr>`+internalOrders.map(cmdRowHTML).join('');
     tbody.innerHTML=html;
   }
 }
-function cmdLivraisonBadge(c){
-  if(CLIENT_MODE||c.statut==='refusee')return'';
+function cmdLivraisonCell(c){
+  if(c.statut==='refusee')return'<td class="admin-only" style="color:var(--text3);">—</td>';
   const n=new Date();const today=n.getFullYear()+'-'+_p2(n.getMonth()+1)+'-'+_p2(n.getDate());
   const d=c.date_livraison_prevue?String(c.date_livraison_prevue).slice(0,10):'';
-  let info='';
-  if(c.livre)info='<span style="color:var(--green-dark);font-weight:600;">📦 Livré</span>';
-  else if(d)info=d<today?'<span style="color:var(--red);font-weight:600;">⚠ Livraison prévue le '+fmtDateFr(d)+' (dépassée)</span>':'<span style="color:var(--blue);">📅 Livraison prévue le '+fmtDateFr(d)+'</span>';
-  return'<div style="font-size:11px;margin-top:4px;white-space:nowrap;">'+(info?info+'<br>':'')
-    +'<label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;color:var(--text2);"><input type="checkbox" '+(c.livre?'checked ':'')+'onchange="toggleCmdLivre(\''+c.id+'\',this.checked)" style="width:auto;flex:none;margin:0;padding:0;"> Livré</label></div>';
+  const retard=!c.livre&&d&&d<today;
+  const col=c.livre?'var(--green-dark)':(retard?'var(--red)':'inherit');
+  return'<td class="admin-only" style="white-space:nowrap;">'
+    +'<input type="date" value="'+d+'" onchange="setCmdDateLivraison(\''+c.id+'\',this.value)" title="Date de livraison prévue" style="width:132px;padding:3px 6px;font-size:12px;color:'+col+';'+(retard?'border-color:var(--red);':'')+'">'
+    +(retard?'<div style="font-size:10px;color:var(--red);font-weight:600;margin-top:2px;">⚠ date dépassée</div>':'')
+    +'<div style="margin-top:4px;"><label style="font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;color:'+(c.livre?'var(--green-dark)':'var(--text2)')+';font-weight:'+(c.livre?'700':'400')+';"><input type="checkbox" '+(c.livre?'checked ':'')+'onchange="toggleCmdLivre(\''+c.id+'\',this.checked)" style="width:auto;flex:none;margin:0;padding:0;"> '+(c.livre?'📦 Livré':'Livré')+'</label></div>'
+    +'</td>';
+}
+async function setCmdDateLivraison(id,val){
+  const c=commandes.find(x=>x.id===id);if(!c)return;
+  const{error}=await db.from('commandes').update({date_livraison_prevue:val||null}).eq('id',id);
+  if(error){showToast('❌ '+error.message);renderCommandes();return;}
+  c.date_livraison_prevue=val||null;
+  renderCommandes();
+  showToast(val?'📅 Livraison de '+cmdNumLabel(c)+' prévue le '+fmtDateFr(val):'Date de livraison effacée');
 }
 async function toggleCmdLivre(id,checked){
   const c=commandes.find(x=>x.id===id);if(!c)return;
