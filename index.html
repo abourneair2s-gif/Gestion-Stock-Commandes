@@ -552,7 +552,7 @@ tr.cmd-archived-row{opacity:.6;background:#fafaf8;}
     <div class="page" id="page-alertes">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
         <div class="info-box" style="margin:0;flex:1;">Les alertes se déclenchent automatiquement quand le stock passe sous le seuil minimum.</div>
-        <button class="btn btn-sm" onclick="exportAlertesCSV()">📥 Export Excel</button>
+        <button class="btn btn-sm" onclick="printAlertesStock()">🖨 Imprimer</button> <button class="btn btn-sm" onclick="exportAlertesCSV()">📥 Export Excel</button>
       </div>
       <div class="table-wrap">
         <table><thead><tr><th>Référence</th><th>Catégorie</th><th>Ø</th><th>Stock actuel</th><th>Seuil min.</th><th>Statut</th><th></th></tr></thead>
@@ -2046,7 +2046,7 @@ function renderDashboard(){
   const alerts=getAlerts(),pending=getCmdPending();
   const totalVal=stock.reduce((s,a)=>s+a.stock*a.prixUnitaire,0);
   document.getElementById('kpi-grid').innerHTML=`
-    <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div></div>
+    <div class="kpi"><div class="kpi-label">Alertes stock</div><div class="kpi-value ${alerts.length>0?'stock-danger':''}">${alerts.length}</div><div class="kpi-sub ${alerts.length>0?'danger':'ok'}">${alerts.length>0?'Réapprovisionnement requis':'Tous les stocks OK'}</div>${alerts.length>0?'<button class="btn btn-xs" style="margin-top:8px;" onclick="event.stopPropagation();printAlertesStock()">🖨 Imprimer</button>':''}</div>
     <div class="kpi" id="kpi-commandes-attente" style="cursor:pointer;"><div class="kpi-label">Commandes en attente <span style="font-size:10px;color:var(--blue);">↗</span></div><div class="kpi-value ${pending.length>0?'stock-warn':''}">${pending.length}</div><div class="kpi-sub ${pending.length>0?'warn':'ok'}">${pending.length>0?'À approuver':'Aucune en attente'}</div></div>
     ${(()=>{const v=getVentesClients();return`<div class="kpi"><div class="kpi-label">Ventes clients</div><div class="kpi-value" style="color:var(--blue);">${v.total.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')} €</div><div class="kpi-sub ok">${v.nb} commande${v.nb>1?'s':''} client approuvée${v.nb>1?'s':''}</div></div>`;})()}`;
   const alertDiv=document.getElementById('dashboard-alerts');
@@ -4284,6 +4284,53 @@ let etiqSelectedCat='';let etiqSelected=new Set();function renderAlertes(){
     <th>Stock actuel</th><th>Seuil min.</th><th>Statut</th><th></th>
   </tr></thead><tbody>${html}</tbody></table>`;
 }
+
+function printAlertesStock(){
+  const alerts=getAlerts();
+  if(!alerts.length){showToast('✅ Aucune alerte de stock à imprimer');return;}
+  const row=a=>{
+    const s=getStatus(a);
+    const crit=s!=='warn';
+    return '<tr><td><code>'+a.id+'</code></td><td>'+a.categorie+'</td><td>'+a.diametre+'</td>'
+      +'<td class="n" style="color:'+(crit?'#c0392b':'#b87010')+';">'+a.stock+'</td><td class="n">'+a.stockMin+'</td>'
+      +'<td>'+(crit?'Critique':'Bas')+'</td><td class="n">☐</td></tr>';
+  };
+  const head=t=>'<tr><td colspan="7" class="g">'+t+'</td></tr>';
+  const rendered=new Set();
+  let body='';
+  famillesTree.forEach(f=>{
+    const famDirect=alerts.filter(a=>(f.categories||[]).includes(a.categorie)&&!rendered.has(a.id));
+    famDirect.forEach(a=>rendered.add(a.id));
+    const sfGroups=[];
+    (f.enfants||[]).forEach(sf=>{
+      const arts=alerts.filter(a=>(sf.categories||[]).includes(a.categorie)&&!rendered.has(a.id));
+      arts.forEach(a=>rendered.add(a.id));
+      if(arts.length)sfGroups.push({nom:sf.nom,arts});
+    });
+    if(!famDirect.length&&!sfGroups.length)return;
+    body+=head('📁 '+f.nom+' ('+(famDirect.length+sfGroups.reduce((n,g)=>n+g.arts.length,0))+')');
+    body+=famDirect.map(row).join('');
+    sfGroups.forEach(g=>{body+='<tr><td colspan="7" class="sg">↳ '+g.nom+' ('+g.arts.length+')</td></tr>'+g.arts.map(row).join('');});
+  });
+  const unclassed=alerts.filter(a=>!rendered.has(a.id));
+  if(unclassed.length)body+=head('Non classées ('+unclassed.length+')')+unclassed.map(row).join('');
+  const nbCrit=alerts.filter(a=>getStatus(a)!=='warn').length;
+  const w=window.open('','_blank');
+  if(!w){showToast('⚠ Autorise les fenêtres pop-up pour imprimer');return;}
+  w.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Alertes stock — AIR2S</title><style>'
+    +'body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:18px;}h1{font-size:18px;margin:0 0 4px;}'
+    +'.sub{color:#666;margin-bottom:12px;}table{width:100%;border-collapse:collapse;}'
+    +'th{text-align:left;background:#eee;padding:5px 8px;border-bottom:2px solid #999;font-size:11px;}'
+    +'td{padding:4px 8px;border-bottom:1px solid #ddd;}td.n{text-align:center;font-weight:700;}'
+    +'td.g{background:#f0ede7;font-weight:700;padding:7px 8px;}td.sg{background:#fafaf8;font-weight:600;font-size:11px;}'
+    +'tr{page-break-inside:avoid;}@media print{body{margin:8mm;}}'
+    +'</style></head><body><h1>Alertes stock bas — AIR2S</h1>'
+    +'<div class="sub">'+alerts.length+' article'+(alerts.length>1?'s':'')+' sous le seuil minimum ('+nbCrit+' critique'+(nbCrit>1?'s':'')+') — imprimé le '+new Date().toLocaleString('fr-FR')+'</div>'
+    +'<table><thead><tr><th>Référence</th><th>Catégorie</th><th>Ø</th><th style="text-align:center;">Stock</th><th style="text-align:center;">Seuil min.</th><th>Statut</th><th style="text-align:center;">Commandé</th></tr></thead><tbody>'+body+'</tbody></table>'
+    +'<script>window.onload=function(){window.print();};<\/script></body></html>');
+  w.document.close();
+}
+
 function histSelectFam(){
   const famId=document.getElementById('hist-filter-fam')?.value||'';
   const sfSel=document.getElementById('hist-filter-sf');
